@@ -3,7 +3,7 @@ import { HttpError } from "../models/http_error.js";
 
 export const login = (req: Request, res: Response, next: NextFunction) => {
   try {
-    throw new HttpError(501, "Not implemented");
+    res.status(200).send({ message: "Logged in!" });
   } catch (error) {
     next(error);
   }
