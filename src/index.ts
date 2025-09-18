@@ -1,11 +1,9 @@
 import env from "dotenv";
 import express from "express";
 import cors from "cors";
-import { authRouter } from "./routes/index.js";
-import {
-  errorHandlerMiddleware,
-  unknownRouteMiddleware,
-} from "./middlewares/index.js";
+import { authRouter, userRouter } from "./routes/index.js";
+import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
+import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
 
 env.config();
 
@@ -16,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/auth", authRouter);
+app.use("/user", userRouter);
 
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
