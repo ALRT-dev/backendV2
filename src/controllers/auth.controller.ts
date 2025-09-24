@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { signAccessToken, signRefreshToken } from "../utils/jwt.util.js";
 import { comparePassword, hashPassword } from "../services/auth.service.js";
+import client from "../utils/google_oauth_client.util.js";
 
 export const registerWithEmailAndPassword = async (
   req: Request,
@@ -97,14 +98,63 @@ export const loginWithEmailAndPassword = async (
   }
 };
 
-export const login = async (
+export const verifyGoogleOAuth = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const users = await prisma.user.findMany();
-    res.status(200).json(users);
+    const { idToken } = req.body;
+    if (!idToken) {
+      throw new HttpError(400, "Email is required");
+    }
+
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: [
+        process.env.GOOGLE_OAUTH_CLIENT_ID_WEB!!,
+        process.env.GOOGLE_OAUTH_CLIENT_ID_IOS!!,
+        process.env.GOOGLE_OAUTH_CLIENT_ID_ANDROID!!,
+      ],
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      throw new HttpError(400, "Invalid ID token");
+    }
+
+    if (payload.exp * 1000 < Date.now()) {
+      throw new HttpError(400, "ID token has expired");
+    }
+
+    const email = payload.email!!;
+    const name = payload.name || null;
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email, name },
+      });
+    }
+
+    const accessToken = signAccessToken({ userId: user.id });
+    if (!accessToken) {
+      throw new HttpError(500, "Error signing access token");
+    }
+
+    const refreshToken = signRefreshToken({ userId: user.id });
+    if (!refreshToken) {
+      throw new HttpError(500, "Error signing refresh token");
+    }
+
+    res.status(200).json({
+      accessToken,
+      refreshToken,
+    });
   } catch (error) {
     next(error);
   }

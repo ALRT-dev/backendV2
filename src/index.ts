@@ -13,8 +13,8 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-app.use("/auth", authRouter);
-app.use("/user", userRouter);
+app.use("/api/auth", authRouter);
+app.use("/api/user", userRouter);
 
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
