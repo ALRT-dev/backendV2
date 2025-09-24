@@ -6,10 +6,14 @@ COPY package.json yarn.lock ./
 
 RUN yarn install --frozen-lockfile
 
+COPY prisma ./prisma
+
+RUN npx prisma generate
+
 COPY . .
 
-ENV PORT=9000
-EXPOSE 9000
+ENV PORT=3000
+EXPOSE 3000
 
 RUN npm run build
 
