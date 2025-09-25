@@ -12,8 +12,7 @@ RUN npx prisma generate
 
 COPY . .
 
-ENV PORT=3000
-EXPOSE 3000
+EXPOSE 9000
 
 RUN npm run build
 

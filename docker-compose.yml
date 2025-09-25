@@ -5,10 +5,11 @@ services:
     env_file:
       - .env
     ports:
-      - "3000:3000"
+      - "80:9000"
     depends_on:
       postgres:
         condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && yarn start"
 
   postgres:
     container_name: postgres
