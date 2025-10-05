@@ -1,10 +1,14 @@
+// Run `npx prisma migrate dev` to update your database schema.
+
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
 model User {
@@ -14,4 +18,36 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model HazardCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  emoji     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hazards   Hazard[]
+}
+
+enum HazardSeverity {
+  info
+  advice
+  watchAndAct
+  emergency
+}
+
+model Hazard {
+  id               String         @id @default(uuid())
+  title            String
+  shortDescription String
+  severity         HazardSeverity @default(info)
+  source           String?
+  geoLocation      String? // PostGIS geometry as string (WKT or WKB)
+  latitude         Float?
+  longitude        Float?
+  categoryId       String
+  category         HazardCategory @relation(fields: [categoryId], references: [id])
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  expiresAt        DateTime?
 }

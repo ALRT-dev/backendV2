@@ -1,9 +1,10 @@
 import env from "dotenv";
 import express from "express";
 import cors from "cors";
-import { authRouter, userRouter } from "./routes/index.js";
+import { authRouter, hazardRouter, userRouter } from "./routes/index.js";
 import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
+import hazardCategoryRouter from "./routes/hazardCategory.route.js";
 
 env.config();
 
@@ -15,6 +16,8 @@ app.use(express.json());
 
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
+app.use("/api/hazards", hazardRouter);
+app.use("/api/hazard-categories", hazardCategoryRouter);
 
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
