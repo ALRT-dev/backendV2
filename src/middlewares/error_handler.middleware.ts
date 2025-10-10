@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express"
+import type { NextFunction, Request, Response } from "express";
 
 export const errorHandlerMiddleware = (
   error: any,
@@ -7,6 +7,6 @@ export const errorHandlerMiddleware = (
   next: NextFunction
 ) => {
   res
-    .status(error.statusCode || 400)
-    .send({ error: error.message || "Internal Server Error" })
-}
+    .status(error.statusCode || 500)
+    .send({ error: error.message || "Internal Server Error" });
+};

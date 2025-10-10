@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import type { HazardSeverity } from "@prisma/client";
+import { getHazardsApplyingFilters } from "../services/hazard.service.js";
+import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 
 export const getHazards = async (
   req: Request,
@@ -8,51 +10,13 @@ export const getHazards = async (
   next: NextFunction
 ) => {
   try {
-    const {
-      categoryIds,
-      searchString,
-      page = "1",
-      pageSize = "20",
-    } = req.query;
+    const { categoryIds, searchString, page = 1, pageSize = 20 } = req.query;
 
-    const hazards = await prisma.hazard.findMany({
-      where: {
-        ...(categoryIds
-          ? {
-              categoryId: {
-                in: Array.isArray(categoryIds)
-                  ? (categoryIds as string[])
-                  : (categoryIds as string).split(","),
-              },
-            }
-          : {}),
-        ...(searchString
-          ? {
-              OR: [
-                {
-                  title: {
-                    contains: searchString as string,
-                    mode: "insensitive",
-                  },
-                },
-                {
-                  shortDescription: {
-                    contains: searchString as string,
-                    mode: "insensitive",
-                  },
-                },
-              ],
-            }
-          : {}),
-      },
-      include: {
-        category: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip: (Number(page) - 1) * Number(pageSize),
-      take: Number(pageSize),
+    const hazards = await getHazardsApplyingFilters({
+      searchString,
+      categoryIds,
+      page,
+      pageSize,
     });
 
     res.status(200).json(hazards);
@@ -88,140 +52,23 @@ export const getHazardsWithCategories = async (
       select: { id: true },
     });
 
-    const categoriesPromise = prisma.hazardCategory.findMany({
-      where: {
-        hazards: {
-          some: {
-            ...(searchString
-              ? {
-                  OR: [
-                    {
-                      title: {
-                        contains: searchString as string,
-                        mode: "insensitive",
-                      },
-                    },
-                    {
-                      shortDescription: {
-                        contains: searchString as string,
-                        mode: "insensitive",
-                      },
-                    },
-                  ],
-                }
-              : {}),
-            ...(northeastLat && northeastLng && southwestLat && southwestLng
-              ? {
-                  latitude: {
-                    gte: Number(southwestLat),
-                    lte: Number(northeastLat),
-                  },
-                  longitude: {
-                    gte: Number(southwestLng),
-                    lte: Number(northeastLng),
-                  },
-                }
-              : {}),
-          },
-        },
-      },
-      include: {
-        _count: {
-          select: {
-            hazards: {
-              where: {
-                ...(searchString
-                  ? {
-                      OR: [
-                        {
-                          title: {
-                            contains: searchString as string,
-                            mode: "insensitive",
-                          },
-                        },
-                        {
-                          shortDescription: {
-                            contains: searchString as string,
-                            mode: "insensitive",
-                          },
-                        },
-                      ],
-                    }
-                  : {}),
-                ...(northeastLat && northeastLng && southwestLat && southwestLng
-                  ? {
-                      latitude: {
-                        gte: Number(southwestLat),
-                        lte: Number(northeastLat),
-                      },
-                      longitude: {
-                        gte: Number(southwestLng),
-                        lte: Number(northeastLng),
-                      },
-                    }
-                  : {}),
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        hazards: {
-          _count: "desc",
-        },
-      },
+    const categoriesPromise = getCategoriesApplyingFilters({
+      hazardSearchString: searchString,
+      hazardNortheastLat: northeastLat,
+      hazardNortheastLng: northeastLng,
+      hazardSouthwestLat: southwestLat,
+      hazardSouthwestLng: southwestLng,
     });
 
-    const hazardsPromise = prisma.hazard.findMany({
-      where: {
-        ...(categoryIds
-          ? {
-              categoryId: {
-                in: Array.isArray(categoryIds)
-                  ? (categoryIds as string[])
-                  : (categoryIds as string).split(","),
-              },
-            }
-          : {}),
-        ...(searchString
-          ? {
-              OR: [
-                {
-                  title: {
-                    contains: searchString as string,
-                    mode: "insensitive",
-                  },
-                },
-                {
-                  shortDescription: {
-                    contains: searchString as string,
-                    mode: "insensitive",
-                  },
-                },
-              ],
-            }
-          : {}),
-        ...(northeastLat && northeastLng && southwestLat && southwestLng
-          ? {
-              latitude: {
-                gte: Number(southwestLat),
-                lte: Number(northeastLat),
-              },
-              longitude: {
-                gte: Number(southwestLng),
-                lte: Number(northeastLng),
-              },
-            }
-          : {}),
-      },
-      include: {
-        category: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      skip: (Number(page) - 1) * Number(pageSize),
-      take: Number(pageSize),
+    const hazardsPromise = getHazardsApplyingFilters({
+      searchString,
+      categoryIds,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+      page,
+      pageSize,
     });
 
     const [subscription, categories, hazards] = await Promise.all([
@@ -232,16 +79,14 @@ export const getHazardsWithCategories = async (
 
     const subscriptionId = subscription?.id;
 
-    // Transform categories to include hazardsCount and remove _count
-    const transformedCategories = categories.map((category) => ({
-      ...category,
-      hazardsCount: category._count.hazards,
-      _count: undefined,
-    }));
+    // If no hazards found, return empty categories and hazards
+    if (hazards.length === 0) {
+      return res
+        .status(200)
+        .json({ subscriptionId: null, categories: [], hazards: [] });
+    }
 
-    res
-      .status(200)
-      .json({ subscriptionId, categories: transformedCategories, hazards });
+    res.status(200).json({ subscriptionId, categories, hazards });
   } catch (error) {
     next(error);
   }
