@@ -78,6 +78,16 @@ export const getHazardsWithCategories = async (
       pageSize = 20,
     } = req.query;
 
+    const subscriptionPromise = prisma.locationSubscription.findFirst({
+      where: {
+        northeastLat: Number(northeastLat),
+        northeastLng: Number(northeastLng),
+        southwestLat: Number(southwestLat),
+        southwestLng: Number(southwestLng),
+      },
+      select: { id: true },
+    });
+
     const categoriesPromise = prisma.hazardCategory.findMany({
       where: {
         hazards: {
@@ -214,10 +224,13 @@ export const getHazardsWithCategories = async (
       take: Number(pageSize),
     });
 
-    const [categories, hazards] = await Promise.all([
+    const [subscription, categories, hazards] = await Promise.all([
+      subscriptionPromise,
       categoriesPromise,
       hazardsPromise,
     ]);
+
+    const subscriptionId = subscription?.id;
 
     // Transform categories to include hazardsCount and remove _count
     const transformedCategories = categories.map((category) => ({
@@ -226,7 +239,9 @@ export const getHazardsWithCategories = async (
       _count: undefined,
     }));
 
-    res.status(200).json({ categories: transformedCategories, hazards });
+    res
+      .status(200)
+      .json({ subscriptionId, categories: transformedCategories, hazards });
   } catch (error) {
     next(error);
   }

@@ -195,14 +195,8 @@ export const refreshToken = async (
       throw new HttpError(500, "Error signing access token");
     }
 
-    const newRefreshToken = signRefreshToken({ userId: user.id });
-    if (!newRefreshToken) {
-      throw new HttpError(500, "Error signing refresh token");
-    }
-
     res.status(200).json({
       accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
     });
   } catch (error) {
     next(error);
