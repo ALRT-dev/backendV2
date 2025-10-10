@@ -5,12 +5,18 @@ import {
   getHazards,
   deleteHazard,
   populateHazards,
+  getHazardsWithCategories,
 } from "../controllers/hazard.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 
 const hazardRouter = Router();
 
 hazardRouter.get("/", requireAuth, getHazards);
+hazardRouter.get(
+  "/hazards-with-categories",
+  requireAuth,
+  getHazardsWithCategories
+);
 hazardRouter.get("/:id", requireAuth, getHazardById);
 hazardRouter.post("/", requireAuth, createHazard);
 hazardRouter.post("/populate", requireAuth, populateHazards);

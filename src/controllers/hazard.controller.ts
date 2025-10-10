@@ -61,6 +61,177 @@ export const getHazards = async (
   }
 };
 
+export const getHazardsWithCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const {
+      searchString,
+      categoryIds,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+      page = 1,
+      pageSize = 20,
+    } = req.query;
+
+    const categoriesPromise = prisma.hazardCategory.findMany({
+      where: {
+        hazards: {
+          some: {
+            ...(searchString
+              ? {
+                  OR: [
+                    {
+                      title: {
+                        contains: searchString as string,
+                        mode: "insensitive",
+                      },
+                    },
+                    {
+                      shortDescription: {
+                        contains: searchString as string,
+                        mode: "insensitive",
+                      },
+                    },
+                  ],
+                }
+              : {}),
+            ...(northeastLat && northeastLng && southwestLat && southwestLng
+              ? {
+                  latitude: {
+                    gte: Number(southwestLat),
+                    lte: Number(northeastLat),
+                  },
+                  longitude: {
+                    gte: Number(southwestLng),
+                    lte: Number(northeastLng),
+                  },
+                }
+              : {}),
+          },
+        },
+      },
+      include: {
+        _count: {
+          select: {
+            hazards: {
+              where: {
+                ...(searchString
+                  ? {
+                      OR: [
+                        {
+                          title: {
+                            contains: searchString as string,
+                            mode: "insensitive",
+                          },
+                        },
+                        {
+                          shortDescription: {
+                            contains: searchString as string,
+                            mode: "insensitive",
+                          },
+                        },
+                      ],
+                    }
+                  : {}),
+                ...(northeastLat && northeastLng && southwestLat && southwestLng
+                  ? {
+                      latitude: {
+                        gte: Number(southwestLat),
+                        lte: Number(northeastLat),
+                      },
+                      longitude: {
+                        gte: Number(southwestLng),
+                        lte: Number(northeastLng),
+                      },
+                    }
+                  : {}),
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        hazards: {
+          _count: "desc",
+        },
+      },
+    });
+
+    const hazardsPromise = prisma.hazard.findMany({
+      where: {
+        ...(categoryIds
+          ? {
+              categoryId: {
+                in: Array.isArray(categoryIds)
+                  ? (categoryIds as string[])
+                  : (categoryIds as string).split(","),
+              },
+            }
+          : {}),
+        ...(searchString
+          ? {
+              OR: [
+                {
+                  title: {
+                    contains: searchString as string,
+                    mode: "insensitive",
+                  },
+                },
+                {
+                  shortDescription: {
+                    contains: searchString as string,
+                    mode: "insensitive",
+                  },
+                },
+              ],
+            }
+          : {}),
+        ...(northeastLat && northeastLng && southwestLat && southwestLng
+          ? {
+              latitude: {
+                gte: Number(southwestLat),
+                lte: Number(northeastLat),
+              },
+              longitude: {
+                gte: Number(southwestLng),
+                lte: Number(northeastLng),
+              },
+            }
+          : {}),
+      },
+      include: {
+        category: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip: (Number(page) - 1) * Number(pageSize),
+      take: Number(pageSize),
+    });
+
+    const [categories, hazards] = await Promise.all([
+      categoriesPromise,
+      hazardsPromise,
+    ]);
+
+    // Transform categories to include hazardsCount and remove _count
+    const transformedCategories = categories.map((category) => ({
+      ...category,
+      hazardsCount: category._count.hazards,
+      _count: undefined,
+    }));
+
+    res.status(200).json({ categories: transformedCategories, hazards });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getHazardById = async (
   req: Request,
   res: Response,
