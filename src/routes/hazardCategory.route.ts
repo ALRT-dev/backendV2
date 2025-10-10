@@ -3,10 +3,11 @@ import {
   createHazardCategory,
   getHazardCategories,
 } from "../controllers/hazardCategory.controller.js";
+import { requireAuth } from "../middlewares/auth.middleware.js";
 
 const hazardCategoryRouter = Router();
 
-hazardCategoryRouter.get("/", getHazardCategories);
-hazardCategoryRouter.post("/", createHazardCategory);
+hazardCategoryRouter.get("/", requireAuth, getHazardCategories);
+hazardCategoryRouter.post("/", requireAuth, createHazardCategory);
 
 export default hazardCategoryRouter;

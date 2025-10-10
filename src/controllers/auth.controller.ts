@@ -1,7 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
-import { signAccessToken, signRefreshToken } from "../utils/jwt.util.js";
+import {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "../utils/jwt.util.js";
 import { comparePassword, hashPassword } from "../services/auth.service.js";
 import client from "../utils/google_oauth_client.util.js";
 
@@ -154,6 +158,51 @@ export const verifyGoogleOAuth = async (
     res.status(200).json({
       accessToken,
       refreshToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const refreshToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { refreshToken: incomingRefreshToken } = req.body;
+    if (!incomingRefreshToken) {
+      throw new HttpError(400, "Refresh token is required");
+    }
+
+    // Verify the refresh token
+    const decoded = verifyRefreshToken(incomingRefreshToken);
+    if (!decoded || typeof decoded === "string") {
+      throw new HttpError(401, "Invalid refresh token");
+    }
+
+    const userId = decoded.userId;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new HttpError(401, "User not found");
+    }
+
+    const newAccessToken = signAccessToken({ userId: user.id });
+    if (!newAccessToken) {
+      throw new HttpError(500, "Error signing access token");
+    }
+
+    const newRefreshToken = signRefreshToken({ userId: user.id });
+    if (!newRefreshToken) {
+      throw new HttpError(500, "Error signing refresh token");
+    }
+
+    res.status(200).json({
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     next(error);
