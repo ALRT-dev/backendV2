@@ -12,12 +12,13 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String   @default("")
-  name         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String                 @default("")
+  name                  String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  locationSubscriptions LocationSubscription[]
 }
 
 model HazardCategory {
@@ -50,4 +51,21 @@ model Hazard {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   expiresAt        DateTime?
+}
+
+model LocationSubscription {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  northeastLat Float
+  northeastLng Float
+  southwestLat Float
+  southwestLng Float
+  name         String? // Optional name for the location
+  address      String? // Optional human-readable address
+  geoRegion    String? // PostGIS geometry as string (WKT or WKB)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId])
 }
