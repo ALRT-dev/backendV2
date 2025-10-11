@@ -1,4 +1,7 @@
+import type { Hazard, HazardCategory } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
+import openai from "../utils/open_ai_client.util.js";
+import { HttpError } from "../models/http_error.js";
 
 export const buildHazardsWhereClause = ({
   searchString,
@@ -146,4 +149,79 @@ export const getHazardsApplyingFilters = async ({
     skip: (Number(page) - 1) * Number(pageSize),
     take: Number(pageSize),
   });
+};
+
+export const reviewHazard = async ({
+  hazard,
+  category,
+}: {
+  hazard: Hazard;
+  category: HazardCategory;
+}) => {
+  const { title, description, latitude, longitude } = hazard;
+  const { name: categoryName } = category;
+
+  const prompt = `
+You are an AI reviewer for a hazard alert system.
+A user has submitted the following hazard:
+
+Title: ${title}
+Description: ${description}
+Category: ${categoryName}
+Location: ${latitude}, ${longitude}
+
+Tasks:
+1. Check if the description is valid (not spam or nonsense). If content contains inappropriate or harmful material, mark as invalid.
+2. Suggest a better title if necessary.
+3. Summarize the hazard in few sentences.
+4. Create a very short summary (max 100 characters). Don't repeat the title.
+5. Rate confidence in hazard being real: high, medium, low.
+6. Estimate severity based on possible danger to life or property: info, advice, watchAndAct, emergency.
+7. Return structured JSON only.
+
+Respond in JSON:
+{
+  "valid": true/false,
+  "suggestedTitle": "string",
+  "summary": "string",
+  "shortSummary": "string",
+  "confidence": "high/medium/low",
+  "severity": "info/advice/watchAndAct/emergency",
+  "feedback": "short feedback message for user"
+}
+`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 500,
+  });
+
+  if (
+    response.choices.length === 0 ||
+    !response.choices[0]!!.message?.content
+  ) {
+    throw new HttpError(500, "AI review failed: No response from AI");
+  }
+
+  const aiReview = JSON.parse(response.choices[0]!!.message.content!!) as {
+    valid: boolean;
+    suggestedTitle: string;
+    summary: string;
+    shortSummary: string;
+    confidence: "high" | "medium" | "low";
+    severity: "info" | "advice" | "watchAndAct" | "emergency";
+    feedback: string;
+  };
+
+  return {
+    valid: aiReview.valid,
+    suggestedTitle: aiReview.suggestedTitle || title,
+    summary: aiReview.summary,
+    shortSummary: aiReview.shortSummary,
+    confidence: aiReview.confidence,
+    severity: aiReview.severity,
+    feedback: aiReview.feedback,
+  };
 };

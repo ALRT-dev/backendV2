@@ -1,7 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import type { HazardSeverity } from "@prisma/client";
-import { getHazardsApplyingFilters } from "../services/hazard.service.js";
+import {
+  getHazardsApplyingFilters,
+  reviewHazard,
+} from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 
 export const getHazards = async (
@@ -150,10 +153,44 @@ export const createHazard = async (
         .json({ message: "Location (latitude and longitude) is required" });
     }
 
+    const category = await prisma.hazardCategory.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) {
+      return res.status(400).json({ message: "Invalid Category ID" });
+    }
+
+    let review: any;
+    try {
+      review = await reviewHazard({ hazard: req.body, category });
+    } catch (error) {
+      console.log("Error during hazard review:", error);
+      review = {
+        valid: false,
+        aiFeedback: "Error during AI review process",
+      };
+    }
+
+    const {
+      valid,
+      suggestedTitle,
+      summary: aiSummary,
+      shortSummary: shortDescription,
+      confidence: aiConfidence,
+      severity: aiSeverity,
+      feedback: aiFeedback,
+    } = review;
+
     const result = await prisma.hazard.create({
       data: {
-        title,
+        title: suggestedTitle || title,
         description,
+        ...(shortDescription && { shortDescription }),
+        ...(aiSummary && { aiSummary }),
+        ...(aiFeedback && { aiFeedback }),
+        ...(aiSeverity && { aiSeverity }),
+        ...(aiConfidence && { aiConfidence }),
+        visibility: valid,
         categoryId,
         latitude,
         longitude,

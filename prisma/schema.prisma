@@ -37,22 +37,32 @@ enum HazardSeverity {
   emergency
 }
 
+enum AIConfidence {
+  low
+  medium
+  high
+}
+
 model Hazard {
-  id               String         @id @default(uuid())
+  id               String          @id @default(uuid())
   title            String
   description      String
   shortDescription String?
   aiSummary        String?
-  severity         HazardSeverity @default(info)
+  aiFeedback       String?
+  aiSeverity       HazardSeverity?
+  aiConfidence     AIConfidence?
+  visibility       Boolean         @default(true)
+  severity         HazardSeverity  @default(info)
   source           String?
   geoLocation      String? // PostGIS geometry as string (WKT or WKB)
   latitude         Float?
   longitude        Float?
   categoryId       String
-  category         HazardCategory @relation(fields: [categoryId], references: [id])
-  occurredAt       DateTime       @default(now())
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  category         HazardCategory  @relation(fields: [categoryId], references: [id])
+  occurredAt       DateTime        @default(now())
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
   expiresAt        DateTime?
 }
 
