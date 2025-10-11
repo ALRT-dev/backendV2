@@ -6,6 +6,7 @@ import {
   reviewHazard,
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
+import { sendPushNotificationAboutHazard } from "../services/notification.service.js";
 
 export const getHazards = async (
   req: Request,
@@ -200,6 +201,9 @@ export const createHazard = async (
       },
       include: { category: true },
     });
+
+    // Send push notifications to users who subscribed to this area when a new hazard is created
+    sendPushNotificationAboutHazard(result);
 
     res.status(201).json(result);
   } catch (error) {

@@ -11,14 +11,10 @@ export const getNotificationsFeed = async (
 ) => {
   try {
     const { userId } = res;
-    if (!userId) {
-      throw new HttpError(401, "Unauthorized");
-    }
-
     const { searchString, categoryIds, page = 1, pageSize = 20 } = req.query;
 
     const subscriptions = await prisma.locationSubscription.findMany({
-      where: { userId },
+      where: { userId: userId! },
     });
 
     if (subscriptions.length === 0) {
@@ -49,6 +45,39 @@ export const getNotificationsFeed = async (
     }
 
     res.status(200).json({ categories, hazards });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const sendPushNotificationToken = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { token, platform } = req.body;
+    const { userId } = res;
+
+    const newDevice = await prisma.userDevice.upsert({
+      where: {
+        deviceToken: token,
+      },
+      create: {
+        userId: userId!,
+        deviceToken: token,
+        platform,
+      },
+      update: {
+        platform,
+      },
+    });
+
+    if (!newDevice) {
+      throw new HttpError(500, "Failed to register device token");
+    }
+
+    res.status(200).json({ message: "Device token registered successfully" });
   } catch (error) {
     next(error);
   }

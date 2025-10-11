@@ -5,3 +5,4 @@ dist
 *.env
 rest.http
 /src/generated/prisma
+serviceAccountKey.json

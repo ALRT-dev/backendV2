@@ -19,6 +19,7 @@ model User {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   locationSubscriptions LocationSubscription[]
+  devices               UserDevice[]
 }
 
 model HazardCategory {
@@ -79,6 +80,18 @@ model LocationSubscription {
   geoRegion    String? // PostGIS geometry as string (WKT or WKB)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserDevice {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  deviceToken String   @unique
+  platform    String? // e.g., "ios", "android"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([userId])
 }
