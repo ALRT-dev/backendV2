@@ -1,6 +1,7 @@
 import type { Hazard } from "@prisma/client";
 import { firebaseAdmin } from "../utils/firebase_admin_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
+import { PushNotificationType } from "../models/push_notification_types.js";
 
 /// A function to get user push notification tokens of a specific user by their user ID.
 const getUserPushNotificationTokens = async (userId: string) => {
@@ -31,11 +32,13 @@ const sendPushNotificationToTokens = async ({
   title,
   body,
   data,
+  type,
 }: {
   tokens: string[];
   title: string;
   body: string;
   data: object;
+  type: PushNotificationType;
 }) => {
   try {
     if (tokens.length === 0) {
@@ -48,12 +51,10 @@ const sendPushNotificationToTokens = async ({
         title,
         body,
       },
-      data: Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [
-          key,
-          value?.toString() ?? "",
-        ])
-      ),
+      data: {
+        payload: JSON.stringify(data),
+        notificationType: type.toString(),
+      },
       tokens: tokens,
     };
 
@@ -76,11 +77,13 @@ export const sendPushNotificationToUser = async ({
   title,
   body,
   data,
+  type,
 }: {
   userId: string;
   title: string;
   body: string;
   data: object;
+  type: PushNotificationType;
 }) => {
   try {
     // Fetch user tokens from your database
@@ -96,6 +99,7 @@ export const sendPushNotificationToUser = async ({
       title,
       body,
       data,
+      type,
     });
   } catch (error) {
     console.error("Error sending push notification to user:", error);
@@ -105,7 +109,7 @@ export const sendPushNotificationToUser = async ({
 /// Sends push notifications to users who have subscribed to the area around the hazard.
 export const sendPushNotificationAboutHazard = async (hazard: Hazard) => {
   try {
-    const { latitude, longitude, title } = hazard;
+    const { latitude, longitude, title, reportedById } = hazard;
     if (!latitude || !longitude) {
       console.log(
         "Hazard does not have valid coordinates to send notifications"
@@ -119,6 +123,8 @@ export const sendPushNotificationAboutHazard = async (hazard: Hazard) => {
         northeastLng: { gte: longitude - 0.1 },
         southwestLat: { lte: latitude + 0.1 },
         southwestLng: { lte: longitude + 0.1 },
+        // don't notify the user who reported the hazard
+        ...(reportedById && { userId: { not: reportedById } }),
       },
       select: {
         user: {
@@ -136,6 +142,7 @@ export const sendPushNotificationAboutHazard = async (hazard: Hazard) => {
       title: title,
       body: `A new hazard has been reported in your area`,
       data: hazard,
+      type: PushNotificationType.viewHazard,
     });
   } catch (error) {
     console.error(

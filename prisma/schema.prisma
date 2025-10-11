@@ -20,6 +20,7 @@ model User {
   updatedAt             DateTime               @updatedAt
   locationSubscriptions LocationSubscription[]
   devices               UserDevice[]
+  reportedHazards       Hazard[]
 }
 
 model HazardCategory {
@@ -61,6 +62,8 @@ model Hazard {
   longitude        Float?
   categoryId       String
   category         HazardCategory  @relation(fields: [categoryId], references: [id])
+  reportedById     String?
+  reportedBy       User?           @relation(fields: [reportedById], references: [id])
   occurredAt       DateTime        @default(now())
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt

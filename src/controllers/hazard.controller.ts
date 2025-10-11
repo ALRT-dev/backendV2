@@ -6,7 +6,11 @@ import {
   reviewHazard,
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
-import { sendPushNotificationAboutHazard } from "../services/notification.service.js";
+import {
+  sendPushNotificationAboutHazard as sendPushNotificationAboutNewHazard,
+  sendPushNotificationToUser,
+} from "../services/notification.service.js";
+import { PushNotificationType } from "../models/push_notification_types.js";
 
 export const getHazards = async (
   req: Request,
@@ -138,6 +142,7 @@ export const createHazard = async (
       source,
       occurredAt,
     } = req.body;
+    const { userId } = res;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
@@ -193,6 +198,7 @@ export const createHazard = async (
         ...(aiConfidence && { aiConfidence }),
         visibility: valid,
         categoryId,
+        reportedById: userId,
         latitude,
         longitude,
         severity,
@@ -202,8 +208,30 @@ export const createHazard = async (
       include: { category: true },
     });
 
-    // Send push notifications to users who subscribed to this area when a new hazard is created
-    sendPushNotificationAboutHazard(result);
+    if (valid) {
+      // Send push notifications to users who subscribed to this area when a new hazard is created
+      // This will ignore the user who reported the hazard
+      sendPushNotificationAboutNewHazard(result);
+    }
+
+    // Send a notification to the user who reported the hazard
+    if (valid) {
+      sendPushNotificationToUser({
+        userId: userId!,
+        title: "Hazard Reported Successfully",
+        body: `Your hazard "${result.title}" has been reported successfully.`,
+        data: result,
+        type: PushNotificationType.viewHazard,
+      });
+    } else {
+      sendPushNotificationToUser({
+        userId: userId!,
+        title: "Invalid Hazard Report",
+        body: `Our review found your hazard report to be invalid. ${aiFeedback}`,
+        data: result,
+        type: PushNotificationType.viewHazard,
+      });
+    }
 
     res.status(201).json(result);
   } catch (error) {
