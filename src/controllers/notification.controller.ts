@@ -22,7 +22,7 @@ export const getNotificationsFeed = async (
     });
 
     if (subscriptions.length === 0) {
-      return res.status(200).json([]);
+      return res.status(200).json({ categories: [], hazards: [] });
     }
 
     const categoriesPromise = getCategoriesApplyingFilters({

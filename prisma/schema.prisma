@@ -40,7 +40,9 @@ enum HazardSeverity {
 model Hazard {
   id               String         @id @default(uuid())
   title            String
-  shortDescription String
+  description      String
+  shortDescription String?
+  aiSummary        String?
   severity         HazardSeverity @default(info)
   source           String?
   geoLocation      String? // PostGIS geometry as string (WKT or WKB)
@@ -48,6 +50,7 @@ model Hazard {
   longitude        Float?
   categoryId       String
   category         HazardCategory @relation(fields: [categoryId], references: [id])
+  occurredAt       DateTime       @default(now())
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   expiresAt        DateTime?

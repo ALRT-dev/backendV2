@@ -126,19 +126,20 @@ export const createHazard = async (
   try {
     const {
       title,
-      shortDescription,
+      description,
       categoryId,
       latitude,
       longitude,
       severity,
       source,
+      occurredAt,
     } = req.body;
 
     if (!title) {
       return res.status(400).json({ message: "Title is required" });
     }
-    if (!shortDescription) {
-      return res.status(400).json({ message: "Short description is required" });
+    if (!description) {
+      return res.status(400).json({ message: "Description is required" });
     }
     if (!categoryId) {
       return res.status(400).json({ message: "Category ID is required" });
@@ -152,12 +153,13 @@ export const createHazard = async (
     const result = await prisma.hazard.create({
       data: {
         title,
-        shortDescription,
+        description,
         categoryId,
         latitude,
         longitude,
         severity,
         source,
+        occurredAt,
       },
       include: { category: true },
     });
@@ -234,7 +236,7 @@ export const populateHazards = async (
         title: "Landslide in Kathmandu",
         categoryName: "Weather & Environment",
         severity: "emergency",
-        shortDescription: "A massive landslide has occurred in Kathmandu.",
+        description: "A massive landslide has occurred in Kathmandu.",
         latitude: 27.7172,
         longitude: 85.324,
         createdAt: new Date("2025-10-01T10:00:00Z"),
@@ -243,7 +245,7 @@ export const populateHazards = async (
         title: "Flood in Chitwan",
         categoryName: "Weather & Environment",
         severity: "watchAndAct",
-        shortDescription: "Severe flooding reported in Chitwan area.",
+        description: "Severe flooding reported in Chitwan area.",
         latitude: 27.5291,
         longitude: 84.3542,
         createdAt: new Date("2025-09-30T12:30:00Z"),
@@ -252,7 +254,7 @@ export const populateHazards = async (
         title: "Earthquake near Pokhara",
         categoryName: "Weather & Environment",
         severity: "emergency",
-        shortDescription: "A 5.6 magnitude earthquake struck near Pokhara.",
+        description: "A 5.6 magnitude earthquake struck near Pokhara.",
         latitude: 28.2096,
         longitude: 83.9856,
         createdAt: new Date("2025-09-28T14:15:00Z"),
@@ -261,8 +263,7 @@ export const populateHazards = async (
         title: "Wildfire in Bardiya",
         categoryName: "Weather & Environment",
         severity: "emergency",
-        shortDescription:
-          "Wildfire spreading rapidly in Bardiya National Park.",
+        description: "Wildfire spreading rapidly in Bardiya National Park.",
         latitude: 28.356,
         longitude: 81.491,
         createdAt: new Date("2024-03-04T16:45:00Z"),
@@ -271,7 +272,7 @@ export const populateHazards = async (
         title: "Tornado in Biratnagar",
         categoryName: "Weather & Environment",
         severity: "emergency",
-        shortDescription: "A tornado has caused damage in Biratnagar region.",
+        description: "A tornado has caused damage in Biratnagar region.",
         latitude: 26.4525,
         longitude: 87.2718,
         createdAt: new Date("2023-10-05T18:00:00Z"),
@@ -280,7 +281,7 @@ export const populateHazards = async (
         title: "Flood near Bagmati River",
         categoryName: "Weather & Environment",
         severity: "watchAndAct",
-        shortDescription:
+        description:
           "The Bagmati River overflowed due to heavy rainfall, causing localized flooding.",
         latitude: 27.6931,
         longitude: 85.3145,
@@ -290,8 +291,7 @@ export const populateHazards = async (
         title: "Earthquake tremor felt in Thamel",
         categoryName: "Weather & Environment",
         severity: "advice",
-        shortDescription:
-          "Mild earthquake tremor shook buildings in Thamel area.",
+        description: "Mild earthquake tremor shook buildings in Thamel area.",
         latitude: 27.7154,
         longitude: 85.3123,
         createdAt: new Date("2025-10-01T11:30:00Z"),
@@ -300,7 +300,7 @@ export const populateHazards = async (
         title: "Wildfire in Shivapuri forest",
         categoryName: "Weather & Environment",
         severity: "emergency",
-        shortDescription:
+        description:
           "A wildfire has broken out in the Shivapuri National Park forest area.",
         latitude: 27.8333,
         longitude: 85.3667,
@@ -310,7 +310,7 @@ export const populateHazards = async (
         title: "Building collapse in Baneshwor",
         categoryName: "Infrastructure & Services",
         severity: "emergency",
-        shortDescription:
+        description:
           "A residential building collapsed due to weak structure and recent tremors.",
         latitude: 27.7033,
         longitude: 85.3333,
@@ -320,7 +320,7 @@ export const populateHazards = async (
         title: "Tornado spotted in Bhaktapur outskirts",
         categoryName: "Weather & Environment",
         severity: "watchAndAct",
-        shortDescription:
+        description:
           "A small tornado was spotted on the outskirts near Bhaktapur, affecting nearby houses.",
         latitude: 27.671,
         longitude: 85.4298,
@@ -330,7 +330,7 @@ export const populateHazards = async (
         title: "Flooded streets in Patan",
         categoryName: "Weather & Environment",
         severity: "advice",
-        shortDescription:
+        description:
           "Monsoon rains caused waterlogging in Patan Durbar Square area.",
         latitude: 27.6722,
         longitude: 85.324,
@@ -340,7 +340,7 @@ export const populateHazards = async (
         title: "Gas leak in Baneshwor",
         categoryName: "Health & Emergency",
         severity: "emergency",
-        shortDescription:
+        description:
           "A gas leak was reported in a small factory near Baneshwor.",
         latitude: 27.703,
         longitude: 85.3345,
@@ -350,7 +350,7 @@ export const populateHazards = async (
         title: "Fire outbreak in Kalimati market",
         categoryName: "Health & Emergency",
         severity: "emergency",
-        shortDescription:
+        description:
           "A fire broke out in the crowded Kalimati vegetable market.",
         latitude: 27.6915,
         longitude: 85.301,
@@ -360,7 +360,7 @@ export const populateHazards = async (
         title: "Power outage in Bhaktapur",
         categoryName: "Infrastructure & Services",
         severity: "info",
-        shortDescription:
+        description:
           "Large parts of Bhaktapur experienced blackout due to storm.",
         latitude: 27.671,
         longitude: 85.4298,
@@ -370,8 +370,7 @@ export const populateHazards = async (
         title: "Structural damage at Dharahara",
         categoryName: "Infrastructure & Services",
         severity: "watchAndAct",
-        shortDescription:
-          "Cracks appeared in Dharahara tower after recent tremors.",
+        description: "Cracks appeared in Dharahara tower after recent tremors.",
         latitude: 27.7039,
         longitude: 85.3157,
         createdAt: new Date("2025-10-01T15:15:00Z"),
@@ -380,8 +379,7 @@ export const populateHazards = async (
         title: "Earthquake tremors in Lalitpur",
         categoryName: "Weather & Environment",
         severity: "advice",
-        shortDescription:
-          "People rushed out of their homes after mild tremors.",
+        description: "People rushed out of their homes after mild tremors.",
         latitude: 27.6588,
         longitude: 85.3247,
         createdAt: new Date("2025-10-01T15:30:00Z"),
@@ -390,8 +388,7 @@ export const populateHazards = async (
         title: "Heavy rainfall in Kirtipur",
         categoryName: "Weather & Environment",
         severity: "advice",
-        shortDescription:
-          "Continuous rainfall flooded low-lying roads in Kirtipur.",
+        description: "Continuous rainfall flooded low-lying roads in Kirtipur.",
         latitude: 27.6675,
         longitude: 85.278,
         createdAt: new Date("2025-10-01T16:00:00Z"),
@@ -400,7 +397,7 @@ export const populateHazards = async (
         title: "Small landslide in Sundarijal",
         categoryName: "Weather & Environment",
         severity: "watchAndAct",
-        shortDescription:
+        description:
           "Road blocked due to small landslide near Sundarijal hiking trail.",
         latitude: 27.7892,
         longitude: 85.4253,
@@ -410,8 +407,7 @@ export const populateHazards = async (
         title: "Bridge collapse in Gorkha",
         categoryName: "Infrastructure & Services",
         severity: "emergency",
-        shortDescription:
-          "A suspension bridge collapsed due to rust and overuse.",
+        description: "A suspension bridge collapsed due to rust and overuse.",
         latitude: 28.0135,
         longitude: 84.6339,
         createdAt: new Date("2025-10-01T17:00:00Z"),
@@ -420,7 +416,7 @@ export const populateHazards = async (
         title: "Robbery reported in New Road",
         categoryName: "Safety & Security",
         severity: "info",
-        shortDescription: "Two individuals reported being robbed at New Road.",
+        description: "Two individuals reported being robbed at New Road.",
         latitude: 27.7045,
         longitude: 85.3073,
         createdAt: new Date("2025-10-01T17:30:00Z"),
@@ -444,7 +440,7 @@ export const populateHazards = async (
       const hazard = await prisma.hazard.create({
         data: {
           title: hazardData.title,
-          shortDescription: hazardData.shortDescription,
+          description: hazardData.description,
           categoryId: category.id,
           latitude: hazardData.latitude,
           longitude: hazardData.longitude,
