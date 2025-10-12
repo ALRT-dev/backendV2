@@ -9,6 +9,7 @@ import {
 import { comparePassword, hashPassword } from "../services/auth.service.js";
 import client from "../utils/google_oauth_client.util.js";
 
+/// Controller to handle user registration with email and password.
 export const registerWithEmailAndPassword = async (
   req: Request,
   res: Response,
@@ -56,6 +57,7 @@ export const registerWithEmailAndPassword = async (
   }
 };
 
+/// Controller to handle user login with email and password.
 export const loginWithEmailAndPassword = async (
   req: Request,
   res: Response,
@@ -102,6 +104,7 @@ export const loginWithEmailAndPassword = async (
   }
 };
 
+/// Controller to handle user login or registration via Google OAuth.
 export const verifyGoogleOAuth = async (
   req: Request,
   res: Response,
@@ -164,6 +167,7 @@ export const verifyGoogleOAuth = async (
   }
 };
 
+/// Controller to handle refreshing the access token using a refresh token.
 export const refreshToken = async (
   req: Request,
   res: Response,

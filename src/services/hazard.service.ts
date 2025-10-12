@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
 
+/// Builds the where clause for filtering hazards based on various criteria.
 export const buildHazardsWhereClause = ({
   searchString,
   categoryIds,
@@ -24,6 +25,9 @@ export const buildHazardsWhereClause = ({
   const whereClause: any = {
     AND: [],
   };
+
+  // Only include hazards with visibility set to 'true'
+  whereClause.AND.push({ visibility: true });
 
   // Apply search string filter if provided
   if (searchString) {
@@ -107,6 +111,7 @@ export const buildHazardsWhereClause = ({
   return whereClause;
 };
 
+/// Fetch hazards applying various filters and pagination.
 export const getHazardsApplyingFilters = async ({
   searchString,
   categoryIds,
@@ -151,6 +156,7 @@ export const getHazardsApplyingFilters = async ({
   });
 };
 
+/// Uses AI to review a hazard report for validity, severity, and suggestions.
 export const reviewHazard = async ({
   hazard,
   category,
@@ -175,7 +181,7 @@ Tasks:
 2. Suggest a better title if necessary.
 3. Summarize the hazard in few sentences.
 4. Create a very short summary (max 100 characters). Don't repeat the title.
-5. Rate confidence in hazard being real: high, medium, low.
+5. Rate confidence in hazard being real: high, medium, low. Consider the description quality, details and length for this.
 6. Estimate severity based on possible danger to life or property: info, advice, watchAndAct, emergency.
 7. Return structured JSON only.
 

@@ -3,6 +3,7 @@ import { HttpError } from "../models/http_error.js";
 import { getUserById } from "../services/user.service.js";
 import prisma from "../utils/prisma_client.util.js";
 
+/// Controller to handle fetching the profile of the authenticated user.
 export const getUserProfile = async (
   req: Request,
   res: Response,
@@ -26,6 +27,7 @@ export const getUserProfile = async (
   }
 };
 
+/// Controller to handle subscribing the authenticated user to a location.
 export const subscribeToLocation = async (
   req: Request,
   res: Response,
@@ -71,6 +73,7 @@ export const subscribeToLocation = async (
   }
 };
 
+/// Controller to handle unsubscribing the authenticated user from a location.
 export const unsubscribeFromLocation = async (
   req: Request,
   res: Response,
@@ -105,6 +108,7 @@ export const unsubscribeFromLocation = async (
   }
 };
 
+/// Controller to handle fetching all location subscriptions of the authenticated user.
 export const getUserSubscriptions = async (
   req: Request,
   res: Response,

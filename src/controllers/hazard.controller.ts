@@ -7,11 +7,13 @@ import {
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 import {
-  sendPushNotificationAboutHazard as sendPushNotificationAboutNewHazard,
+  sendPushNotificationAboutNewHazard,
   sendPushNotificationToUser,
 } from "../services/notification.service.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
+import { sendSocketEventAboutNewHazard } from "../services/socket.service.js";
 
+/// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
   req: Request,
   res: Response,
@@ -100,6 +102,7 @@ export const getHazardsWithCategories = async (
   }
 };
 
+/// Controller to handle fetching a single hazard by its ID.
 export const getHazardById = async (
   req: Request,
   res: Response,
@@ -126,6 +129,7 @@ export const getHazardById = async (
   }
 };
 
+/// Controller to handle creating a new hazard report.
 export const createHazard = async (
   req: Request,
   res: Response,
@@ -212,9 +216,13 @@ export const createHazard = async (
       // Send push notifications to users who subscribed to this area when a new hazard is created
       // This will ignore the user who reported the hazard
       sendPushNotificationAboutNewHazard(result);
+
+      // Send socket events to users who subscribed to this area when a new hazard is created
+      // This will NOT ignore the user who reported the hazard
+      sendSocketEventAboutNewHazard(result);
     }
 
-    // Send a notification to the user who reported the hazard
+    // Now also send a notification to the user who reported the hazard
     if (valid) {
       sendPushNotificationToUser({
         userId: userId!,
@@ -239,6 +247,7 @@ export const createHazard = async (
   }
 };
 
+/// Controller to handle deleting a hazard by its ID.
 export const deleteHazard = async (
   req: Request,
   res: Response,
@@ -268,6 +277,7 @@ export const deleteHazard = async (
   }
 };
 
+/// Controller to handle populating the database with sample hazards and categories.
 export const populateHazards = async (
   req: Request,
   res: Response,

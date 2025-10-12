@@ -107,7 +107,7 @@ export const sendPushNotificationToUser = async ({
 };
 
 /// Sends push notifications to users who have subscribed to the area around the hazard.
-export const sendPushNotificationAboutHazard = async (hazard: Hazard) => {
+export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
   try {
     const { latitude, longitude, title, reportedById } = hazard;
     if (!latitude || !longitude) {
