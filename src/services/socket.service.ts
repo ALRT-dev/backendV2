@@ -1,5 +1,5 @@
 import type { Hazard } from "@prisma/client";
-import ioClient from "../utils/socket_client.util.js";
+import { getSocketClient } from "../utils/socket_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 
@@ -13,6 +13,9 @@ export const sendSocketEventToUsers = ({
   event: SocketEvent;
   data: any;
 }) => {
+  console.log(`Sending socket event '${event}' to users:`, userIds);
+
+  const ioClient = getSocketClient();
   userIds.forEach((userId) => {
     ioClient?.to("user_" + userId).emit(event, data);
   });
