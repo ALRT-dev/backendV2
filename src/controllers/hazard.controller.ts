@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
-import type { HazardSeverity } from "@prisma/client";
+import { HazardVoteType, type HazardSeverity } from "@prisma/client";
 import {
   getHazardsApplyingFilters,
   reviewHazard,
@@ -12,6 +12,7 @@ import {
 } from "../services/notification.service.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventAboutNewHazard } from "../services/socket.service.js";
+import { HttpError } from "../models/http_error.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -272,6 +273,114 @@ export const deleteHazard = async (
     });
 
     res.status(200).json({ message: "Hazard deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle voting (upvote/downvote) on a hazard.
+export const voteHazard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id: hazardId } = req.params;
+    const { voteType } = req.body;
+    const { userId } = res;
+
+    if (!hazardId) {
+      throw new HttpError(400, "Hazard ID is required");
+    }
+    if (!voteType || (voteType !== "upvote" && voteType !== "downvote")) {
+      throw new HttpError(400, "Vote must be either 'upvote' or 'downvote'");
+    }
+
+    // Check if the hazard exists
+    const hazard = await prisma.hazard.findUnique({
+      where: { id: hazardId },
+      select: { id: true },
+    });
+    if (!hazard) {
+      throw new HttpError(404, "Hazard not found");
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Check if the user has already voted on this hazard
+      const existingVote = await tx.hazardVote.findUnique({
+        where: {
+          hazardId_userId: {
+            hazardId,
+            userId: userId!,
+          },
+        },
+      });
+
+      if (!existingVote) {
+        // If no existing vote, create a new one
+        await tx.hazardVote.create({
+          data: {
+            hazardId,
+            userId: userId!,
+            voteType: voteType as HazardVoteType,
+          },
+        });
+
+        // Also increment the appropriate count in Hazard
+        await tx.hazard.update({
+          where: { id: hazardId },
+          data: {
+            upvoteCount: {
+              increment: voteType === "upvote" ? 1 : 0,
+            },
+            downvoteCount: {
+              increment: voteType === "downvote" ? 1 : 0,
+            },
+          },
+        });
+      } else {
+        // If the user has already voted and is trying to vote the same way, then remove the vote
+        if (existingVote.voteType === voteType) {
+          await tx.hazardVote.delete({
+            where: { id: existingVote.id },
+          });
+
+          // Decrement the appropriate count in Hazard
+          await tx.hazard.update({
+            where: { id: hazardId },
+            data: {
+              upvoteCount: {
+                decrement: voteType === "upvote" ? 1 : 0,
+              },
+              downvoteCount: {
+                decrement: voteType === "downvote" ? 1 : 0,
+              },
+            },
+          });
+        } else {
+          // If the user is changing their vote, update the existing vote
+          await tx.hazardVote.update({
+            where: { id: existingVote.id },
+            data: { voteType: voteType as HazardVoteType },
+          });
+
+          // Update the counts in Hazard accordingly
+          await tx.hazard.update({
+            where: { id: hazardId },
+            data: {
+              upvoteCount: {
+                increment: voteType === "upvote" ? 1 : -1,
+              },
+              downvoteCount: {
+                increment: voteType === "downvote" ? 1 : -1,
+              },
+            },
+          });
+        }
+      }
+    });
+
+    res.status(200).json({ message: "Vote recorded successfully" });
   } catch (error) {
     next(error);
   }

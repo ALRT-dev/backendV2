@@ -21,6 +21,7 @@ model User {
   locationSubscriptions LocationSubscription[]
   devices               UserDevice[]
   reportedHazards       Hazard[]
+  hazardVotes           HazardVote[]
 }
 
 model HazardCategory {
@@ -64,10 +65,31 @@ model Hazard {
   category         HazardCategory  @relation(fields: [categoryId], references: [id])
   reportedById     String?
   reportedBy       User?           @relation(fields: [reportedById], references: [id])
+  upvoteCount      Int             @default(0)
+  downvoteCount    Int             @default(0)
+  votes            HazardVote[]
   occurredAt       DateTime        @default(now())
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
   expiresAt        DateTime?
+}
+
+model HazardVote {
+  id        String         @id @default(uuid())
+  hazardId  String
+  hazard    Hazard         @relation(fields: [hazardId], references: [id])
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  voteType  HazardVoteType
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([hazardId, userId])
+}
+
+enum HazardVoteType {
+  upvote
+  downvote
 }
 
 model LocationSubscription {
