@@ -29,6 +29,7 @@ export const getNotificationsFeed = async (
     const hazardsPromise = getHazardsApplyingFilters({
       searchString,
       categoryIds,
+      userId,
       page,
       pageSize,
       subscriptions,

@@ -22,10 +22,12 @@ export const getHazards = async (
 ) => {
   try {
     const { categoryIds, searchString, page = 1, pageSize = 20 } = req.query;
+    const { userId } = res;
 
     const hazards = await getHazardsApplyingFilters({
       searchString,
       categoryIds,
+      userId,
       page,
       pageSize,
     });
@@ -52,6 +54,7 @@ export const getHazardsWithCategories = async (
       page = 1,
       pageSize = 20,
     } = req.query;
+    const { userId } = res;
 
     const subscriptionPromise = prisma.locationSubscription.findFirst({
       where: {
@@ -78,6 +81,7 @@ export const getHazardsWithCategories = async (
       northeastLng,
       southwestLat,
       southwestLng,
+      userId,
       page,
       pageSize,
     });

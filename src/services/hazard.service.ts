@@ -1,4 +1,4 @@
-import type { Hazard, HazardCategory } from "@prisma/client";
+import type { Hazard, HazardCategory, HazardVoteType } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
@@ -120,6 +120,7 @@ export const getHazardsApplyingFilters = async ({
   southwestLat,
   southwestLng,
   subscriptions,
+  userId, // if userId is provided, include user's vote type in the result
   page = 1,
   pageSize = 20,
 }: {
@@ -130,6 +131,7 @@ export const getHazardsApplyingFilters = async ({
   southwestLat?: any;
   southwestLng?: any;
   subscriptions?: any[] | undefined;
+  userId?: string | undefined;
   page?: any;
   pageSize?: any;
 }) => {
@@ -143,10 +145,20 @@ export const getHazardsApplyingFilters = async ({
     subscriptions,
   });
 
-  return await prisma.hazard.findMany({
+  const hazards = await prisma.hazard.findMany({
     where: whereClause,
     include: {
       category: true,
+      ...(userId && {
+        votes: {
+          where: {
+            userId: userId,
+          },
+          select: {
+            voteType: true,
+          },
+        },
+      }),
     },
     orderBy: {
       createdAt: "desc",
@@ -154,6 +166,13 @@ export const getHazardsApplyingFilters = async ({
     skip: (Number(page) - 1) * Number(pageSize),
     take: Number(pageSize),
   });
+
+  // Transform the result to include userVoteType
+  return hazards.map((hazard) => ({
+    ...hazard,
+    userVoteType: hazard.votes?.[0]?.voteType,
+    votes: undefined, // Remove the votes array from the result
+  }));
 };
 
 /// Uses AI to review a hazard report for validity, severity, and suggestions.
