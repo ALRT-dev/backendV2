@@ -409,11 +409,13 @@ export const voteHazard = async (
     });
 
     if (updatedHazard) {
-      // Send socket event about updated hazard to subscribers
-      sendSocketEventAboutHazardToSubscribers({
-        hazard: updatedHazard,
-        socketEvent: SocketEvent.updateHazard,
-      });
+      if (updatedHazard.reportedById !== userId) {
+        // Send socket event about updated hazard to subscribers (except the user who voted)
+        sendSocketEventAboutHazardToSubscribers({
+          hazard: updatedHazard,
+          socketEvent: SocketEvent.updateHazard,
+        });
+      }
     }
 
     res.status(200).json({ message: "Vote recorded successfully" });
