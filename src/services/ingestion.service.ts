@@ -7,7 +7,7 @@ import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
 import { summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
-import { sendSocketEventAboutNewHazard } from "./socket.service.js";
+import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 
 /**
  * Syncs hazards from the NSW Rural Fire Service (RFS) feed.
@@ -80,7 +80,7 @@ export const syncHazardsFromRFS = async () => {
 
           // Send socket events to users who subscribed to this area when a new hazard is created
           // This will NOT ignore the user who reported the hazard
-          sendSocketEventAboutNewHazard(createdHazard);
+          sendSocketEventAboutHazardToSubscribers(createdHazard);
 
           return createdHazard;
         })

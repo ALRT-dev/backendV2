@@ -3,7 +3,9 @@ import { getSocketClient } from "../utils/socket_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 
-/// Sends a socket event to multiple users identified by their user IDs.
+/**
+ * Sends a socket event to multiple users identified by their user IDs.
+ */
 export const sendSocketEventToUsers = ({
   userIds,
   event,
@@ -28,8 +30,16 @@ export const sendSocketEventToUsers = ({
   });
 };
 
-/// Sends socket events to users who have subscribed to the area around the hazard.
-export const sendSocketEventAboutNewHazard = async (hazard: Hazard) => {
+/**
+ * Sends a socket event about a new hazard to users subscribed to the hazard's location.
+ */
+export const sendSocketEventAboutHazardToSubscribers = async ({
+  hazard,
+  socketEvent,
+}: {
+  hazard: Hazard;
+  socketEvent: SocketEvent;
+}) => {
   try {
     const { latitude, longitude } = hazard;
     if (!latitude || !longitude) {
@@ -54,7 +64,7 @@ export const sendSocketEventAboutNewHazard = async (hazard: Hazard) => {
     const userIds = subscriptions.map((sub) => sub.userId);
     sendSocketEventToUsers({
       userIds,
-      event: SocketEvent.newHazard,
+      event: socketEvent,
       data: hazard,
     });
   } catch (error) {

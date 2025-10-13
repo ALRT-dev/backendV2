@@ -12,13 +12,14 @@ import {
   sendPushNotificationToUser,
 } from "../services/notification.service.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
-import { sendSocketEventAboutNewHazard } from "../services/socket.service.js";
+import { sendSocketEventAboutHazardToSubscribers } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { getHazardsDataFromRFS } from "../services/ingestion.service.js";
 import {
   dumpHazardsToJson,
   getDumpHazardById,
 } from "../utils/data_dump.util.js";
+import { SocketEvent } from "../models/socket_event_types.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -234,7 +235,10 @@ export const createHazard = async (
 
       // Send socket events to users who subscribed to this area when a new hazard is created
       // This will NOT ignore the user who reported the hazard
-      sendSocketEventAboutNewHazard(result);
+      sendSocketEventAboutHazardToSubscribers({
+        hazard: result,
+        socketEvent: SocketEvent.newHazard,
+      });
     }
 
     // Now also send a notification to the user who reported the hazard
@@ -393,6 +397,17 @@ export const voteHazard = async (
         }
       }
     });
+
+    const updatedHazard = await prisma.hazard.findUnique({
+      where: { id: hazardId },
+    });
+    if (updatedHazard) {
+      // Send socket event about updated hazard to subscribers
+      sendSocketEventAboutHazardToSubscribers({
+        hazard: updatedHazard,
+        socketEvent: SocketEvent.updateHazard,
+      });
+    }
 
     res.status(200).json({ message: "Vote recorded successfully" });
   } catch (error) {
@@ -758,7 +773,10 @@ export const populateFromSource = async (
 
           // Send socket events to users who subscribed to this area when a new hazard is created
           // This will NOT ignore the user who reported the hazard
-          sendSocketEventAboutNewHazard(createdHazard);
+          sendSocketEventAboutHazardToSubscribers({
+            hazard: createdHazard,
+            socketEvent: SocketEvent.newHazard,
+          });
 
           return createdHazard;
         })
