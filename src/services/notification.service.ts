@@ -41,7 +41,10 @@ const sendPushNotificationToTokens = async ({
   type: PushNotificationType;
 }) => {
   try {
-    if (tokens.length === 0) {
+    // Remove duplicate tokens
+    const uniqueTokens = [...new Set(tokens)];
+
+    if (uniqueTokens.length === 0) {
       console.log("No tokens to send notification to.");
       return;
     }
@@ -55,7 +58,7 @@ const sendPushNotificationToTokens = async ({
         payload: JSON.stringify(data),
         notificationType: type.toString(),
       },
-      tokens: tokens,
+      tokens: uniqueTokens,
     };
 
     const response = await firebaseAdmin
@@ -119,10 +122,10 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
 
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
-        northeastLat: { gte: latitude - 0.1 },
-        northeastLng: { gte: longitude - 0.1 },
-        southwestLat: { lte: latitude + 0.1 },
-        southwestLng: { lte: longitude + 0.1 },
+        northeastLat: { gte: latitude },
+        northeastLng: { gte: longitude },
+        southwestLat: { lte: latitude },
+        southwestLng: { lte: longitude },
         // don't notify the user who reported the hazard
         ...(reportedById && { userId: { not: reportedById } }),
       },

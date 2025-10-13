@@ -57,7 +57,8 @@ model Hazard {
   aiConfidence     AIConfidence?
   visibility       Boolean         @default(true)
   severity         HazardSeverity  @default(info)
-  source           String?
+  sourceId         String?
+  source           HazardSource?   @relation(fields: [sourceId], references: [id])
   geoLocation      String? // PostGIS geometry as string (WKT or WKB)
   latitude         Float?
   longitude        Float?
@@ -85,6 +86,15 @@ model HazardVote {
   updatedAt DateTime       @updatedAt
 
   @@unique([hazardId, userId])
+}
+
+model HazardSource {
+  id        String   @id @default(uuid())
+  name      String
+  url       String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hazards   Hazard[]
 }
 
 enum HazardVoteType {

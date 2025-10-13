@@ -149,6 +149,7 @@ export const getHazardsApplyingFilters = async ({
     where: whereClause,
     include: {
       category: true,
+      source: true,
       ...(userId && {
         votes: {
           where: {
@@ -177,48 +178,49 @@ export const getHazardsApplyingFilters = async ({
 
 /// Uses AI to review a hazard report for validity, severity, and suggestions.
 export const reviewHazard = async ({
-  hazard,
-  category,
+  title,
+  description,
+  latitude,
+  longitude,
 }: {
-  hazard: Hazard;
-  category: HazardCategory;
+  title: string;
+  description: string;
+  latitude: number;
+  longitude: number;
 }) => {
-  const { title, description, latitude, longitude } = hazard;
-  const { name: categoryName } = category;
+  const systemPrompt = `
+You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
 
-  const prompt = `
-You are an AI reviewer for a hazard alert system.
-A user has submitted the following hazard:
+CONFIDENCE LEVELS:
+- "high": Detailed, specific, credible information with clear location and time
+- "medium": Reasonable detail but some ambiguity or missing information
+- "low": Vague, unclear, or potentially unreliable information
+
+Always respond with valid JSON containing these exact fields:
+{
+  "valid": "boolean (true if the description is a valid hazard report (not spam or nonsense or profanity), false otherwise)",
+  "feedback": "string (constructive feedback for the reporter if valid is false - ignore if valid is true, max 200 chars)"
+  "title": "string (a concise, clear title for the hazard, max 80 chars)",
+  "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
+  "summary": "string (a 3-4 sentence summary of the hazard)",
+  "confidence": "high|medium|low (based on detail quality and specificity)",
+}
+`;
+
+  const userPrompt = `
+Evaluate this hazard:
 
 Title: ${title}
 Description: ${description}
-Category: ${categoryName}
 Location: ${latitude}, ${longitude}
-
-Tasks:
-1. Check if the description is valid (not spam or nonsense). If content contains inappropriate or harmful material, mark as invalid.
-2. Suggest a better title if necessary.
-3. Summarize the hazard in few sentences.
-4. Create a very short summary (max 100 characters). Don't repeat the title.
-5. Rate confidence in hazard being real: high, medium, low. Consider the description quality, details and length for this.
-6. Estimate severity based on possible danger to life or property: info, advice, watchAndAct, emergency.
-7. Return structured JSON only.
-
-Respond in JSON:
-{
-  "valid": true/false,
-  "suggestedTitle": "string",
-  "summary": "string",
-  "shortSummary": "string",
-  "confidence": "high/medium/low",
-  "severity": "info/advice/watchAndAct/emergency",
-  "feedback": "short feedback message for user"
-}
 `;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
     response_format: { type: "json_object" },
     max_completion_tokens: 500,
   });
@@ -232,21 +234,83 @@ Respond in JSON:
 
   const aiReview = JSON.parse(response.choices[0]!!.message.content!!) as {
     valid: boolean;
-    suggestedTitle: string;
+    feedback?: string | undefined;
+    title: string;
+    shortDescription: string;
     summary: string;
-    shortSummary: string;
     confidence: "high" | "medium" | "low";
-    severity: "info" | "advice" | "watchAndAct" | "emergency";
-    feedback: string;
   };
 
-  return {
-    valid: aiReview.valid,
-    suggestedTitle: aiReview.suggestedTitle || title,
-    summary: aiReview.summary,
-    shortSummary: aiReview.shortSummary,
-    confidence: aiReview.confidence,
-    severity: aiReview.severity,
-    feedback: aiReview.feedback,
+  return aiReview;
+};
+
+export const summarizeHazard = async ({
+  title,
+  description,
+  latitude,
+  longitude,
+}: {
+  title: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+}) => {
+  const systemPrompt = `
+You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
+
+SEVERITY LEVELS:
+- "info": General awareness, no immediate action needed (traffic updates, minor incidents)
+- "advice": Caution recommended (weather warnings, road closures)
+- "watchAndAct": Active monitoring and preparation needed (approaching storms, evacuation warnings)
+- "emergency": Immediate danger requiring urgent action (active fires, severe flooding)
+
+CONFIDENCE LEVELS:
+- "high": Detailed, specific, credible information with clear location and time
+- "medium": Reasonable detail but some ambiguity or missing information
+- "low": Vague, unclear, or potentially unreliable information
+
+Always respond with valid JSON containing these exact fields:
+{
+  "title": "string (a concise, clear title for the hazard, max 80 chars)",
+  "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
+  "summary": "string (a 3-4 sentence summary of the hazard)",
+  "confidence": "high|medium|low (based on detail quality and specificity)",
+  "severity": "info|advice|watchAndAct|emergency (based on immediate danger level)"
+}
+`;
+
+  const userPrompt = `
+Analyze this hazard report:
+
+TITLE: ${title}
+DESCRIPTION: ${description}
+LOCATION: ${latitude}, ${longitude}
+`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    max_completion_tokens: 500,
+  });
+
+  if (
+    response.choices.length === 0 ||
+    !response.choices[0]!!.message?.content
+  ) {
+    throw new HttpError(500, "AI summarization failed: No response from AI");
+  }
+
+  const aiSummary = JSON.parse(response.choices[0]!!.message.content!!) as {
+    title: string;
+    shortDescription: string;
+    summary: string;
+    confidence: "high" | "medium" | "low";
+    severity: "info" | "advice" | "watchAndAct" | "emergency";
   };
+
+  return aiSummary;
 };

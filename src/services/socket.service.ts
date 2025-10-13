@@ -13,10 +13,17 @@ export const sendSocketEventToUsers = ({
   event: SocketEvent;
   data: any;
 }) => {
-  console.log(`Sending socket event '${event}' to users:`, userIds);
+  // Remove duplicate user IDs
+  const uniqueUserIds = [...new Set(userIds)];
+  if (uniqueUserIds.length === 0) {
+    console.log("No user IDs provided for socket event.");
+    return;
+  }
+
+  console.log(`Sending socket event '${event}' to users:`, uniqueUserIds);
 
   const ioClient = getSocketClient();
-  userIds.forEach((userId) => {
+  uniqueUserIds.forEach((userId) => {
     ioClient?.to("user_" + userId).emit(event, data);
   });
 };
@@ -34,10 +41,10 @@ export const sendSocketEventAboutNewHazard = async (hazard: Hazard) => {
 
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
-        northeastLat: { gte: latitude - 0.1 },
-        northeastLng: { gte: longitude - 0.1 },
-        southwestLat: { lte: latitude + 0.1 },
-        southwestLng: { lte: longitude + 0.1 },
+        northeastLat: { gte: latitude },
+        northeastLng: { gte: longitude },
+        southwestLat: { lte: latitude },
+        southwestLng: { lte: longitude },
       },
       select: {
         userId: true,

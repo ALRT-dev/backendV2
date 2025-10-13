@@ -4,6 +4,7 @@ import { HazardVoteType, type HazardSeverity } from "@prisma/client";
 import {
   getHazardsApplyingFilters,
   reviewHazard,
+  summarizeHazard,
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 import {
@@ -13,6 +14,11 @@ import {
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventAboutNewHazard } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
+import { getHazardsDataFromRFS } from "../services/ingestion.service.js";
+import {
+  dumpHazardsToJson,
+  getDumpHazardById,
+} from "../utils/data_dump.util.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -62,6 +68,7 @@ export const getHazardsWithCategories = async (
         northeastLng: Number(northeastLng),
         southwestLat: Number(southwestLat),
         southwestLng: Number(southwestLng),
+        userId: userId!,
       },
       select: { id: true },
     });
@@ -177,23 +184,27 @@ export const createHazard = async (
 
     let review: any;
     try {
-      review = await reviewHazard({ hazard: req.body, category });
+      review = await reviewHazard({
+        title,
+        description,
+        latitude,
+        longitude,
+      });
     } catch (error) {
       console.log("Error during hazard review:", error);
       review = {
         valid: false,
-        aiFeedback: "Error during AI review process",
+        feedback: "Error during AI review process",
       };
     }
 
     const {
       valid,
-      suggestedTitle,
-      summary: aiSummary,
-      shortSummary: shortDescription,
-      confidence: aiConfidence,
-      severity: aiSeverity,
       feedback: aiFeedback,
+      title: suggestedTitle,
+      shortDescription,
+      summary: aiSummary,
+      confidence: aiConfidence,
     } = review;
 
     const result = await prisma.hazard.create({
@@ -203,7 +214,6 @@ export const createHazard = async (
         ...(shortDescription && { shortDescription }),
         ...(aiSummary && { aiSummary }),
         ...(aiFeedback && { aiFeedback }),
-        ...(aiSeverity && { aiSeverity }),
         ...(aiConfidence && { aiConfidence }),
         visibility: valid,
         categoryId,
@@ -212,7 +222,7 @@ export const createHazard = async (
         longitude,
         severity,
         source,
-        occurredAt,
+        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
       },
       include: { category: true },
     });
@@ -637,7 +647,6 @@ export const populateHazards = async (
           latitude: hazardData.latitude,
           longitude: hazardData.longitude,
           severity: hazardData.severity as HazardSeverity,
-          source: "Fake Data Generator",
         },
         include: { category: true },
       });
@@ -656,6 +665,146 @@ export const populateHazards = async (
       hazards: createdHazards,
       categories: createdCategories,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const populateFromSource = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    // First, ensure hazard categories exist
+    const categories = [
+      { name: "Safety & Security", emoji: "🔒" },
+      { name: "Traffic & Transport", emoji: "🚗" },
+      { name: "Weather & Environment", emoji: "🌧️" },
+      { name: "Health & Emergency", emoji: "🚑" },
+      { name: "Infrastructure & Services", emoji: "🏗️" },
+    ];
+
+    const createdCategories = [];
+    for (const category of categories) {
+      const existingCategory = await prisma.hazardCategory.findFirst({
+        where: { name: category.name },
+      });
+
+      if (!existingCategory) {
+        const newCategory = await prisma.hazardCategory.create({
+          data: category,
+        });
+        createdCategories.push(newCategory);
+      } else {
+        createdCategories.push(existingCategory);
+      }
+    }
+
+    console.log("Created or found categories:", createdCategories);
+
+    const rfsHazards = await getHazardsDataFromRFS();
+    const dumpFileName = "rfs_existing_hazards.json";
+
+    await prisma.hazardVote.deleteMany({});
+    await prisma.hazard.deleteMany({});
+
+    const summarizedHazardPromises: Promise<any>[] = [];
+    const createdHazardPromises: Promise<any>[] = [];
+
+    const allHazards: any[] = [];
+
+    for (const hazardData of rfsHazards) {
+      const promise = prisma.hazard
+        .findUnique({
+          where: { id: hazardData.id },
+        })
+        .then((existing) => {
+          if (existing) {
+            console.log("Hazard already exists, skipping:", hazardData.title);
+            allHazards.push(existing);
+            return null;
+          }
+
+          // check if existing in the dumped json file
+          return getDumpHazardById(hazardData.id, dumpFileName).then(
+            (dumped) => {
+              if (dumped) {
+                console.log(
+                  "Hazard already exists in dump file, skipping:",
+                  hazardData.title
+                );
+                allHazards.push(dumped);
+                return dumped;
+              }
+
+              return summarizeHazard({
+                title: hazardData.title,
+                description: hazardData.description,
+                latitude: Number(hazardData.latitude),
+                longitude: Number(hazardData.longitude),
+              })
+                .then((summarized) => {
+                  return {
+                    ...hazardData,
+                    title: summarized.title || hazardData.title,
+                    shortDescription: summarized.shortDescription,
+                    aiSummary: summarized.summary,
+                    aiConfidence: summarized.confidence,
+                    severity: summarized.severity,
+                  };
+                })
+                .catch((error) => {
+                  console.log("Error during summarization:", error);
+                  return null;
+                });
+            }
+          );
+        })
+        .catch((error) => {
+          console.log("Error checking existing hazard:", error);
+          return null;
+        });
+
+      summarizedHazardPromises.push(promise);
+    }
+
+    const summarizedHazards = await Promise.all(summarizedHazardPromises);
+
+    for (const summarizedHazard of summarizedHazards) {
+      if (!summarizedHazard) continue;
+
+      const promise = prisma.hazard
+        .create({
+          data: summarizedHazard,
+        })
+        .then((createdHazard) => {
+          console.log("Created hazard:", summarizedHazard.title);
+          allHazards.push(createdHazard);
+
+          // Send push notifications to users who subscribed to this area when a new hazard is created
+          // This will ignore the user who reported the hazard
+          sendPushNotificationAboutNewHazard(createdHazard);
+
+          // Send socket events to users who subscribed to this area when a new hazard is created
+          // This will NOT ignore the user who reported the hazard
+          sendSocketEventAboutNewHazard(createdHazard);
+
+          return createdHazard;
+        })
+        .catch((error) => {
+          console.log("Error creating hazard:", error);
+          return null;
+        });
+
+      createdHazardPromises.push(promise);
+    }
+
+    const createdHazards = await Promise.all(createdHazardPromises);
+
+    await dumpHazardsToJson(allHazards, dumpFileName);
+
+    res.status(200).json(createdHazards);
   } catch (error) {
     next(error);
   }
