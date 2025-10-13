@@ -3,6 +3,7 @@ import env from "dotenv";
 import express from "express";
 import cors from "cors";
 import { Server } from "socket.io";
+import { config } from "./utils/config.js";
 import {
   authRouter,
   hazardRouter,
@@ -41,10 +42,13 @@ app.use("/api/notifications", notificationRouter);
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server is running at PORT:${PORT}`);
+server.listen(config.port, () => {
+  console.log(
+    `${config.env.toUpperCase()} server is running at PORT:${config.port}`
+  );
 
-  // Initialize scheduled tasks
-  initializeScheduledTasks();
+  if (config.env === "prod") {
+    // Initialize scheduled tasks only in production
+    initializeScheduledTasks();
+  }
 });

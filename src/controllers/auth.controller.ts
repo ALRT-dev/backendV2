@@ -8,6 +8,7 @@ import {
 } from "../utils/jwt.util.js";
 import { comparePassword, hashPassword } from "../services/auth.service.js";
 import client from "../utils/google_oauth_client.util.js";
+import { config } from "../utils/config.js";
 
 /// Controller to handle user registration with email and password.
 export const registerWithEmailAndPassword = async (
@@ -119,9 +120,9 @@ export const verifyGoogleOAuth = async (
     const ticket = await client.verifyIdToken({
       idToken,
       audience: [
-        process.env.GOOGLE_OAUTH_CLIENT_ID_WEB!!,
-        process.env.GOOGLE_OAUTH_CLIENT_ID_IOS!!,
-        process.env.GOOGLE_OAUTH_CLIENT_ID_ANDROID!!,
+        config.googleOAuth.clientIdWeb,
+        config.googleOAuth.clientIdIos,
+        config.googleOAuth.clientIdAndroid,
       ],
     });
 
