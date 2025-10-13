@@ -9,6 +9,12 @@ import {
 import { comparePassword, hashPassword } from "../services/auth.service.js";
 import client from "../utils/google_oauth_client.util.js";
 import { config } from "../utils/config.js";
+import type {
+  GoogleOAuthInput,
+  LoginInput,
+  RefreshTokenInput,
+  RegisterInput,
+} from "../validators/auth.validator.js";
 
 /// Controller to handle user registration with email and password.
 export const registerWithEmailAndPassword = async (
@@ -17,10 +23,7 @@ export const registerWithEmailAndPassword = async (
   next: NextFunction
 ) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      throw new HttpError(400, "Email and password are required");
-    }
+    const { email, password }: RegisterInput = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -65,10 +68,7 @@ export const loginWithEmailAndPassword = async (
   next: NextFunction
 ) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      throw new HttpError(400, "Email and password are required");
-    }
+    const { email, password }: LoginInput = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -112,10 +112,7 @@ export const verifyGoogleOAuth = async (
   next: NextFunction
 ) => {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      throw new HttpError(400, "Email is required");
-    }
+    const { idToken }: GoogleOAuthInput = req.body;
 
     const ticket = await client.verifyIdToken({
       idToken,
@@ -175,10 +172,7 @@ export const refreshToken = async (
   next: NextFunction
 ) => {
   try {
-    const { refreshToken: incomingRefreshToken } = req.body;
-    if (!incomingRefreshToken) {
-      throw new HttpError(400, "Refresh token is required");
-    }
+    const { refreshToken: incomingRefreshToken }: RefreshTokenInput = req.body;
 
     // Verify the refresh token
     const decoded = verifyRefreshToken(incomingRefreshToken);

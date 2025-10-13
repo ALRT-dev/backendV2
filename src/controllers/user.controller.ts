@@ -11,6 +11,10 @@ export const getUserProfile = async (
 ) => {
   try {
     const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
     const user = await getUserById(userId!);
 
     if (!user) {
@@ -32,7 +36,7 @@ export const subscribeToLocation = async (
   try {
     const { userId } = res;
     if (!userId) {
-      throw new HttpError(400, "User ID not found");
+      throw new HttpError(400, "Unauthenticated user");
     }
 
     const {

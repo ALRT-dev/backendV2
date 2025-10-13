@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
+import type { CreateHazardCategoryInput } from "../validators/hazard_category.validator.js";
 
 export const getHazardCategories = async (
   req: Request,
@@ -41,7 +42,7 @@ export const createHazardCategory = async (
   next: NextFunction
 ) => {
   try {
-    const { name, emoji } = req.body;
+    const { name, emoji }: CreateHazardCategoryInput = req.body;
 
     const existingCategory = await prisma.hazardCategory.findUnique({
       where: { name },
@@ -51,7 +52,7 @@ export const createHazardCategory = async (
     }
 
     const newCategory = await prisma.hazardCategory.create({
-      data: { name, emoji },
+      data: { name, emoji: emoji || null },
     });
 
     res.status(201).json(newCategory);

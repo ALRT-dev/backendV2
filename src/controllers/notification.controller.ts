@@ -3,6 +3,10 @@ import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { getHazardsApplyingFilters } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
+import type {
+  GetNotificationsFeedQuery,
+  PushNotificationTokenInput,
+} from "../validators/notification.validator.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -11,7 +15,12 @@ export const getNotificationsFeed = async (
 ) => {
   try {
     const { userId } = res;
-    const { searchString, categoryIds, page = 1, pageSize = 20 } = req.query;
+    const {
+      searchString,
+      categoryIds,
+      page = "1",
+      pageSize = "20",
+    }: GetNotificationsFeedQuery = req.query;
 
     const subscriptions = await prisma.locationSubscription.findMany({
       where: { userId: userId! },
@@ -57,7 +66,7 @@ export const sendPushNotificationToken = async (
   next: NextFunction
 ) => {
   try {
-    const { token, platform } = req.body;
+    const { token, platform }: PushNotificationTokenInput = req.body;
     const { userId } = res;
 
     const newDevice = await prisma.userDevice.upsert({
@@ -67,10 +76,10 @@ export const sendPushNotificationToken = async (
       create: {
         userId: userId!,
         deviceToken: token,
-        platform,
+        platform: platform || null,
       },
       update: {
-        platform,
+        platform: platform || null,
       },
     });
 

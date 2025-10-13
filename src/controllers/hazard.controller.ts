@@ -24,6 +24,11 @@ import {
   getDumpHazardById,
 } from "../utils/data_dump.util.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import type {
+  CreateHazardInput,
+  GetHazardsQuery,
+  VoteHazardInput,
+} from "../validators/hazard.schema.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -33,19 +38,19 @@ export const getHazards = async (
 ) => {
   try {
     const {
-      categoryIds,
       searchString,
+      categoryIds,
       reportedById,
       visibility,
-      page = 1,
-      pageSize = 20,
-    } = req.query;
+      page = "1",
+      pageSize = "20",
+    }: GetHazardsQuery = req.query;
     const { userId } = res;
 
     const hazards = await getHazardsApplyingFilters({
       searchString,
       reportedById,
-      visibility: visibility === undefined ? undefined : visibility === "true",
+      visibility,
       categoryIds,
       userId,
       page,
@@ -71,9 +76,9 @@ export const getHazardsWithCategories = async (
       northeastLng,
       southwestLat,
       southwestLng,
-      page = 1,
-      pageSize = 20,
-    } = req.query;
+      page = "1",
+      pageSize = "20",
+    }: GetHazardsQuery = req.query;
     const { userId } = res;
 
     const subscriptionPromise = prisma.locationSubscription.findFirst({
@@ -137,7 +142,7 @@ export const getHazardById = async (
   try {
     const { id } = req.params;
     if (!id) {
-      return res.status(400).json({ message: "Hazard ID is required" });
+      throw new HttpError(400, "Hazard ID is required");
     }
 
     const hazard = await prisma.hazard.findUnique({
@@ -171,29 +176,15 @@ export const createHazard = async (
       severity,
       source,
       occurredAt,
-    } = req.body;
+    }: CreateHazardInput = req.body;
     const { userId } = res;
 
-    if (!title) {
-      return res.status(400).json({ message: "Title is required" });
-    }
-    if (!description) {
-      return res.status(400).json({ message: "Description is required" });
-    }
-    if (!categoryId) {
-      return res.status(400).json({ message: "Category ID is required" });
-    }
-    if (!latitude || !longitude) {
-      return res
-        .status(400)
-        .json({ message: "Location (latitude and longitude) is required" });
-    }
-
+    // Validate that category exists
     const category = await prisma.hazardCategory.findUnique({
       where: { id: categoryId },
     });
     if (!category) {
-      return res.status(400).json({ message: "Invalid Category ID" });
+      throw new HttpError(400, "Invalid Category ID");
     }
 
     let review: any;
@@ -293,7 +284,7 @@ export const deleteHazard = async (
   try {
     const { id } = req.params;
     if (!id) {
-      return res.status(400).json({ message: "Hazard ID is required" });
+      throw new HttpError(400, "Hazard ID is required");
     }
 
     const hazard = await prisma.hazard.findUnique({
@@ -301,7 +292,7 @@ export const deleteHazard = async (
     });
 
     if (!hazard) {
-      return res.status(404).json({ message: "Hazard not found" });
+      throw new HttpError(404, "Hazard not found");
     }
 
     await prisma.hazard.delete({
@@ -322,14 +313,11 @@ export const voteHazard = async (
 ) => {
   try {
     const { id: hazardId } = req.params;
-    const { voteType } = req.body;
+    const { voteType }: VoteHazardInput = req.body;
     const { userId } = res;
 
     if (!hazardId) {
       throw new HttpError(400, "Hazard ID is required");
-    }
-    if (!voteType || (voteType !== "upvote" && voteType !== "downvote")) {
-      throw new HttpError(400, "Vote must be either 'upvote' or 'downvote'");
     }
 
     // Check if the hazard exists
