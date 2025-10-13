@@ -14,6 +14,7 @@ import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.j
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
 import { initSocket } from "./utils/socket_client.util.js";
 import { requireSocketAuth } from "./middlewares/auth.middleware.js";
+import { initializeScheduledTasks } from "./services/scheduler.service.js";
 
 env.config();
 
@@ -43,4 +44,7 @@ app.use(unknownRouteMiddleware);
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server is running at PORT:${PORT}`);
+
+  // Initialize scheduled tasks
+  initializeScheduledTasks();
 });

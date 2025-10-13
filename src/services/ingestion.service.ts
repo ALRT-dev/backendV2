@@ -5,6 +5,100 @@ import {
 } from "../utils/ingestion.util.js";
 import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
+import { summarizeHazard } from "./hazard.service.js";
+import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
+import { sendSocketEventAboutNewHazard } from "./socket.service.js";
+
+/**
+ * Syncs hazards from the NSW Rural Fire Service (RFS) feed.
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromRFS = async () => {
+  try {
+    const rfsHazards = await getHazardsDataFromRFS();
+
+    const summarizedHazardPromises: Promise<any>[] = [];
+    const createdHazardPromises: Promise<any>[] = [];
+
+    for (const hazardData of rfsHazards) {
+      const promise = prisma.hazard
+        .findUnique({
+          where: { id: hazardData.id },
+        })
+        .then((existing) => {
+          if (existing) {
+            console.log("Hazard already exists, skipping:", hazardData.title);
+            return null;
+          }
+
+          // check if existing in the dumped json file
+          return summarizeHazard({
+            title: hazardData.title,
+            description: hazardData.description,
+            latitude: Number(hazardData.latitude),
+            longitude: Number(hazardData.longitude),
+          })
+            .then((summarized) => {
+              return {
+                ...hazardData,
+                title: summarized.title || hazardData.title,
+                shortDescription: summarized.shortDescription,
+                aiSummary: summarized.summary,
+                aiConfidence: summarized.confidence,
+                severity: summarized.severity,
+              };
+            })
+            .catch((error) => {
+              console.log("Error during summarization:", error);
+              return null;
+            });
+        })
+        .catch((error) => {
+          console.log("Error checking existing hazard:", error);
+          return null;
+        });
+
+      summarizedHazardPromises.push(promise);
+    }
+
+    const summarizedHazards = await Promise.all(summarizedHazardPromises);
+
+    for (const summarizedHazard of summarizedHazards) {
+      if (!summarizedHazard) continue;
+
+      const promise = prisma.hazard
+        .create({
+          data: summarizedHazard,
+        })
+        .then((createdHazard) => {
+          console.log("Created hazard:", summarizedHazard.title);
+
+          // Send push notifications to users who subscribed to this area when a new hazard is created
+          // This will ignore the user who reported the hazard
+          sendPushNotificationAboutNewHazard(createdHazard);
+
+          // Send socket events to users who subscribed to this area when a new hazard is created
+          // This will NOT ignore the user who reported the hazard
+          sendSocketEventAboutNewHazard(createdHazard);
+
+          return createdHazard;
+        })
+        .catch((error) => {
+          console.log("Error creating hazard:", error);
+          return null;
+        });
+
+      createdHazardPromises.push(promise);
+    }
+
+    const createdHazards = await Promise.all(createdHazardPromises);
+
+    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+  } catch (error) {
+    console.error("Error during RFS hazard sync:", error);
+  }
+};
 
 /**
  * Fetches hazard data from the NSW Rural Fire Service (RFS) feed

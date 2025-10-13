@@ -676,38 +676,8 @@ export const populateFromSource = async (
   next: NextFunction
 ) => {
   try {
-    // First, ensure hazard categories exist
-    const categories = [
-      { name: "Safety & Security", emoji: "🔒" },
-      { name: "Traffic & Transport", emoji: "🚗" },
-      { name: "Weather & Environment", emoji: "🌧️" },
-      { name: "Health & Emergency", emoji: "🚑" },
-      { name: "Infrastructure & Services", emoji: "🏗️" },
-    ];
-
-    const createdCategories = [];
-    for (const category of categories) {
-      const existingCategory = await prisma.hazardCategory.findFirst({
-        where: { name: category.name },
-      });
-
-      if (!existingCategory) {
-        const newCategory = await prisma.hazardCategory.create({
-          data: category,
-        });
-        createdCategories.push(newCategory);
-      } else {
-        createdCategories.push(existingCategory);
-      }
-    }
-
-    console.log("Created or found categories:", createdCategories);
-
     const rfsHazards = await getHazardsDataFromRFS();
     const dumpFileName = "rfs_existing_hazards.json";
-
-    await prisma.hazardVote.deleteMany({});
-    await prisma.hazard.deleteMany({});
 
     const summarizedHazardPromises: Promise<any>[] = [];
     const createdHazardPromises: Promise<any>[] = [];
