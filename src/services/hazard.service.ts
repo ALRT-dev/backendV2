@@ -7,6 +7,8 @@ import { HttpError } from "../models/http_error.js";
 export const buildHazardsWhereClause = ({
   searchString,
   categoryIds,
+  reportedById,
+  visibility,
   northeastLat,
   northeastLng,
   southwestLat,
@@ -15,6 +17,8 @@ export const buildHazardsWhereClause = ({
 }: {
   searchString?: any;
   categoryIds?: any;
+  reportedById?: any;
+  visibility?: boolean | undefined;
   northeastLat?: any;
   northeastLng?: any;
   southwestLat?: any;
@@ -25,9 +29,6 @@ export const buildHazardsWhereClause = ({
   const whereClause: any = {
     AND: [],
   };
-
-  // Only include hazards with visibility set to 'true'
-  whereClause.AND.push({ visibility: true });
 
   // Apply search string filter if provided
   if (searchString) {
@@ -59,6 +60,18 @@ export const buildHazardsWhereClause = ({
       },
     });
   }
+
+  // Apply reportedById filter if provided
+  if (reportedById) {
+    whereClause.AND.push({
+      reportedById: reportedById,
+    });
+  }
+
+  // Apply visibility filter if provided
+  whereClause.AND.push({
+    visibility: visibility === undefined ? true : visibility,
+  });
 
   // Filter hazards that fall within subscription regions if provided
   if (subscriptions && subscriptions.length > 0) {
@@ -115,6 +128,8 @@ export const buildHazardsWhereClause = ({
 export const getHazardsApplyingFilters = async ({
   searchString,
   categoryIds,
+  reportedById,
+  visibility,
   northeastLat,
   northeastLng,
   southwestLat,
@@ -126,6 +141,8 @@ export const getHazardsApplyingFilters = async ({
 }: {
   searchString?: any;
   categoryIds?: any;
+  reportedById?: any;
+  visibility?: boolean | undefined;
   northeastLat?: any;
   northeastLng?: any;
   southwestLat?: any;
@@ -138,6 +155,8 @@ export const getHazardsApplyingFilters = async ({
   const whereClause = buildHazardsWhereClause({
     searchString,
     categoryIds,
+    reportedById,
+    visibility,
     northeastLat,
     northeastLng,
     southwestLat,

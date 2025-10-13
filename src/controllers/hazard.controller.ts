@@ -32,11 +32,20 @@ export const getHazards = async (
   next: NextFunction
 ) => {
   try {
-    const { categoryIds, searchString, page = 1, pageSize = 20 } = req.query;
+    const {
+      categoryIds,
+      searchString,
+      reportedById,
+      visibility,
+      page = 1,
+      pageSize = 20,
+    } = req.query;
     const { userId } = res;
 
     const hazards = await getHazardsApplyingFilters({
       searchString,
+      reportedById,
+      visibility: visibility === undefined ? undefined : visibility === "true",
       categoryIds,
       userId,
       page,
