@@ -12,25 +12,33 @@ datasource db {
 }
 
 model User {
-  id                    String                 @id @default(uuid())
-  email                 String                 @unique
-  passwordHash          String                 @default("")
-  name                  String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String  @default("")
+  name         String?
+
+  xpPoints         Int   @default(0)
+  reliabilityScore Float @default(0.0)
+
   locationSubscriptions LocationSubscription[]
   devices               UserDevice[]
-  reportedHazards       Hazard[]
+  hazardsReported       Hazard[]
   hazardVotes           HazardVote[]
+  hazardViews           HazardView[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model HazardCategory {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  emoji     String?
+  id    String  @id @default(uuid())
+  name  String  @unique
+  emoji String?
+
+  hazards Hazard[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  hazards   Hazard[]
 }
 
 enum HazardSeverity {
@@ -58,27 +66,32 @@ model Hazard {
   visibility       Boolean         @default(true)
   severity         HazardSeverity  @default(info)
   sourceId         String?
-  source           HazardSource?   @relation(fields: [sourceId], references: [id])
   geoLocation      String? // PostGIS geometry as string (WKT or WKB)
   latitude         Float?
   longitude        Float?
   categoryId       String
-  category         HazardCategory  @relation(fields: [categoryId], references: [id])
   reportedById     String?
-  reportedBy       User?           @relation(fields: [reportedById], references: [id])
-  upvoteCount      Int             @default(0)
-  downvoteCount    Int             @default(0)
-  votes            HazardVote[]
-  occurredAt       DateTime        @default(now())
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  expiresAt        DateTime?
+
+  upvoteCount   Int @default(0)
+  downvoteCount Int @default(0)
+  viewCount     Int @default(0)
+
+  occurredAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  expiresAt  DateTime?
+
+  source     HazardSource?  @relation(fields: [sourceId], references: [id])
+  category   HazardCategory @relation(fields: [categoryId], references: [id])
+  reportedBy User?          @relation(fields: [reportedById], references: [id])
+  votes      HazardVote[]
+  views      HazardView[]
 }
 
 model HazardVote {
   id        String         @id @default(uuid())
   hazardId  String
-  hazard    Hazard         @relation(fields: [hazardId], references: [id])
+  hazard    Hazard         @relation(fields: [hazardId], references: [id], onDelete: Cascade)
   userId    String
   user      User           @relation(fields: [userId], references: [id])
   voteType  HazardVoteType
@@ -95,6 +108,20 @@ model HazardSource {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   hazards   Hazard[]
+}
+
+model HazardView {
+  id       String   @id @default(uuid())
+  hazardId String
+  userId   String
+  viewedAt DateTime @default(now())
+
+  user   User?  @relation(fields: [userId], references: [id])
+  hazard Hazard @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+
+  @@unique([hazardId, userId])
+  @@index([hazardId])
+  @@index([userId])
 }
 
 enum HazardVoteType {

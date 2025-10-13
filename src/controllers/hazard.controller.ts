@@ -1,6 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
-import { HazardVoteType, type HazardSeverity } from "@prisma/client";
+import {
+  HazardVoteType,
+  type Hazard,
+  type HazardSeverity,
+} from "@prisma/client";
 import {
   getHazardsApplyingFilters,
   reviewHazard,
@@ -208,24 +212,29 @@ export const createHazard = async (
       confidence: aiConfidence,
     } = review;
 
-    const result = await prisma.hazard.create({
-      data: {
-        title: suggestedTitle || title,
-        description,
-        ...(shortDescription && { shortDescription }),
-        ...(aiSummary && { aiSummary }),
-        ...(aiFeedback && { aiFeedback }),
-        ...(aiConfidence && { aiConfidence }),
-        visibility: valid,
-        categoryId,
-        reportedById: userId,
-        latitude,
-        longitude,
-        severity,
-        source,
-        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
-      },
-      include: { category: true },
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the hazard
+      const hazard = await tx.hazard.create({
+        data: {
+          title: suggestedTitle || title,
+          description,
+          ...(shortDescription && { shortDescription }),
+          ...(aiSummary && { aiSummary }),
+          ...(aiFeedback && { aiFeedback }),
+          ...(aiConfidence && { aiConfidence }),
+          visibility: valid,
+          categoryId,
+          reportedById: userId,
+          latitude,
+          longitude,
+          severity,
+          source,
+          ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+        },
+        include: { category: true },
+      });
+
+      return hazard;
     });
 
     if (valid) {
@@ -323,7 +332,9 @@ export const voteHazard = async (
       throw new HttpError(404, "Hazard not found");
     }
 
-    await prisma.$transaction(async (tx) => {
+    const updatedHazard = await prisma.$transaction(async (tx) => {
+      let updatedHazard: Hazard;
+
       // Check if the user has already voted on this hazard
       const existingVote = await tx.hazardVote.findUnique({
         where: {
@@ -345,7 +356,7 @@ export const voteHazard = async (
         });
 
         // Also increment the appropriate count in Hazard
-        await tx.hazard.update({
+        updatedHazard = await tx.hazard.update({
           where: { id: hazardId },
           data: {
             upvoteCount: {
@@ -364,7 +375,7 @@ export const voteHazard = async (
           });
 
           // Decrement the appropriate count in Hazard
-          await tx.hazard.update({
+          updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
             data: {
               upvoteCount: {
@@ -383,7 +394,7 @@ export const voteHazard = async (
           });
 
           // Update the counts in Hazard accordingly
-          await tx.hazard.update({
+          updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
             data: {
               upvoteCount: {
@@ -395,12 +406,11 @@ export const voteHazard = async (
             },
           });
         }
+
+        return updatedHazard;
       }
     });
 
-    const updatedHazard = await prisma.hazard.findUnique({
-      where: { id: hazardId },
-    });
     if (updatedHazard) {
       // Send socket event about updated hazard to subscribers
       sendSocketEventAboutHazardToSubscribers({

@@ -10,12 +10,8 @@ export const getUserProfile = async (
   next: NextFunction
 ) => {
   try {
-    const userId = res.userId;
-    if (!userId) {
-      throw new Error("User ID not found");
-    }
-
-    const user = await getUserById(userId);
+    const { userId } = res;
+    const user = await getUserById(userId!);
 
     if (!user) {
       throw new HttpError(404, "User not found");
