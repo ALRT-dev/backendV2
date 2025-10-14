@@ -1,48 +1,50 @@
-import { HazardReviewStatus } from "@prisma/client";
+import {
+  type Prisma,
+  type LocationSubscription,
+  HazardVoteType,
+  HazardSeverity,
+} from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
+import type { AISummaryResponse } from "../models/ai_summary_response_interface.js";
+import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
+import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
 
 /// Builds the where clause for filtering hazards based on various criteria.
-export const buildHazardsWhereClause = ({
-  searchString,
-  categoryIds,
-  reportedById,
-  reviewStatus,
-  northeastLat,
-  northeastLng,
-  southwestLat,
-  southwestLng,
-  subscriptions,
-}: {
-  searchString?: any;
-  categoryIds?: any;
-  reportedById?: any;
-  reviewStatus?: any;
-  northeastLat?: any;
-  northeastLng?: any;
-  southwestLat?: any;
-  southwestLng?: any;
-  subscriptions?: any[] | undefined;
-}) => {
+export const buildHazardsWhereClause = (
+  params: HazardSearchParams & {
+    subscriptions?: LocationSubscription[] | undefined;
+  }
+): Prisma.HazardWhereInput => {
+  const {
+    searchString,
+    categoryIds,
+    reportedById,
+    reviewStatus,
+    northeastLat,
+    northeastLng,
+    southwestLat,
+    southwestLng,
+    subscriptions,
+  } = params;
+
   // Build the where clause for filtering hazards
-  const whereClause: any = {
-    AND: [],
-  };
+  const andConditions: Prisma.HazardWhereInput[] = [];
 
   // Apply search string filter if provided
   if (searchString) {
-    whereClause.AND.push({
+    andConditions.push({
       OR: [
         {
           title: {
-            contains: searchString as string,
+            contains: searchString,
             mode: "insensitive",
           },
         },
         {
           shortDescription: {
-            contains: searchString as string,
+            contains: searchString,
             mode: "insensitive",
           },
         },
@@ -52,32 +54,34 @@ export const buildHazardsWhereClause = ({
 
   // Apply category filter if provided
   if (categoryIds) {
-    whereClause.AND.push({
+    const categoryIdArray = Array.isArray(categoryIds)
+      ? categoryIds
+      : categoryIds.split(",");
+
+    andConditions.push({
       categoryId: {
-        in: Array.isArray(categoryIds)
-          ? (categoryIds as string[])
-          : (categoryIds as string).split(","),
+        in: categoryIdArray,
       },
     });
   }
 
   // Apply reportedById filter if provided
   if (reportedById) {
-    whereClause.AND.push({
+    andConditions.push({
       reportedById: reportedById,
     });
   }
 
   // Apply reviewStatus filter if provided
   if (reviewStatus) {
-    whereClause.AND.push({
+    andConditions.push({
       reviewStatus: reviewStatus,
     });
   }
 
   // Filter hazards that fall within subscription regions if provided
   if (subscriptions && subscriptions.length > 0) {
-    whereClause.AND.push({
+    andConditions.push({
       OR: subscriptions.map((subscription) => ({
         AND: [
           {
@@ -111,49 +115,43 @@ export const buildHazardsWhereClause = ({
 
   // Filter hazards that fall within geographic bounds if provided
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    whereClause.AND.push({
+    andConditions.push({
       latitude: {
-        gte: Number(southwestLat),
-        lte: Number(northeastLat),
+        gte: southwestLat,
+        lte: northeastLat,
       },
       longitude: {
-        gte: Number(southwestLng),
-        lte: Number(northeastLng),
+        gte: southwestLng,
+        lte: northeastLng,
       },
     });
   }
 
-  return whereClause;
+  return andConditions.length > 0 ? { AND: andConditions } : {};
 };
 
 /// Fetch hazards applying various filters and pagination.
-export const getHazardsApplyingFilters = async ({
-  searchString,
-  categoryIds,
-  reportedById,
-  reviewStatus,
-  northeastLat,
-  northeastLng,
-  southwestLat,
-  southwestLng,
-  subscriptions,
-  userId, // if userId is provided, include user's vote type in the result
-  page = 1,
-  pageSize = 20,
-}: {
-  searchString?: any;
-  categoryIds?: any;
-  reportedById?: any;
-  reviewStatus?: any;
-  northeastLat?: any;
-  northeastLng?: any;
-  southwestLat?: any;
-  southwestLng?: any;
-  subscriptions?: any[] | undefined;
-  userId?: string | undefined;
-  page?: any;
-  pageSize?: any;
-}) => {
+export const getHazardsApplyingFilters = async (
+  params: HazardSearchParams & {
+    userId?: string | undefined;
+    subscriptions?: LocationSubscription[] | undefined;
+  }
+) => {
+  const {
+    searchString,
+    categoryIds,
+    reportedById,
+    reviewStatus,
+    northeastLat,
+    northeastLng,
+    southwestLat,
+    southwestLng,
+    subscriptions,
+    userId,
+    page = 1,
+    pageSize = 20,
+  } = params;
+
   const whereClause = buildHazardsWhereClause({
     searchString,
     categoryIds,
@@ -171,6 +169,7 @@ export const getHazardsApplyingFilters = async ({
     include: {
       category: true,
       source: true,
+      reportedBy: true,
       ...(userId && {
         votes: {
           where: {
@@ -185,16 +184,22 @@ export const getHazardsApplyingFilters = async ({
     orderBy: {
       createdAt: "desc",
     },
-    skip: (Number(page) - 1) * Number(pageSize),
-    take: Number(pageSize),
+    skip: (page - 1) * pageSize,
+    take: pageSize,
   });
 
+  type TransformedHazardPayload = Prisma.HazardGetPayload<{}> & {
+    userVoteType?: HazardVoteType | undefined;
+  };
+
   // Transform the result to include userVoteType
-  return hazards.map((hazard) => ({
-    ...hazard,
-    userVoteType: hazard.votes?.[0]?.voteType,
-    votes: undefined, // Remove the votes array from the result
-  }));
+  return hazards.map((hazard): TransformedHazardPayload => {
+    const { votes, ...hazardWithoutVotes } = hazard;
+    return {
+      ...hazardWithoutVotes,
+      userVoteType: votes?.[0]?.voteType,
+    };
+  });
 };
 
 /// Uses AI to review a hazard report for validity, severity, and suggestions.
@@ -203,12 +208,16 @@ export const reviewHazard = async ({
   description,
   latitude,
   longitude,
+  severity,
+  occurredAt,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
-}) => {
+  severity: HazardSeverity;
+  occurredAt: string | Date;
+}): Promise<AIReviewResponse> => {
   const systemPrompt = `
 You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
 
@@ -234,6 +243,8 @@ Evaluate this hazard:
 Title: ${title}
 Description: ${description}
 Location: ${latitude}, ${longitude}
+Severity Level: ${severity}
+Occurred At: ${occurredAt}
 `;
 
   const response = await openai.chat.completions.create({
@@ -246,23 +257,22 @@ Location: ${latitude}, ${longitude}
     max_completion_tokens: 500,
   });
 
-  if (
-    response.choices.length === 0 ||
-    !response.choices[0]!!.message?.content
-  ) {
+  if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
     throw new HttpError(500, "AI review failed: No response from AI");
   }
 
-  const aiReview = JSON.parse(response.choices[0]!!.message.content!!) as {
-    reviewStatus: "accepted" | "rejected";
-    reviewFeedback: string;
-    title: string;
-    shortDescription: string;
-    summary: string;
-    confidence: "high" | "medium" | "low";
-  };
+  const content = response.choices[0].message.content;
+  if (!content) {
+    throw new HttpError(500, "AI review failed: Empty response from AI");
+  }
 
-  return aiReview;
+  try {
+    const aiReview = JSON.parse(content) as AIReviewResponse;
+    return aiReview;
+  } catch (parseError) {
+    console.error("Failed to parse AI review response:", parseError);
+    throw new HttpError(500, "AI review failed: Invalid response format");
+  }
 };
 
 export const summarizeHazard = async ({
@@ -275,7 +285,7 @@ export const summarizeHazard = async ({
   description: string;
   latitude: number;
   longitude: number;
-}) => {
+}): Promise<AISummaryResponse> => {
   const systemPrompt = `
 You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
 
@@ -318,20 +328,23 @@ LOCATION: ${latitude}, ${longitude}
     max_completion_tokens: 500,
   });
 
-  if (
-    response.choices.length === 0 ||
-    !response.choices[0]!!.message?.content
-  ) {
+  if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
     throw new HttpError(500, "AI summarization failed: No response from AI");
   }
 
-  const aiSummary = JSON.parse(response.choices[0]!!.message.content!!) as {
-    title: string;
-    shortDescription: string;
-    summary: string;
-    confidence: "high" | "medium" | "low";
-    severity: "info" | "advice" | "watchAndAct" | "emergency";
-  };
+  const content = response.choices[0].message.content;
+  if (!content) {
+    throw new HttpError(500, "AI summarization failed: Empty response from AI");
+  }
 
-  return aiSummary;
+  try {
+    const aiSummary = JSON.parse(content) as AISummaryResponse;
+    return aiSummary;
+  } catch (parseError) {
+    console.error("Failed to parse AI summary response:", parseError);
+    throw new HttpError(
+      500,
+      "AI summarization failed: Invalid response format"
+    );
+  }
 };

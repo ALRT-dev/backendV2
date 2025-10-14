@@ -36,9 +36,11 @@ export const sendSocketEventToUsers = ({
 export const sendSocketEventAboutHazardToSubscribers = async ({
   hazard,
   socketEvent,
+  excludeUserIds,
 }: {
   hazard: Hazard;
   socketEvent: SocketEvent;
+  excludeUserIds?: string[];
 }) => {
   try {
     const { latitude, longitude } = hazard;
@@ -61,9 +63,12 @@ export const sendSocketEventAboutHazardToSubscribers = async ({
       },
     });
 
-    const userIds = subscriptions.map((sub) => sub.userId);
+    const userIds = subscriptions
+      .map((sub) => sub.userId)
+      .filter((id) => !excludeUserIds?.includes(id));
+
     sendSocketEventToUsers({
-      userIds,
+      userIds: userIds,
       event: socketEvent,
       data: hazard,
     });

@@ -28,7 +28,7 @@ export const createHazardSchema = z.object({
     .optional()
     .default("info"),
 
-  occurredAt: z.string().datetime().optional(),
+  occurredAt: z.iso.datetime().optional(),
 });
 
 export type CreateHazardInput = z.infer<typeof createHazardSchema>;
@@ -44,7 +44,7 @@ export type VoteHazardInput = z.infer<typeof voteHazardSchema>;
 export const getHazardsQuerySchema = z.object({
   searchString: z.string().optional(),
 
-  categoryIds: z.string().optional(), // Comma-separated list of UUIDs
+  categoryIds: z.string().optional(), // Comma-separated list of UUIDs "2025-10-14T15:40:00.000"
 
   reportedById: z.string().uuid().optional(),
 

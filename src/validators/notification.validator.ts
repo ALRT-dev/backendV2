@@ -5,6 +5,8 @@ export const getNotificationsFeedSchema = z.object({
 
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
+  reviewStatus: z.enum(["accepted", "rejected"]).optional(),
+
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 
   pageSize: z.string().regex(/^\d+$/, "Page size must be a number").optional(),

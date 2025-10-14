@@ -16,6 +16,7 @@ import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.j
 import { initSocket } from "./utils/socket_client.util.js";
 import { requireSocketAuth } from "./middlewares/auth.middleware.js";
 import { initializeScheduledTasks } from "./services/scheduler.service.js";
+import { populateCategories } from "./controllers/hazardCategory.controller.js";
 
 env.config();
 

@@ -54,8 +54,8 @@ export const getHazards = async (
       reviewStatus,
       categoryIds,
       userId,
-      page,
-      pageSize,
+      page: Number(page),
+      pageSize: Number(pageSize),
     });
 
     res.status(200).json(hazards);
@@ -73,6 +73,8 @@ export const getHazardsWithCategories = async (
     const {
       searchString,
       categoryIds,
+      reportedById,
+      reviewStatus,
       northeastLat,
       northeastLng,
       southwestLat,
@@ -95,22 +97,25 @@ export const getHazardsWithCategories = async (
 
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
-      hazardNortheastLat: northeastLat,
-      hazardNortheastLng: northeastLng,
-      hazardSouthwestLat: southwestLat,
-      hazardSouthwestLng: southwestLng,
+      hazardReviewStatus: reviewStatus,
+      hazardReportedById: reportedById,
+      hazardNortheastLat: Number(northeastLat),
+      hazardNortheastLng: Number(northeastLng),
+      hazardSouthwestLat: Number(southwestLat),
+      hazardSouthwestLng: Number(southwestLng),
     });
 
     const hazardsPromise = getHazardsApplyingFilters({
       searchString,
       categoryIds,
-      northeastLat,
-      northeastLng,
-      southwestLat,
-      southwestLng,
+      reviewStatus,
+      northeastLat: Number(northeastLat),
+      northeastLng: Number(northeastLng),
+      southwestLat: Number(southwestLat),
+      southwestLng: Number(southwestLng),
       userId,
-      page,
-      pageSize,
+      page: Number(page),
+      pageSize: Number(pageSize),
     });
 
     const [subscription, categories, hazards] = await Promise.all([
@@ -194,6 +199,8 @@ export const createHazard = async (
         description,
         latitude,
         longitude,
+        severity,
+        occurredAt: occurredAt || new Date(),
       });
     } catch (error) {
       console.log("Error during hazard review:", error);
@@ -219,6 +226,9 @@ export const createHazard = async (
           description,
           reviewStatus,
           reviewFeedback,
+          ...(reviewStatus === HazardReviewStatus.accepted && {
+            reviewedAt: new Date(),
+          }),
           shortDescription,
           aiSummary,
           ...(aiConfidence && { aiConfidence }),
@@ -229,11 +239,13 @@ export const createHazard = async (
           severity,
           ...(occurredAt && { occurredAt: new Date(occurredAt) }),
         },
-        include: { category: true },
+        include: { category: true, reportedBy: true },
       });
 
       return hazard;
     });
+
+    console.log("Created hazard with review feedback:", result.reviewFeedback);
 
     if (reviewStatus === HazardReviewStatus.accepted) {
       // Send push notifications to users who subscribed to this area when a new hazard is created
@@ -401,19 +413,18 @@ export const voteHazard = async (
             },
           });
         }
-
-        return updatedHazard;
       }
+
+      return updatedHazard;
     });
 
     if (updatedHazard) {
-      if (updatedHazard.reportedById !== userId) {
-        // Send socket event about updated hazard to subscribers (except the user who voted)
-        sendSocketEventAboutHazardToSubscribers({
-          hazard: updatedHazard,
-          socketEvent: SocketEvent.updateHazard,
-        });
-      }
+      // Send socket event about updated hazard to subscribers (except the user who voted)
+      sendSocketEventAboutHazardToSubscribers({
+        hazard: updatedHazard,
+        socketEvent: SocketEvent.updateHazard,
+        excludeUserIds: [userId!],
+      });
     }
 
     res.status(200).json({ message: "Vote recorded successfully" });

@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import type { CreateHazardCategoryInput } from "../validators/hazard_category.validator.js";
+import type { Prisma } from "@prisma/client";
 
 export const getHazardCategories = async (
   req: Request,
@@ -56,6 +57,50 @@ export const createHazardCategory = async (
     });
 
     res.status(201).json(newCategory);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const populateCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const categories = [
+      { name: "Safety & Security", emoji: "🔒" },
+      { name: "Traffic & Transport", emoji: "🚗" },
+      { name: "Weather & Environment", emoji: "🌧️" },
+      { name: "Health & Emergency", emoji: "🚑" },
+      { name: "Infrastructure & Services", emoji: "🏗️" },
+    ];
+
+    const categoriesData: Prisma.HazardCategoryCreateInput[] = categories.map(
+      (category) => ({
+        name: category.name,
+        emoji: category.emoji,
+      })
+    );
+
+    const createdCategories = [];
+
+    for (const categoryData of categoriesData) {
+      const existingCategory = await prisma.hazardCategory.findUnique({
+        where: { name: categoryData.name },
+      });
+      if (existingCategory) {
+        continue; // Skip creation if category already exists
+      }
+
+      const createdCategory = await prisma.hazardCategory.create({
+        data: categoryData,
+      });
+
+      createdCategories.push(createdCategory);
+    }
+
+    res.status(201).json(createdCategories);
   } catch (error) {
     next(error);
   }

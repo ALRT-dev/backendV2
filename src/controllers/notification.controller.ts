@@ -18,6 +18,7 @@ export const getNotificationsFeed = async (
     const {
       searchString,
       categoryIds,
+      reviewStatus,
       page = "1",
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
@@ -32,15 +33,17 @@ export const getNotificationsFeed = async (
 
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
+      hazardReviewStatus: reviewStatus,
       subscriptions,
     });
 
     const hazardsPromise = getHazardsApplyingFilters({
       searchString,
       categoryIds,
+      reviewStatus,
       userId,
-      page,
-      pageSize,
+      page: Number(page),
+      pageSize: Number(pageSize),
       subscriptions,
     });
 
