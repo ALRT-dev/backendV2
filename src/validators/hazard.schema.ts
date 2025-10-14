@@ -28,8 +28,6 @@ export const createHazardSchema = z.object({
     .optional()
     .default("info"),
 
-  source: z.string().optional(),
-
   occurredAt: z.string().datetime().optional(),
 });
 
@@ -50,7 +48,7 @@ export const getHazardsQuerySchema = z.object({
 
   reportedById: z.string().uuid().optional(),
 
-  visibility: z.boolean().optional(),
+  reviewStatus: z.enum(["accepted", "rejected"]).optional(),
 
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 

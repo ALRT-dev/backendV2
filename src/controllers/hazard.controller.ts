@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import {
+  HazardReviewStatus,
   HazardVoteType,
   type Hazard,
   type HazardSeverity,
@@ -41,7 +42,7 @@ export const getHazards = async (
       searchString,
       categoryIds,
       reportedById,
-      visibility,
+      reviewStatus,
       page = "1",
       pageSize = "20",
     }: GetHazardsQuery = req.query;
@@ -50,7 +51,7 @@ export const getHazards = async (
     const hazards = await getHazardsApplyingFilters({
       searchString,
       reportedById,
-      visibility,
+      reviewStatus,
       categoryIds,
       userId,
       page,
@@ -174,7 +175,6 @@ export const createHazard = async (
       latitude,
       longitude,
       severity,
-      source,
       occurredAt,
     }: CreateHazardInput = req.body;
     const { userId } = res;
@@ -198,14 +198,13 @@ export const createHazard = async (
     } catch (error) {
       console.log("Error during hazard review:", error);
       review = {
-        valid: false,
-        feedback: "Error during AI review process",
+        reviewStatus: HazardReviewStatus.pending,
       };
     }
 
     const {
-      valid,
-      feedback: aiFeedback,
+      reviewStatus,
+      reviewFeedback,
       title: suggestedTitle,
       shortDescription,
       summary: aiSummary,
@@ -218,17 +217,16 @@ export const createHazard = async (
         data: {
           title: suggestedTitle || title,
           description,
-          ...(shortDescription && { shortDescription }),
-          ...(aiSummary && { aiSummary }),
-          ...(aiFeedback && { aiFeedback }),
+          reviewStatus,
+          reviewFeedback,
+          shortDescription,
+          aiSummary,
           ...(aiConfidence && { aiConfidence }),
-          visibility: valid,
           categoryId,
           reportedById: userId,
           latitude,
           longitude,
           severity,
-          source,
           ...(occurredAt && { occurredAt: new Date(occurredAt) }),
         },
         include: { category: true },
@@ -237,7 +235,7 @@ export const createHazard = async (
       return hazard;
     });
 
-    if (valid) {
+    if (reviewStatus === HazardReviewStatus.accepted) {
       // Send push notifications to users who subscribed to this area when a new hazard is created
       // This will ignore the user who reported the hazard
       sendPushNotificationAboutNewHazard(result);
@@ -251,7 +249,7 @@ export const createHazard = async (
     }
 
     // Now also send a notification to the user who reported the hazard
-    if (valid) {
+    if (reviewStatus === HazardReviewStatus.accepted) {
       sendPushNotificationToUser({
         userId: userId!,
         title: "Hazard Reported Successfully",
@@ -259,11 +257,11 @@ export const createHazard = async (
         data: result,
         type: PushNotificationType.viewHazard,
       });
-    } else {
+    } else if (reviewStatus === HazardReviewStatus.rejected) {
       sendPushNotificationToUser({
         userId: userId!,
         title: "Invalid Hazard Report",
-        body: `Our review found your hazard report to be invalid. ${aiFeedback}`,
+        body: `Our review found your hazard report to be invalid. ${reviewFeedback}`,
         data: result,
         type: PushNotificationType.viewHazard,
       });

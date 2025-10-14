@@ -60,10 +60,8 @@ model Hazard {
   description      String
   shortDescription String?
   aiSummary        String?
-  aiFeedback       String?
   aiSeverity       HazardSeverity?
   aiConfidence     AIConfidence?
-  visibility       Boolean         @default(true)
   severity         HazardSeverity  @default(info)
   sourceId         String?
   geoLocation      String? // PostGIS geometry as string (WKT or WKB)
@@ -71,6 +69,11 @@ model Hazard {
   longitude        Float?
   categoryId       String
   reportedById     String?
+
+  reviewStatus   HazardReviewStatus @default(pending)
+  reviewFeedback String?
+  reviewedAt     DateTime?
+  reviewedById   String? // user ID of the user who reviewed OR "ai" if AI-reviewed
 
   upvoteCount   Int @default(0)
   downvoteCount Int @default(0)
@@ -127,6 +130,12 @@ model HazardView {
 enum HazardVoteType {
   upvote
   downvote
+}
+
+enum HazardReviewStatus {
+  pending
+  accepted
+  rejected
 }
 
 model LocationSubscription {

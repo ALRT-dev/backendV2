@@ -1,4 +1,4 @@
-import type { Hazard, HazardCategory, HazardVoteType } from "@prisma/client";
+import { HazardReviewStatus } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
@@ -8,7 +8,7 @@ export const buildHazardsWhereClause = ({
   searchString,
   categoryIds,
   reportedById,
-  visibility,
+  reviewStatus,
   northeastLat,
   northeastLng,
   southwestLat,
@@ -18,7 +18,7 @@ export const buildHazardsWhereClause = ({
   searchString?: any;
   categoryIds?: any;
   reportedById?: any;
-  visibility?: boolean | undefined;
+  reviewStatus?: any;
   northeastLat?: any;
   northeastLng?: any;
   southwestLat?: any;
@@ -68,10 +68,12 @@ export const buildHazardsWhereClause = ({
     });
   }
 
-  // Apply visibility filter if provided
-  whereClause.AND.push({
-    visibility: visibility === undefined ? true : visibility,
-  });
+  // Apply reviewStatus filter if provided
+  if (reviewStatus) {
+    whereClause.AND.push({
+      reviewStatus: reviewStatus,
+    });
+  }
 
   // Filter hazards that fall within subscription regions if provided
   if (subscriptions && subscriptions.length > 0) {
@@ -129,7 +131,7 @@ export const getHazardsApplyingFilters = async ({
   searchString,
   categoryIds,
   reportedById,
-  visibility,
+  reviewStatus,
   northeastLat,
   northeastLng,
   southwestLat,
@@ -142,7 +144,7 @@ export const getHazardsApplyingFilters = async ({
   searchString?: any;
   categoryIds?: any;
   reportedById?: any;
-  visibility?: boolean | undefined;
+  reviewStatus?: any;
   northeastLat?: any;
   northeastLng?: any;
   southwestLat?: any;
@@ -156,7 +158,7 @@ export const getHazardsApplyingFilters = async ({
     searchString,
     categoryIds,
     reportedById,
-    visibility,
+    reviewStatus,
     northeastLat,
     northeastLng,
     southwestLat,
@@ -217,8 +219,8 @@ CONFIDENCE LEVELS:
 
 Always respond with valid JSON containing these exact fields:
 {
-  "valid": "boolean (true if the description is a valid hazard report (not spam or nonsense or profanity), false otherwise)",
-  "feedback": "string (constructive feedback for the reporter if valid is false - ignore if valid is true, max 200 chars)"
+  "reviewStatus": "accepted|rejected (accepted if the description is a valid hazard report (not spam or nonsense or profanity), rejected otherwise)",
+  "reviewFeedback": "string (constructive feedback for the reporter, max 200 chars)"
   "title": "string (a concise, clear title for the hazard, max 80 chars)",
   "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
   "summary": "string (a 3-4 sentence summary of the hazard)",
@@ -252,8 +254,8 @@ Location: ${latitude}, ${longitude}
   }
 
   const aiReview = JSON.parse(response.choices[0]!!.message.content!!) as {
-    valid: boolean;
-    feedback?: string | undefined;
+    reviewStatus: "accepted" | "rejected";
+    reviewFeedback: string;
     title: string;
     shortDescription: string;
     summary: string;
