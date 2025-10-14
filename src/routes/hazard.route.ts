@@ -6,7 +6,7 @@ import {
   deleteHazard,
   getHazardsWithCategories,
   voteHazard,
-  populateFromSource,
+  populateHazards,
 } from "../controllers/hazard.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
@@ -27,7 +27,7 @@ hazardRouter.get(
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 hazardRouter.post("/", requireAuth, validate(createHazardSchema), createHazard);
-hazardRouter.post("/populate", requireAuth, populateFromSource);
+hazardRouter.post("/populate", requireAuth, populateHazards);
 hazardRouter.delete("/:id", requireAuth, deleteHazard);
 hazardRouter.post(
   "/:id/vote",

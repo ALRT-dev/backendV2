@@ -16,7 +16,6 @@ import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.j
 import { initSocket } from "./utils/socket_client.util.js";
 import { requireSocketAuth } from "./middlewares/auth.middleware.js";
 import { initializeScheduledTasks } from "./services/scheduler.service.js";
-import { populateCategories } from "./controllers/hazardCategory.controller.js";
 
 env.config();
 
@@ -48,8 +47,11 @@ server.listen(config.port, () => {
     `${config.env.toUpperCase()} server is running at PORT:${config.port}`
   );
 
-  if (config.env === "prod") {
-    // Initialize scheduled tasks only in production
+  // Whether to run scheduled tasks in development environment
+  const runScheduledTasksInDev = false;
+
+  if (runScheduledTasksInDev || config.env === "prod") {
+    // Initialize scheduled tasks only in production or if explicitly enabled in development
     initializeScheduledTasks();
   }
 });

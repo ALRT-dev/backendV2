@@ -1,16 +1,32 @@
-import type { Prisma } from "@prisma/client";
+import { HazardReviewStatus, type Hazard, type Prisma } from "@prisma/client";
 import {
   parseBoMWarningsToHazards,
   parseGeoJsonToHazards,
 } from "../utils/ingestion.util.js";
 import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
-import { summarizeHazard } from "./hazard.service.js";
+import { buildHazardInclude, summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
+import { SocketEvent } from "../models/socket_event_types.js";
 
 /**
- * Syncs hazards from the NSW Rural Fire Service (RFS) feed.
+ * Syncs hazards from different sources (RFS and BoM) to the database.
+ *
+ * Fetches data from both sources, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromDifferentSources = async () => {
+  try {
+    await Promise.all([syncHazardsFromRFS(), syncHazardsFromBoM()]);
+  } catch (error) {
+    console.error("Error during hazard sync from different sources:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the NSW Rural Fire Service (RFS) feed to the database.
+ *
  * Fetches data, summarizes it using AI, and stores new hazards in the database.
  * Sends notifications for newly created hazards.
  */
@@ -18,10 +34,51 @@ export const syncHazardsFromRFS = async () => {
   try {
     const rfsHazards = await getHazardsDataFromRFS();
 
-    const summarizedHazardPromises: Promise<any>[] = [];
-    const createdHazardPromises: Promise<any>[] = [];
+    console.log(`Fetched ${rfsHazards.length} hazards from RFS feed.`);
 
-    for (const hazardData of rfsHazards) {
+    const createdHazards = await summarizeAndPostHazards(rfsHazards);
+
+    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+  } catch (error) {
+    console.error("Error during RFS hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the Bureau of Meteorology (BoM) feed to the database.
+ *
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromBoM = async () => {
+  try {
+    const bomHazards = await getHazardsDataFromBoM();
+
+    console.log(`Fetched ${bomHazards.length} hazards from BoM feed.`);
+
+    const createdHazards = await summarizeAndPostHazards(bomHazards);
+
+    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+  } catch (error) {
+    console.error("Error during BoM hazard sync:", error);
+  }
+};
+
+/**
+ * Summarizes and posts hazards to the database.
+ * Sends notifications for newly created hazards.
+ */
+const summarizeAndPostHazards = async (
+  hazardDatas: Prisma.HazardCreateInput[]
+): Promise<Hazard[]> => {
+  try {
+    const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
+      [];
+    const createdHazardPromises: Promise<Hazard | null>[] = [];
+
+    for (const hazardData of hazardDatas) {
+      if (!hazardData.id) continue;
+
       const promise = prisma.hazard
         .findUnique({
           where: { id: hazardData.id },
@@ -47,6 +104,8 @@ export const syncHazardsFromRFS = async () => {
                 aiSummary: summarized.summary,
                 aiConfidence: summarized.confidence,
                 severity: summarized.severity,
+                reviewStatus: HazardReviewStatus.accepted,
+                reviewedAt: new Date(),
               };
             })
             .catch((error) => {
@@ -62,7 +121,9 @@ export const syncHazardsFromRFS = async () => {
       summarizedHazardPromises.push(promise);
     }
 
-    const summarizedHazards = await Promise.all(summarizedHazardPromises);
+    const summarizedHazards = (
+      await Promise.all(summarizedHazardPromises)
+    ).filter((h) => h !== null);
 
     for (const summarizedHazard of summarizedHazards) {
       if (!summarizedHazard) continue;
@@ -70,17 +131,19 @@ export const syncHazardsFromRFS = async () => {
       const promise = prisma.hazard
         .create({
           data: summarizedHazard,
+          include: buildHazardInclude(),
         })
         .then((createdHazard) => {
           console.log("Created hazard:", summarizedHazard.title);
 
           // Send push notifications to users who subscribed to this area when a new hazard is created
-          // This will ignore the user who reported the hazard
           sendPushNotificationAboutNewHazard(createdHazard);
 
           // Send socket events to users who subscribed to this area when a new hazard is created
-          // This will NOT ignore the user who reported the hazard
-          sendSocketEventAboutHazardToSubscribers(createdHazard);
+          sendSocketEventAboutHazardToSubscribers({
+            hazard: createdHazard,
+            socketEvent: SocketEvent.newHazard,
+          });
 
           return createdHazard;
         })
@@ -92,11 +155,14 @@ export const syncHazardsFromRFS = async () => {
       createdHazardPromises.push(promise);
     }
 
-    const createdHazards = await Promise.all(createdHazardPromises);
+    const createdHazards = (await Promise.all(createdHazardPromises)).filter(
+      (h) => h !== null
+    );
 
-    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+    return createdHazards;
   } catch (error) {
-    console.error("Error during RFS hazard sync:", error);
+    console.error("Error during hazard summarization and posting:", error);
+    return [];
   }
 };
 
@@ -104,7 +170,9 @@ export const syncHazardsFromRFS = async () => {
  * Fetches hazard data from the NSW Rural Fire Service (RFS) feed
  * and converts it into an array of HazardCreateInput objects.
  */
-export const getHazardsDataFromRFS = async () => {
+export const getHazardsDataFromRFS = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
   try {
     const response = await fetch(
       "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json"
@@ -115,10 +183,23 @@ export const getHazardsDataFromRFS = async () => {
 
     const category = await prisma.hazardCategory.findFirst({
       where: { name: "Weather & Environment" },
+      select: { id: true },
     });
     if (!category) {
       throw new Error("Hazard category 'Weather & Environment' not found");
     }
+
+    // Ensure the source exists before creating hazards
+    const rfsSource = await prisma.hazardSource.upsert({
+      where: {
+        url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+      },
+      create: {
+        name: "NSW Rural Fire Service",
+        url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+      },
+      update: {},
+    });
 
     const data = await response.json();
     const hazards = parseGeoJsonToHazards(data, category.id);
@@ -126,14 +207,8 @@ export const getHazardsDataFromRFS = async () => {
     return hazards.map((hazard) => ({
       ...hazard,
       source: {
-        connectOrCreate: {
-          where: {
-            url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
-          },
-          create: {
-            name: "NSW Rural Fire Service",
-            url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
-          },
+        connect: {
+          id: rfsSource.id,
         },
       },
       id: generateHazardId(hazard),
@@ -148,33 +223,45 @@ export const getHazardsDataFromRFS = async () => {
  * Fetches hazard data from the Bureau of Meteorology (BoM) warnings feed
  * and converts it into an array of HazardCreateInput objects.
  */
-export const getHazardsDataFromBoM = async () => {
+export const getHazardsDataFromBoM = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
   try {
     const response = await fetch(
       "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20"
     );
     if (!response.ok) {
-      console.error("Failed to fetch BoM data:", response.statusText);
-      return [];
+      throw new Error(`Failed to fetch BoM data: ${response.statusText}`);
     }
 
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const bomSource = await prisma.hazardSource.upsert({
+      where: {
+        url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
+      },
+      create: {
+        name: "Bureau of Meteorology",
+        url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
+      },
+      update: {},
+    });
+
     const data = await response.json();
-    const hazards = parseBoMWarningsToHazards(
-      data,
-      "d28289d9-dc57-447f-a052-ec7fef27723d"
-    );
+    const hazards = parseBoMWarningsToHazards(data, category.id);
 
     return hazards.map((hazard) => ({
       ...hazard,
       source: {
-        connectOrCreate: {
-          where: {
-            url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
-          },
-          create: {
-            name: "Bureau of Meteorology",
-            url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
-          },
+        connect: {
+          id: bomSource.id,
         },
       },
       id: generateHazardId(hazard),

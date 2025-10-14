@@ -10,7 +10,6 @@ import {
   buildHazardInclude,
   getHazardsApplyingFilters,
   reviewHazard,
-  summarizeHazard,
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 import {
@@ -20,11 +19,6 @@ import {
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventAboutHazardToSubscribers } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
-import { getHazardsDataFromRFS } from "../services/ingestion.service.js";
-import {
-  dumpHazardsToJson,
-  getDumpHazardById,
-} from "../utils/data_dump.util.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import type {
   CreateHazardInput,
@@ -65,6 +59,7 @@ export const getHazards = async (
   }
 };
 
+/// Controller to handle fetching hazards along with their categories, applying various filters.
 export const getHazardsWithCategories = async (
   req: Request,
   res: Response,
@@ -131,7 +126,7 @@ export const getHazardsWithCategories = async (
     if (hazards.length === 0) {
       return res
         .status(200)
-        .json({ subscriptionId: null, categories: [], hazards: [] });
+        .json({ subscriptionId, categories: [], hazards: [] });
     }
 
     res.status(200).json({ subscriptionId, categories, hazards });
@@ -702,119 +697,6 @@ export const populateHazards = async (
       hazards: createdHazards,
       categories: createdCategories,
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-export const populateFromSource = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const rfsHazards = await getHazardsDataFromRFS();
-    const dumpFileName = "rfs_existing_hazards.json";
-
-    const summarizedHazardPromises: Promise<any>[] = [];
-    const createdHazardPromises: Promise<any>[] = [];
-
-    const allHazards: any[] = [];
-
-    for (const hazardData of rfsHazards) {
-      const promise = prisma.hazard
-        .findUnique({
-          where: { id: hazardData.id },
-        })
-        .then((existing) => {
-          if (existing) {
-            console.log("Hazard already exists, skipping:", hazardData.title);
-            allHazards.push(existing);
-            return null;
-          }
-
-          // check if existing in the dumped json file
-          return getDumpHazardById(hazardData.id, dumpFileName).then(
-            (dumped) => {
-              if (dumped) {
-                console.log(
-                  "Hazard already exists in dump file, skipping:",
-                  hazardData.title
-                );
-                allHazards.push(dumped);
-                return dumped;
-              }
-
-              return summarizeHazard({
-                title: hazardData.title,
-                description: hazardData.description,
-                latitude: Number(hazardData.latitude),
-                longitude: Number(hazardData.longitude),
-              })
-                .then((summarized) => {
-                  return {
-                    ...hazardData,
-                    title: summarized.title || hazardData.title,
-                    shortDescription: summarized.shortDescription,
-                    aiSummary: summarized.summary,
-                    aiConfidence: summarized.confidence,
-                    severity: summarized.severity,
-                  };
-                })
-                .catch((error) => {
-                  console.log("Error during summarization:", error);
-                  return null;
-                });
-            }
-          );
-        })
-        .catch((error) => {
-          console.log("Error checking existing hazard:", error);
-          return null;
-        });
-
-      summarizedHazardPromises.push(promise);
-    }
-
-    const summarizedHazards = await Promise.all(summarizedHazardPromises);
-
-    for (const summarizedHazard of summarizedHazards) {
-      if (!summarizedHazard) continue;
-
-      const promise = prisma.hazard
-        .create({
-          data: summarizedHazard,
-        })
-        .then((createdHazard) => {
-          console.log("Created hazard:", summarizedHazard.title);
-          allHazards.push(createdHazard);
-
-          // Send push notifications to users who subscribed to this area when a new hazard is created
-          // This will ignore the user who reported the hazard
-          sendPushNotificationAboutNewHazard(createdHazard);
-
-          // Send socket events to users who subscribed to this area when a new hazard is created
-          // This will NOT ignore the user who reported the hazard
-          sendSocketEventAboutHazardToSubscribers({
-            hazard: createdHazard,
-            socketEvent: SocketEvent.newHazard,
-          });
-
-          return createdHazard;
-        })
-        .catch((error) => {
-          console.log("Error creating hazard:", error);
-          return null;
-        });
-
-      createdHazardPromises.push(promise);
-    }
-
-    const createdHazards = await Promise.all(createdHazardPromises);
-
-    await dumpHazardsToJson(allHazards, dumpFileName);
-
-    res.status(200).json(createdHazards);
   } catch (error) {
     next(error);
   }
