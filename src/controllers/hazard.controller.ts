@@ -20,6 +20,7 @@ import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventAboutHazardToSubscribers } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
 import type {
   CreateHazardInput,
   GetHazardsQuery,
@@ -188,6 +189,7 @@ export const createHazard = async (
       throw new HttpError(400, "Invalid Category ID");
     }
 
+    // Perform AI review of the hazard report
     let review: any;
     try {
       review = await reviewHazard({
@@ -203,6 +205,7 @@ export const createHazard = async (
       review = {
         reviewStatus: HazardReviewStatus.pending,
       };
+      // Don't fail the entire request if AI review fails
     }
 
     const {
@@ -214,68 +217,85 @@ export const createHazard = async (
       confidence: aiConfidence,
     } = review;
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Create the hazard
-      const hazard = await tx.hazard.create({
-        data: {
-          title: suggestedTitle || title,
-          description,
-          reviewStatus,
-          reviewFeedback,
-          ...(reviewStatus === HazardReviewStatus.accepted && {
-            reviewedAt: new Date(),
-          }),
-          shortDescription,
-          aiSummary,
-          ...(aiConfidence && { aiConfidence }),
-          categoryId,
-          reportedById: userId,
-          latitude,
-          longitude,
-          severity,
-          ...(occurredAt && { occurredAt: new Date(occurredAt) }),
-        },
-        include: buildHazardInclude(),
-      });
-
-      return hazard;
+    const hazard = await prisma.hazard.create({
+      data: {
+        title: suggestedTitle || title,
+        description,
+        reviewStatus,
+        reviewFeedback,
+        ...(reviewStatus === HazardReviewStatus.accepted && {
+          reviewedAt: new Date(),
+        }),
+        shortDescription,
+        aiSummary,
+        ...(aiConfidence && { aiConfidence }),
+        categoryId,
+        reportedById: userId,
+        latitude,
+        longitude,
+        severity,
+        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+      },
+      include: buildHazardInclude(),
     });
 
-    console.log("Created hazard with review feedback:", result.reviewFeedback);
+    console.log("Created hazard with review feedback:", hazard.reviewFeedback);
+
+    // Award XP points to the user based on AI review
+    let xpResult = null;
+    if (userId && hazard.reviewStatus !== HazardReviewStatus.pending) {
+      try {
+        xpResult = await awardXpPointsForHazard(userId, hazard.id, {
+          confidence: hazard.aiConfidence || ("medium" as any),
+          severity: hazard.severity,
+          reviewStatus: hazard.reviewStatus,
+        });
+      } catch (error) {
+        console.error("Error awarding XP points:", error);
+        // Don't fail the entire request if XP calculation fails
+      }
+    }
 
     if (reviewStatus === HazardReviewStatus.accepted) {
       // Send push notifications to users who subscribed to this area when a new hazard is created
       // This will ignore the user who reported the hazard
-      sendPushNotificationAboutNewHazard(result);
+      sendPushNotificationAboutNewHazard(hazard);
 
       // Send socket events to users who subscribed to this area when a new hazard is created
       // This will NOT ignore the user who reported the hazard
       sendSocketEventAboutHazardToSubscribers({
-        hazard: result,
+        hazard: hazard,
         socketEvent: SocketEvent.newHazard,
       });
     }
 
     // Now also send a notification to the user who reported the hazard
     if (reviewStatus === HazardReviewStatus.accepted) {
+      const xpMessage = xpResult
+        ? ` You earned ${xpResult.pointsAwarded} XP points!`
+        : "";
       sendPushNotificationToUser({
         userId: userId!,
         title: "Hazard Reported Successfully",
-        body: `Your hazard "${result.title}" has been reported successfully.`,
-        data: result,
+        body: `Your hazard "${hazard.title}" has been reported successfully.${xpMessage}`,
+        data: hazard,
         type: PushNotificationType.viewHazard,
       });
     } else if (reviewStatus === HazardReviewStatus.rejected) {
+      const xpMessage =
+        xpResult && xpResult.pointsAwarded < 0
+          ? ` You lost ${Math.abs(xpResult.pointsAwarded)} XP points.`
+          : "";
       sendPushNotificationToUser({
         userId: userId!,
         title: "Invalid Hazard Report",
-        body: `Our review found your hazard report to be invalid. ${reviewFeedback}`,
-        data: result,
+        body: `Our review found your hazard report to be invalid. ${reviewFeedback}${xpMessage}`,
+        data: hazard,
         type: PushNotificationType.viewHazard,
       });
     }
 
-    res.status(201).json(result);
+    res.status(201).json(hazard);
   } catch (error) {
     next(error);
   }
@@ -335,8 +355,10 @@ export const voteHazard = async (
       throw new HttpError(404, "Hazard not found");
     }
 
-    const updatedHazard = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       let updatedHazard: Hazard;
+      let voteAction: "new" | "remove" | "change" = "new";
+      let previousVoteType: HazardVoteType | null = null;
 
       // Check if the user has already voted on this hazard
       const existingVote = await tx.hazardVote.findUnique({
@@ -350,6 +372,7 @@ export const voteHazard = async (
 
       if (!existingVote) {
         // If no existing vote, create a new one
+        voteAction = "new";
         await tx.hazardVote.create({
           data: {
             hazardId,
@@ -372,8 +395,11 @@ export const voteHazard = async (
           },
         });
       } else {
+        previousVoteType = existingVote.voteType;
+
         // If the user has already voted and is trying to vote the same way, then remove the vote
         if (existingVote.voteType === voteType) {
+          voteAction = "remove";
           await tx.hazardVote.delete({
             where: { id: existingVote.id },
           });
@@ -392,6 +418,7 @@ export const voteHazard = async (
             },
           });
         } else {
+          voteAction = "change";
           // If the user is changing their vote, update the existing vote
           await tx.hazardVote.update({
             where: { id: existingVote.id },
@@ -414,13 +441,64 @@ export const voteHazard = async (
         }
       }
 
-      return updatedHazard;
+      return { updatedHazard, voteAction, previousVoteType };
     });
 
-    if (updatedHazard) {
+    // New upvote: +2 XP to reporter
+    // New downvote: -1 XP to reporter
+    // Remove upvote: -2 XP to reporter
+    // Remove downvote: +1 XP to reporter
+    // Change upvote→downvote: -3 XP to reporter (lost +2, gained -1)
+    // Change downvote→upvote: +3 XP to reporter (lost -1, gained +2)
+    if (result.updatedHazard) {
+      // Award XP points for engagement changes (simple approach)
+      try {
+        const reporterId = result.updatedHazard.reportedById;
+
+        // Only award engagement XP for accepted hazards with a reporter
+        if (
+          reporterId &&
+          result.updatedHazard.reviewStatus === HazardReviewStatus.accepted
+        ) {
+          let pointChange = 0;
+
+          if (result.voteAction === "new") {
+            // New vote - award points based on vote type
+            pointChange = voteType === "upvote" ? 2 : -1;
+          } else if (result.voteAction === "remove") {
+            // Removing vote - subtract points
+            pointChange = voteType === "upvote" ? -2 : 1;
+          } else if (result.voteAction === "change") {
+            // Changing vote - apply difference
+            pointChange = voteType === "upvote" ? 3 : -3; // Going from -1 to +2 or +2 to -1
+          }
+
+          if (pointChange !== 0) {
+            // Simply increment/decrement the user's XP points
+            await prisma.user.update({
+              where: { id: reporterId },
+              data: {
+                xpPoints: {
+                  increment: pointChange,
+                },
+              },
+            });
+
+            console.log(
+              `${
+                pointChange > 0 ? "+" : ""
+              }${pointChange} XP for ${voteType} on hazard ${hazardId}`
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error updating XP points for engagement:", error);
+        // Don't fail the vote if XP calculation fails
+      }
+
       // Send socket event about updated hazard to subscribers (except the user who voted)
       sendSocketEventAboutHazardToSubscribers({
-        hazard: updatedHazard,
+        hazard: result.updatedHazard,
         socketEvent: SocketEvent.updateHazard,
         excludeUserIds: [userId!],
       });

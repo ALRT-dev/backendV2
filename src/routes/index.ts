@@ -3,6 +3,7 @@ import userRouter from "./user.route.js";
 import hazardRouter from "./hazard.route.js";
 import notificationRouter from "./notification.route.js";
 import hazardCategoryRouter from "./hazardCategory.route.js";
+import xpPointsRouter from "./xpPoints.route.js";
 
 export {
   authRouter,
@@ -10,4 +11,5 @@ export {
   hazardRouter,
   notificationRouter,
   hazardCategoryRouter,
+  xpPointsRouter,
 };
