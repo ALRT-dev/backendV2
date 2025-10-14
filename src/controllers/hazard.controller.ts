@@ -455,9 +455,10 @@ export const voteHazard = async (
       try {
         const reporterId = result.updatedHazard.reportedById;
 
-        // Only award engagement XP for accepted hazards with a reporter
+        // Only award engagement XP for accepted hazards with a reporter and not self-voting
         if (
           reporterId &&
+          userId !== reporterId &&
           result.updatedHazard.reviewStatus === HazardReviewStatus.accepted
         ) {
           let pointChange = 0;
