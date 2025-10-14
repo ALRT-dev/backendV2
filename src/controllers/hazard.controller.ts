@@ -7,6 +7,7 @@ import {
   type HazardSeverity,
 } from "@prisma/client";
 import {
+  buildHazardInclude,
   getHazardsApplyingFilters,
   reviewHazard,
   summarizeHazard,
@@ -153,7 +154,7 @@ export const getHazardById = async (
 
     const hazard = await prisma.hazard.findUnique({
       where: { id },
-      include: { category: true },
+      include: buildHazardInclude(),
     });
 
     if (!hazard) {
@@ -239,7 +240,7 @@ export const createHazard = async (
           severity,
           ...(occurredAt && { occurredAt: new Date(occurredAt) }),
         },
-        include: { category: true, reportedBy: true },
+        include: buildHazardInclude(),
       });
 
       return hazard;
@@ -365,6 +366,7 @@ export const voteHazard = async (
         // Also increment the appropriate count in Hazard
         updatedHazard = await tx.hazard.update({
           where: { id: hazardId },
+          include: buildHazardInclude(),
           data: {
             upvoteCount: {
               increment: voteType === "upvote" ? 1 : 0,
@@ -384,6 +386,7 @@ export const voteHazard = async (
           // Decrement the appropriate count in Hazard
           updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
+            include: buildHazardInclude(),
             data: {
               upvoteCount: {
                 decrement: voteType === "upvote" ? 1 : 0,
@@ -403,6 +406,7 @@ export const voteHazard = async (
           // Update the counts in Hazard accordingly
           updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
+            include: buildHazardInclude(),
             data: {
               upvoteCount: {
                 increment: voteType === "upvote" ? 1 : -1,
@@ -681,7 +685,7 @@ export const populateHazards = async (
           longitude: hazardData.longitude,
           severity: hazardData.severity as HazardSeverity,
         },
-        include: { category: true },
+        include: buildHazardInclude(),
       });
 
       // Update the createdAt timestamp to match the sample data

@@ -11,7 +11,13 @@ import type { AISummaryResponse } from "../models/ai_summary_response_interface.
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
 import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
 
-/// Builds the where clause for filtering hazards based on various criteria.
+/**
+ * Builds the where clause for querying hazards based on various filters.
+ *
+ * This function constructs a Prisma-compatible where clause object that can be used
+ * to filter hazards based on search strings, categories, reporting user, review status,
+ * geographic bounds, and user subscriptions.
+ */
 export const buildHazardsWhereClause = (
   params: HazardSearchParams & {
     subscriptions?: LocationSubscription[] | undefined;
@@ -130,7 +136,31 @@ export const buildHazardsWhereClause = (
   return andConditions.length > 0 ? { AND: andConditions } : {};
 };
 
-/// Fetch hazards applying various filters and pagination.
+/**
+ * Builds the include object for fetching related entities with hazards.
+ *
+ * This function ensures that related entities such as category, source, and reportedBy
+ * are always included when fetching hazards. Additional include parameters can be merged
+ * in as needed.
+ */
+export const buildHazardInclude = (
+  params?: Prisma.HazardInclude
+): Prisma.HazardInclude => {
+  return {
+    category: true,
+    source: true,
+    reportedBy: true,
+    ...params,
+  };
+};
+
+/**
+ * Fetches hazards from the database applying various filters and pagination.
+ *
+ * This function retrieves hazards based on search strings, categories, reporting user,
+ * review status, geographic bounds, and user subscriptions. It also supports pagination
+ * and includes related entities as specified.
+ */
 export const getHazardsApplyingFilters = async (
   params: HazardSearchParams & {
     userId?: string | undefined;
@@ -166,10 +196,7 @@ export const getHazardsApplyingFilters = async (
 
   const hazards = await prisma.hazard.findMany({
     where: whereClause,
-    include: {
-      category: true,
-      source: true,
-      reportedBy: true,
+    include: buildHazardInclude({
       ...(userId && {
         votes: {
           where: {
@@ -180,7 +207,7 @@ export const getHazardsApplyingFilters = async (
           },
         },
       }),
-    },
+    }),
     orderBy: {
       createdAt: "desc",
     },
@@ -202,7 +229,12 @@ export const getHazardsApplyingFilters = async (
   });
 };
 
-/// Uses AI to review a hazard report for validity, severity, and suggestions.
+/**
+ * Reviews a hazard report using AI to determine its validity, severity, and clarity.
+ *
+ * The AI provides a structured response indicating whether the report is accepted or rejected,
+ * along with feedback, a concise title, a short description, a summary, and a confidence level.
+ */
 export const reviewHazard = async ({
   title,
   description,
@@ -275,6 +307,11 @@ Occurred At: ${occurredAt}
   }
 };
 
+/**
+ * Summarizes a hazard report using AI to generate a concise title, short description, summary, confidence level, and severity.
+ *
+ * The AI provides a structured response to standardize the hazard report for clarity and actionability.
+ */
 export const summarizeHazard = async ({
   title,
   description,
