@@ -311,6 +311,11 @@ export const deleteHazard = async (
   next: NextFunction
 ) => {
   try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(401, "Unauthorized");
+    }
+
     const { id } = req.params;
     if (!id) {
       throw new HttpError(400, "Hazard ID is required");
@@ -318,14 +323,27 @@ export const deleteHazard = async (
 
     const hazard = await prisma.hazard.findUnique({
       where: { id },
+      select: { id: true, reportedById: true },
     });
 
     if (!hazard) {
       throw new HttpError(404, "Hazard not found");
     }
 
-    await prisma.hazard.delete({
+    // only the user who reported the hazard or an admin can delete it
+    if (hazard.reportedById !== userId) {
+      throw new HttpError(403, "Forbidden: You cannot delete this hazard");
+    }
+
+    const deletedHazard = await prisma.hazard.delete({
       where: { id },
+      include: buildHazardInclude(),
+    });
+
+    // Notify subscribers about the deleted hazard
+    sendSocketEventAboutHazardToSubscribers({
+      socketEvent: SocketEvent.deleteHazard,
+      hazard: deletedHazard,
     });
 
     res.status(200).json({ message: "Hazard deleted successfully" });
