@@ -27,6 +27,7 @@ import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
 import type {
   CreateHazardInput,
   GetHazardsQuery,
+  UpdateHazardInput,
   VoteHazardInput,
 } from "../validators/hazard.validator.js";
 
@@ -207,6 +208,8 @@ export const createHazard = async (
       console.log("Error during hazard review:", error);
       review = {
         reviewStatus: HazardReviewStatus.pending,
+        reviewFeedback:
+          "We're sorry, but we couldn't review your alrt at this time. We need more time to process it.",
       };
       // Don't fail the entire request if AI review fails
     }
@@ -279,8 +282,8 @@ export const createHazard = async (
         : "";
       sendPushNotificationToUser({
         userId: userId!,
-        title: "Hazard Reported Successfully",
-        body: `Your hazard "${hazard.title}" has been reported successfully.${xpMessage}`,
+        title: "Alrt Reported Successfully",
+        body: `Your alrt "${hazard.title}" has been reported successfully.${xpMessage}`,
         data: hazard,
         type: PushNotificationType.viewHazard,
       });
@@ -291,14 +294,116 @@ export const createHazard = async (
           : "";
       sendPushNotificationToUser({
         userId: userId!,
-        title: "Invalid Hazard Report",
-        body: `Our review found your hazard report to be invalid. ${reviewFeedback}${xpMessage}`,
+        title: "Invalid Alrt Report",
+        body: `Our review found your alrt report to be invalid. ${reviewFeedback}${xpMessage}`,
         data: hazard,
         type: PushNotificationType.viewHazard,
       });
     }
 
     res.status(201).json(hazard);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateHazard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(401, "Unauthorized");
+    }
+    if (!id) {
+      throw new HttpError(400, "Hazard ID is required");
+    }
+
+    const existingHazard = await prisma.hazard.findUnique({
+      where: { id },
+    });
+    if (!existingHazard) {
+      throw new HttpError(404, "Hazard not found");
+    }
+
+    // only the user who reported the hazard or an admin can update it
+    if (existingHazard.reportedById !== userId) {
+      throw new HttpError(403, "Forbidden: You cannot update this hazard");
+    }
+
+    const {
+      title,
+      description,
+      categoryId,
+      latitude,
+      longitude,
+      severity,
+      occurredAt,
+    }: UpdateHazardInput = req.body;
+
+    // Perform AI review of the hazard report
+    let review: any;
+    try {
+      review = await reviewHazard({
+        title: title || existingHazard.title,
+        description: description || existingHazard.description,
+        latitude: latitude || existingHazard.latitude!,
+        longitude: longitude || existingHazard.longitude!,
+        severity: severity || existingHazard.severity,
+        occurredAt: occurredAt || existingHazard.occurredAt || new Date(),
+      });
+    } catch (error) {
+      console.log("Error during hazard review:", error);
+      review = {
+        reviewStatus: HazardReviewStatus.pending,
+        reviewFeedback:
+          "We're sorry, but we couldn't review your alrt at this time. We need more time to process it.",
+      };
+      // Don't fail the entire request if AI review fails
+    }
+
+    const {
+      reviewStatus,
+      reviewFeedback,
+      title: suggestedTitle,
+      shortDescription,
+      summary: aiSummary,
+      confidence: aiConfidence,
+    } = review;
+
+    const updatedHazard = await prisma.hazard.update({
+      where: { id },
+      data: {
+        title: suggestedTitle || title || existingHazard.title,
+        ...(description && { description }),
+        reviewStatus,
+        reviewFeedback,
+        ...(reviewStatus === HazardReviewStatus.accepted && {
+          reviewedAt: new Date(),
+        }),
+        shortDescription,
+        aiSummary,
+        ...(aiConfidence && { aiConfidence }),
+        ...(categoryId && { categoryId }),
+        ...(latitude && { latitude }),
+        ...(longitude && { longitude }),
+        ...(severity && { severity }),
+        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+      },
+      include: buildHazardInclude(),
+    });
+
+    // Send socket event about updated hazard to subscribers (except the user who updated)
+    sendSocketEventAboutHazardToSubscribers({
+      hazard: updatedHazard,
+      socketEvent: SocketEvent.updateHazard,
+      excludeUserIds: [userId],
+    });
+
+    res.status(200).json(updatedHazard);
   } catch (error) {
     next(error);
   }

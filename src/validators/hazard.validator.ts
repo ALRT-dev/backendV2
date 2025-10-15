@@ -33,6 +33,40 @@ export const createHazardSchema = z.object({
 
 export type CreateHazardInput = z.infer<typeof createHazardSchema>;
 
+export const updateHazardSchema = z.object({
+  title: z
+    .string()
+    .min(1, "Title is required")
+    .max(100, "Title must be less than 100 characters")
+    .optional(),
+
+  description: z
+    .string()
+    .min(1, "Description is required")
+    .max(1000, "Description must be less than 1000 characters")
+    .optional(),
+
+  categoryId: z.string().uuid("Category ID must be a valid UUID").optional(),
+
+  latitude: z
+    .number()
+    .min(-90, "Latitude must be between -90 and 90")
+    .max(90, "Latitude must be between -90 and 90")
+    .optional(),
+
+  longitude: z
+    .number()
+    .min(-180, "Longitude must be between -180 and 180")
+    .max(180, "Longitude must be between -180 and 180")
+    .optional(),
+
+  severity: z.enum(["info", "advice", "watchAndAct", "emergency"]).optional(),
+
+  occurredAt: z.iso.datetime().optional(),
+});
+
+export type UpdateHazardInput = z.infer<typeof updateHazardSchema>;
+
 export const voteHazardSchema = z.object({
   voteType: z.enum(["upvote", "downvote"], {
     message: "Vote must be either 'upvote' or 'downvote'",

@@ -143,7 +143,7 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
     await sendPushNotificationToTokens({
       tokens: userTokens,
       title: title,
-      body: `A new hazard has been reported in your area`,
+      body: `A new alrt has been reported in your area`,
       data: hazard,
       type: PushNotificationType.viewHazard,
     });
