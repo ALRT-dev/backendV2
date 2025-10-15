@@ -13,7 +13,7 @@ services:
 
   postgres:
     container_name: postgres-dev
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     env_file:
       - .env.dev
     ports:
