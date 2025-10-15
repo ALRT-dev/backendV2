@@ -5,6 +5,8 @@ import {
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
+import { sendSocketEventToUsers } from "./socket.service.js";
+import { SocketEvent } from "../models/socket_event_types.js";
 
 export interface XpCalculationFactors {
   confidence: AIConfidence;
@@ -177,11 +179,22 @@ export const awardXpPointsForHazard = async (
   );
 
   // Update user in database
-  await prisma.user.update({
+  const updatedUser = await prisma.user.update({
     where: { id: userId },
     data: {
       xpPoints: newXpTotal,
       reliabilityScore: newReliabilityScore,
+    },
+  });
+
+  // Send updated XP and reliability score to the user via socket
+  sendSocketEventToUsers({
+    userIds: [userId],
+    event: SocketEvent.updateUserXp,
+    data: {
+      userId: updatedUser.id,
+      xpPoints: updatedUser.xpPoints,
+      reliabilityScore: updatedUser.reliabilityScore,
     },
   });
 

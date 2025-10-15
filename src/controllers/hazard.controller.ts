@@ -17,7 +17,10 @@ import {
   sendPushNotificationToUser,
 } from "../services/notification.service.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
-import { sendSocketEventAboutHazardToSubscribers } from "../services/socket.service.js";
+import {
+  sendSocketEventAboutHazardToSubscribers,
+  sendSocketEventToUsers,
+} from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
@@ -475,13 +478,44 @@ export const voteHazard = async (
           }
 
           if (pointChange !== 0) {
-            // Simply increment/decrement the user's XP points
-            await prisma.user.update({
+            // Simply increment/decrement the user's XP points and get upvotes count
+            const updatedUser = await prisma.user.update({
               where: { id: reporterId },
               data: {
                 xpPoints: {
                   increment: pointChange,
                 },
+              },
+            });
+
+            // Calculate upvotes received count by counting votes on user's hazards
+            const upvotesReceived = await prisma.hazardVote.count({
+              where: {
+                voteType: HazardVoteType.upvote,
+                hazard: {
+                  reportedById: reporterId,
+                },
+              },
+            });
+
+            // Send updated XP and reliability score to the user via socket
+            sendSocketEventToUsers({
+              userIds: [reporterId],
+              event: SocketEvent.updateUserXp,
+              data: {
+                userId: updatedUser.id,
+                xpPoints: updatedUser.xpPoints,
+                reliabilityScore: updatedUser.reliabilityScore,
+              },
+            });
+
+            // Send updated upvotes received count to the user via socket
+            sendSocketEventToUsers({
+              userIds: [reporterId],
+              event: SocketEvent.updateUserUpvotesReceivedCount,
+              data: {
+                userId: updatedUser.id,
+                upvotesReceivedCount: upvotesReceived,
               },
             });
 
