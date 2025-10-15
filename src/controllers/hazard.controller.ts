@@ -28,7 +28,7 @@ import type {
   CreateHazardInput,
   GetHazardsQuery,
   VoteHazardInput,
-} from "../validators/hazard.schema.js";
+} from "../validators/hazard.validator.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -540,6 +540,76 @@ export const voteHazard = async (
     }
 
     res.status(200).json({ message: "Vote recorded successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const viewHazard = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { id } = req.params;
+    const { userId } = res;
+
+    if (!id) {
+      throw new HttpError(400, "Hazard ID is required");
+    }
+    if (!userId) {
+      throw new HttpError(401, "Unauthorized");
+    }
+
+    // Check if the hazard exists
+    const hazard = await prisma.hazard.findUnique({
+      where: { id },
+      select: { id: true, reportedById: true },
+    });
+    if (!hazard) {
+      throw new HttpError(404, "Hazard not found");
+    }
+
+    // Skip if the user is the reporter of the hazard
+    if (hazard.reportedById === userId) {
+      return res.status(200).json({
+        message: "Skipping view of your own hazard",
+        isViewRecorded: false,
+      });
+    }
+
+    // Check if already viewed
+    const existingView = await prisma.hazardView.findUnique({
+      where: {
+        hazardId_userId: {
+          hazardId: hazard.id,
+          userId: userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    // Skip if already viewed
+    if (existingView) {
+      return res.status(200).json({
+        message: "Skipping view of already viewed hazard",
+        isViewRecorded: false,
+      });
+    }
+
+    // Record the view finally
+    await prisma.hazardView.create({
+      data: {
+        hazardId: hazard.id,
+        userId: userId,
+        viewedAt: new Date(),
+      },
+    });
+
+    res.status(200).json({
+      message: "Hazard view recorded successfully",
+      isViewRecorded: true,
+    });
   } catch (error) {
     next(error);
   }
