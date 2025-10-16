@@ -9,6 +9,7 @@ import { buildHazardInclude, summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import { getHazardExpiryDateFromSeverity } from "../utils/hazard.util.js";
 
 /**
  * Syncs hazards from different sources (RFS and BoM) to the database.
@@ -106,6 +107,9 @@ const summarizeAndPostHazards = async (
                 severity: summarized.severity,
                 reviewStatus: HazardReviewStatus.accepted,
                 reviewedAt: new Date(),
+                expiresAt:
+                  hazardData.expiresAt ||
+                  getHazardExpiryDateFromSeverity(summarized.severity),
               };
             })
             .catch((error) => {

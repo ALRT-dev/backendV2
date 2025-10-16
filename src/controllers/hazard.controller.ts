@@ -30,6 +30,7 @@ import type {
   UpdateHazardInput,
   VoteHazardInput,
 } from "../validators/hazard.validator.js";
+import { adjustExpirationTime } from "../utils/hazard.util.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -225,6 +226,7 @@ export const createHazard = async (
       confidence: aiConfidence,
     } = review;
 
+    const date = new Date();
     const hazard = await prisma.hazard.create({
       data: {
         title: suggestedTitle || title,
@@ -244,6 +246,7 @@ export const createHazard = async (
         locationName,
         severity,
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+        expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
       },
       include: buildHazardInclude(),
     });
@@ -512,7 +515,20 @@ export const voteHazard = async (
           },
         });
 
-        // Also increment the appropriate count in Hazard
+        // Also increment the appropriate count in Hazard and adjust expiration time
+        const currentHazard = await tx.hazard.findUnique({
+          where: { id: hazardId },
+          select: { expiresAt: true, reportedById: true },
+        });
+
+        let newExpiresAt = currentHazard?.expiresAt;
+        // Only adjust expiration time if it's not a self-vote
+        if (newExpiresAt && currentHazard?.reportedById !== userId) {
+          // Add 1 minute for upvote, subtract 30 seconds for downvote
+          const adjustmentMs = voteType === "upvote" ? 60 * 1000 : -30 * 1000;
+          newExpiresAt = adjustExpirationTime(newExpiresAt, adjustmentMs);
+        }
+
         updatedHazard = await tx.hazard.update({
           where: { id: hazardId },
           include: buildHazardInclude(),
@@ -523,6 +539,7 @@ export const voteHazard = async (
             downvoteCount: {
               increment: voteType === "downvote" ? 1 : 0,
             },
+            ...(newExpiresAt && { expiresAt: newExpiresAt }),
           },
         });
       } else {
@@ -535,7 +552,20 @@ export const voteHazard = async (
             where: { id: existingVote.id },
           });
 
-          // Decrement the appropriate count in Hazard
+          // Decrement the appropriate count in Hazard and adjust expiration time
+          const currentHazard = await tx.hazard.findUnique({
+            where: { id: hazardId },
+            select: { expiresAt: true, reportedById: true },
+          });
+
+          let newExpiresAt = currentHazard?.expiresAt;
+          // Only adjust expiration time if it's not a self-vote
+          if (newExpiresAt && currentHazard?.reportedById !== userId) {
+            // Reverse the time adjustment when removing vote
+            const adjustmentMs = voteType === "upvote" ? -60 * 1000 : 30 * 1000;
+            newExpiresAt = adjustExpirationTime(newExpiresAt, adjustmentMs);
+          }
+
           updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
             include: buildHazardInclude(),
@@ -546,6 +576,7 @@ export const voteHazard = async (
               downvoteCount: {
                 decrement: voteType === "downvote" ? 1 : 0,
               },
+              ...(newExpiresAt && { expiresAt: newExpiresAt }),
             },
           });
         } else {
@@ -556,7 +587,30 @@ export const voteHazard = async (
             data: { voteType: voteType as HazardVoteType },
           });
 
-          // Update the counts in Hazard accordingly
+          // Update the counts in Hazard accordingly and adjust expiration time
+          const currentHazard = await tx.hazard.findUnique({
+            where: { id: hazardId },
+            select: { expiresAt: true, reportedById: true },
+          });
+
+          let newExpiresAt = currentHazard?.expiresAt;
+          // Only adjust expiration time if it's not a self-vote
+          if (newExpiresAt && currentHazard?.reportedById !== userId) {
+            // When changing vote, we need to reverse the previous vote effect and apply the new one
+            let adjustmentMs = 0;
+            if (voteType === "upvote" && previousVoteType === "downvote") {
+              // Changing from downvote to upvote: reverse -30s and add +60s = +90s total
+              adjustmentMs = 90 * 1000;
+            } else if (
+              voteType === "downvote" &&
+              previousVoteType === "upvote"
+            ) {
+              // Changing from upvote to downvote: reverse +60s and add -30s = -90s total
+              adjustmentMs = -90 * 1000;
+            }
+            newExpiresAt = adjustExpirationTime(newExpiresAt, adjustmentMs);
+          }
+
           updatedHazard = await tx.hazard.update({
             where: { id: hazardId },
             include: buildHazardInclude(),
@@ -567,6 +621,7 @@ export const voteHazard = async (
               downvoteCount: {
                 increment: voteType === "downvote" ? 1 : -1,
               },
+              ...(newExpiresAt && { expiresAt: newExpiresAt }),
             },
           });
         }
@@ -659,11 +714,10 @@ export const voteHazard = async (
         // Don't fail the vote if XP calculation fails
       }
 
-      // Send socket event about updated hazard to subscribers (except the user who voted)
+      // Send socket event about updated hazard to subscribers
       sendSocketEventAboutHazardToSubscribers({
         hazard: result.updatedHazard,
         socketEvent: SocketEvent.updateHazard,
-        excludeUserIds: [userId!],
       });
     }
 

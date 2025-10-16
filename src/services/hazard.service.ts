@@ -38,6 +38,13 @@ export const buildHazardsWhereClause = (
   // Build the where clause for filtering hazards
   const andConditions: Prisma.HazardWhereInput[] = [];
 
+  // Only include hazards that haven't expired yet
+  andConditions.push({
+    expiresAt: {
+      gt: new Date(),
+    },
+  });
+
   // Apply search string filter if provided
   if (searchString) {
     andConditions.push({
