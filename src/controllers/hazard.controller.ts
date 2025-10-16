@@ -180,6 +180,7 @@ export const createHazard = async (
       categoryId,
       latitude,
       longitude,
+      locationName,
       severity,
       occurredAt,
     }: CreateHazardInput = req.body;
@@ -201,6 +202,7 @@ export const createHazard = async (
         description,
         latitude,
         longitude,
+        locationName,
         severity,
         occurredAt: occurredAt || new Date(),
       });
@@ -239,6 +241,7 @@ export const createHazard = async (
         reportedById: userId,
         latitude,
         longitude,
+        locationName,
         severity,
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
       },
@@ -340,6 +343,7 @@ export const updateHazard = async (
       categoryId,
       latitude,
       longitude,
+      locationName,
       severity,
       occurredAt,
     }: UpdateHazardInput = req.body;
@@ -352,6 +356,7 @@ export const updateHazard = async (
         description: description || existingHazard.description,
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
+        locationName: locationName || existingHazard.locationName,
         severity: severity || existingHazard.severity,
         occurredAt: occurredAt || existingHazard.occurredAt || new Date(),
       });
@@ -390,17 +395,17 @@ export const updateHazard = async (
         ...(categoryId && { categoryId }),
         ...(latitude && { latitude }),
         ...(longitude && { longitude }),
+        ...(locationName && { locationName }),
         ...(severity && { severity }),
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
       },
       include: buildHazardInclude(),
     });
 
-    // Send socket event about updated hazard to subscribers (except the user who updated)
+    // Send socket event about updated hazard to subscribers
     sendSocketEventAboutHazardToSubscribers({
       hazard: updatedHazard,
       socketEvent: SocketEvent.updateHazard,
-      excludeUserIds: [userId],
     });
 
     res.status(200).json(updatedHazard);

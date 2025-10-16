@@ -63,12 +63,15 @@ model Hazard {
   aiSeverity       HazardSeverity?
   aiConfidence     AIConfidence?
   severity         HazardSeverity  @default(info)
-  sourceId         String?
-  geoLocation      String? // PostGIS geometry as string (WKT or WKB)
-  latitude         Float?
-  longitude        Float?
-  categoryId       String
-  reportedById     String?
+
+  latitude     Float?
+  longitude    Float?
+  locationName String? // Human-readable location name or address
+  geoLocation  String? // PostGIS geometry as string (WKT or WKB)
+
+  categoryId   String
+  sourceId     String?
+  reportedById String?
 
   reviewStatus   HazardReviewStatus @default(pending)
   reviewFeedback String?

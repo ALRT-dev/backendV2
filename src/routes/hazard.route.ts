@@ -30,7 +30,7 @@ hazardRouter.get(
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 hazardRouter.post("/", requireAuth, validate(createHazardSchema), createHazard);
-hazardRouter.delete(
+hazardRouter.put(
   "/:id",
   requireAuth,
   validate(updateHazardSchema),

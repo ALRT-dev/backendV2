@@ -23,6 +23,12 @@ export const createHazardSchema = z.object({
     .min(-180, "Longitude must be between -180 and 180")
     .max(180, "Longitude must be between -180 and 180"),
 
+  locationName: z
+    .string()
+    .min(1, "Location name is required")
+    .max(200, "Location name must be less than 200 characters")
+    .optional(),
+
   severity: z
     .enum(["info", "advice", "watchAndAct", "emergency"])
     .optional()
@@ -58,6 +64,12 @@ export const updateHazardSchema = z.object({
     .number()
     .min(-180, "Longitude must be between -180 and 180")
     .max(180, "Longitude must be between -180 and 180")
+    .optional(),
+
+  locationName: z
+    .string()
+    .min(1, "Location name is required")
+    .max(200, "Location name must be less than 200 characters")
     .optional(),
 
   severity: z.enum(["info", "advice", "watchAndAct", "emergency"]).optional(),

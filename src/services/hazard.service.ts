@@ -240,6 +240,7 @@ export const reviewHazard = async ({
   description,
   latitude,
   longitude,
+  locationName,
   severity,
   occurredAt,
 }: {
@@ -247,6 +248,7 @@ export const reviewHazard = async ({
   description: string;
   latitude: number;
   longitude: number;
+  locationName?: string | undefined | null;
   severity: HazardSeverity;
   occurredAt: string | Date;
 }): Promise<AIReviewResponse> => {
@@ -274,7 +276,7 @@ Evaluate this hazard:
 
 Title: ${title}
 Description: ${description}
-Location: ${latitude}, ${longitude}
+Location: ${locationName ? `${locationName}, ` : ""}(${latitude}, ${longitude})
 Severity Level: ${severity}
 Occurred At: ${occurredAt}
 `;
