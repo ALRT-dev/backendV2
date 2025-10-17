@@ -52,3 +52,23 @@ export const adjustExpirationTime = (
 
   return newExpiresAt;
 };
+
+/**
+ * Returns a formatted string representation of the hazard severity.
+ */
+export const getFormattedHazardSeverity = (
+  severity: HazardSeverity
+): string => {
+  switch (severity) {
+    case HazardSeverity.info:
+      return "Info";
+    case HazardSeverity.advice:
+      return "Advice";
+    case HazardSeverity.watchAndAct:
+      return "Watch and Act";
+    case HazardSeverity.emergency:
+      return "Critical";
+    default:
+      return "Info";
+  }
+};

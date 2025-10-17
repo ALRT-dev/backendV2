@@ -1,9 +1,12 @@
-import type { Hazard } from "@prisma/client";
+import { type Hazard } from "@prisma/client";
 import { firebaseAdmin } from "../utils/firebase_admin_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
+import { getFormattedHazardSeverity } from "../utils/hazard.util.js";
 
-/// A function to get user push notification tokens of a specific user by their user ID.
+/**
+ * A function to get user push notification tokens of a specific user by their user ID.
+ */
 const getUserPushNotificationTokens = async (userId: string) => {
   try {
     const user = await prisma.user.findUnique({
@@ -26,7 +29,9 @@ const getUserPushNotificationTokens = async (userId: string) => {
   }
 };
 
-/// Sends a push notification to multiple device tokens.
+/**
+ * Sends push notifications to a list of device tokens.
+ */
 const sendPushNotificationToTokens = async ({
   tokens,
   title,
@@ -74,7 +79,9 @@ const sendPushNotificationToTokens = async ({
   }
 };
 
-/// Sends a push notification to a specific user by their user ID.
+/**
+ * Sends a push notification to a specific user by their user ID.
+ */
 export const sendPushNotificationToUser = async ({
   userId,
   title,
@@ -109,7 +116,9 @@ export const sendPushNotificationToUser = async ({
   }
 };
 
-/// Sends push notifications to users who have subscribed to the area around the hazard.
+/**
+ * Sends push notifications to users subscribed to the location of a new hazard.
+ */
 export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
   try {
     const { latitude, longitude, title, reportedById } = hazard;
@@ -142,8 +151,8 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
 
     await sendPushNotificationToTokens({
       tokens: userTokens,
-      title: title,
-      body: `A new alrt has been reported in your area`,
+      title: getNotificationTitleForNewHazard(hazard),
+      body: getNotificationBodyForNewHazard(hazard),
       data: hazard,
       type: PushNotificationType.viewHazard,
     });
@@ -153,4 +162,20 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
       error
     );
   }
+};
+
+/**
+ * Returns the notification title for a new hazard based on its severity and title.
+ */
+const getNotificationTitleForNewHazard = (hazard: Hazard): string => {
+  const { severity, title } = hazard;
+  return `${getFormattedHazardSeverity(severity)} | ${title}`;
+};
+
+/**
+ * Returns the notification body for a new hazard based on its short description or description.
+ */
+const getNotificationBodyForNewHazard = (hazard: Hazard): string => {
+  const { shortDescription, description } = hazard;
+  return shortDescription || description || "A new alrt has been reported.";
 };
