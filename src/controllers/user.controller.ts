@@ -1,11 +1,15 @@
 import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
-import { getUserById } from "../services/user.service.js";
+import {
+  getUserById,
+  upsertUserOwnLocationSubscription,
+} from "../services/user.service.js";
 import prisma from "../utils/prisma_client.util.js";
 import type {
   NotificationSettingUpdate,
   SubscribeLocationInput,
   UpdateNotificationSettingsInput,
+  UpdateUserInput,
 } from "../validators/user.validator.js";
 
 /// Controller to handle fetching the profile of the authenticated user.
@@ -27,6 +31,65 @@ export const getUserProfile = async (
     }
 
     res.status(200).json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateUserProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const {
+      name,
+      latitude,
+      longitude,
+      locationName,
+      subscriptionRadiusKm,
+    }: UpdateUserInput = req.body;
+
+    if (!name && !latitude && !longitude && !locationName) {
+      throw new HttpError(
+        400,
+        "Nothing to update. Provide at least one field to update."
+      );
+    }
+
+    // Update user profile
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(name && { name }),
+        ...(latitude && { latitude }),
+        ...(longitude && { longitude }),
+        ...(locationName && { locationName }),
+      },
+    });
+
+    // If latitude and longitude are being updated, create/update user's own location subscription
+    if (latitude && longitude) {
+      await upsertUserOwnLocationSubscription({
+        userId,
+        latitude,
+        longitude,
+        ...(locationName && { locationName }),
+        radiusKm: subscriptionRadiusKm || 10, // Use provided radius or default to 10km
+      });
+    }
+
+    const updatedUser = await getUserById(userId);
+    if (!updatedUser) {
+      throw new HttpError(404, "User not found after update");
+    }
+
+    res.status(200).json(updatedUser);
   } catch (error) {
     next(error);
   }
@@ -128,6 +191,10 @@ export const getUserSubscriptions = async (
         userId: true,
         geoRegion: true,
       },
+      orderBy: [
+        { isOwnLocation: "desc" }, // Own location subscription first
+        { createdAt: "desc" },
+      ],
     });
 
     res.status(200).json(subscriptions);

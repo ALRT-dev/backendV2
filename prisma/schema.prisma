@@ -20,6 +20,11 @@ model User {
   xpPoints         Int   @default(0)
   reliabilityScore Float @default(0.0)
 
+  latitude     Float?
+  longitude    Float?
+  geoLocation  String? // PostGIS geometry as string (WKT or WKB)
+  locationName String? // Human-readable location name or address
+
   locationSubscriptions    LocationSubscription[]
   devices                  UserDevice[]
   hazardsReported          Hazard[]
@@ -143,9 +148,9 @@ enum HazardReviewStatus {
 }
 
 model LocationSubscription {
-  id           String   @id @default(uuid())
+  id           String  @id @default(uuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id])
+  user         User    @relation(fields: [userId], references: [id])
   northeastLat Float
   northeastLng Float
   southwestLat Float
@@ -153,10 +158,13 @@ model LocationSubscription {
   name         String? // Optional name for the location
   address      String? // Optional human-readable address
   geoRegion    String? // PostGIS geometry as string (WKT or WKB)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  isOwnLocation Boolean  @default(false) // True if this subscription is for the user's own location
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
+  @@index([userId, isOwnLocation])
 }
 
 model UserDevice {

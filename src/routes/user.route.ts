@@ -6,17 +6,20 @@ import {
   unsubscribeFromLocation,
   getUserPushNotificationSettings,
   updateUserNotificationSettings,
+  updateUserProfile,
 } from "../controllers/user.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
   subscribeLocationSchema,
   updateNotificationSettingsSchema,
+  updateUserSchema,
 } from "../validators/user.validator.js";
 
 const userRouter = Router();
 
 userRouter.get("/", requireAuth, getUserProfile);
+userRouter.put("/", requireAuth, validate(updateUserSchema), updateUserProfile);
 
 userRouter.post(
   "/subscribe-location",

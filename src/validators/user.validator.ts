@@ -1,5 +1,28 @@
 import z from "zod";
 
+export const updateUserSchema = z.object({
+  name: z.string().min(1, "Name is required").optional(),
+  latitude: z
+    .number()
+    .min(-90, "Latitude must be between -90 and 90")
+    .max(90, "Latitude must be between -90 and 90")
+    .optional(),
+  longitude: z
+    .number()
+    .min(-180, "Longitude must be between -180 and 180")
+    .max(180, "Longitude must be between -180 and 180")
+    .optional(),
+  locationName: z.string().optional(),
+  subscriptionRadiusKm: z
+    .number()
+    .min(1, "Radius must be at least 1 km")
+    .max(50, "Radius cannot exceed 50 km")
+    .optional()
+    .default(10),
+});
+
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
 export const subscribeLocationSchema = z.object({
   northeastLat: z
     .number()
