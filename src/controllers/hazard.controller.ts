@@ -246,7 +246,9 @@ export const createHazard = async (
         locationName,
         severity,
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
-        expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
+        ...(reviewStatus === HazardReviewStatus.accepted && {
+          expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)),
+        }),
       },
       include: buildHazardInclude(),
     });
@@ -382,6 +384,7 @@ export const updateHazard = async (
       confidence: aiConfidence,
     } = review;
 
+    const date = new Date();
     const updatedHazard = await prisma.hazard.update({
       where: { id },
       data: {
@@ -401,6 +404,11 @@ export const updateHazard = async (
         ...(locationName && { locationName }),
         ...(severity && { severity }),
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+        ...(reviewStatus === HazardReviewStatus.accepted && {
+          expiresAt:
+            existingHazard.expiresAt ||
+            new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
+        }),
       },
       include: buildHazardInclude(),
     });
