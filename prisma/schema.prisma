@@ -20,11 +20,12 @@ model User {
   xpPoints         Int   @default(0)
   reliabilityScore Float @default(0.0)
 
-  locationSubscriptions LocationSubscription[]
-  devices               UserDevice[]
-  hazardsReported       Hazard[]
-  hazardVotes           HazardVote[]
-  hazardViews           HazardView[]
+  locationSubscriptions    LocationSubscription[]
+  devices                  UserDevice[]
+  hazardsReported          Hazard[]
+  hazardVotes              HazardVote[]
+  hazardViews              HazardView[]
+  pushNotificationSettings UserPushNotificationSetting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -168,4 +169,19 @@ model UserDevice {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+}
+
+model UserPushNotificationSetting {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  settingType String // e.g., "hazard_severity", "location_updates", "system_notifications"
+  settingKey  String // e.g., "info", "advice", "watchAndAct", "emergency" for hazard_severity
+  isEnabled   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, settingType, settingKey])
+  @@index([userId])
+  @@index([settingType])
 }

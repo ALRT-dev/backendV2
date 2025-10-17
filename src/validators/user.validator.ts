@@ -26,3 +26,22 @@ export const subscribeLocationSchema = z.object({
 });
 
 export type SubscribeLocationInput = z.infer<typeof subscribeLocationSchema>;
+
+const notificationSettingUpdateSchema = z.object({
+  settingType: z.string().min(1, "Setting type is required"),
+  settingKey: z.string().min(1, "Setting key is required"),
+  isEnabled: z.boolean(),
+});
+export type NotificationSettingUpdate = z.infer<
+  typeof notificationSettingUpdateSchema
+>;
+
+export const updateNotificationSettingsSchema = z.object({
+  updates: z
+    .array(notificationSettingUpdateSchema)
+    .min(1, "At least one update is required"),
+});
+
+export type UpdateNotificationSettingsInput = z.infer<
+  typeof updateNotificationSettingsSchema
+>;
