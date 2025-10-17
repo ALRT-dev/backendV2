@@ -50,10 +50,10 @@ server.listen(config.port, () => {
   );
 
   // Whether to run scheduled tasks in development environment
-  // const runScheduledTasksInDev = false;
+  const runScheduledTasksInDev = false;
 
-  // if (runScheduledTasksInDev || config.env === "prod") {
-  //   // Initialize scheduled tasks only in production or if explicitly enabled in development
-  //   initializeScheduledTasks();
-  // }
+  if (runScheduledTasksInDev || config.env === "prod") {
+    // Initialize scheduled tasks only in production or if explicitly enabled in development
+    initializeScheduledTasks();
+  }
 });
