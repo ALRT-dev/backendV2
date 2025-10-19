@@ -1,5 +1,5 @@
+import { buildHazardsWhereClause } from "../utils/hazard.util.js";
 import prisma from "../utils/prisma_client.util.js";
-import { buildHazardsWhereClause } from "./hazard.service.js";
 import type { HazardReviewStatus, LocationSubscription } from "@prisma/client";
 
 export const getCategoriesApplyingFilters = async ({

@@ -32,7 +32,7 @@ export const getHazardsApplyingFilters = async (
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
   }
-) => {
+): Promise<Hazard[]> => {
   const {
     searchString,
     categoryIds,
@@ -198,10 +198,6 @@ export const getHazardsApplyingFiltersRaw = async (
     query,
     ...queryParams
   )) as any[];
-
-  console.log("Query: ", query);
-  console.log("Query Parameters: ", queryParams);
-  console.log("Query Results: ", hazards.length);
 
   // Get unique reporter IDs from hazards that have reporters
   const reporterIds = Array.from(
