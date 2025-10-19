@@ -84,6 +84,9 @@ model Hazard {
   reviewedAt     DateTime?
   reviewedById   String? // user ID of the user who reviewed OR "ai" if AI-reviewed
 
+  confidenceScore             Int      @default(50)
+  confidenceScoreCalculatedAt DateTime @default(now())
+
   upvoteCount   Int @default(0)
   downvoteCount Int @default(0)
   viewCount     Int @default(0)

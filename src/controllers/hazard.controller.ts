@@ -24,6 +24,12 @@ import {
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
+import { calculateUserReportsStatus } from "../services/user.service.js";
+import {
+  calculateConfidenceScore,
+  recalculateHazardConfidenceScore,
+  type HazardForConfidenceCalculation,
+} from "../services/confidence_score.service.js";
 import type {
   CreateHazardInput,
   GetHazardsQuery,
@@ -226,6 +232,39 @@ export const createHazard = async (
       confidence: aiConfidence,
     } = review;
 
+    // Calculate confidence score for the new hazard
+    let confidenceScore = 0;
+    try {
+      // Get reporter data if user is creating the hazard
+      let reporterData = null;
+      let reportsStatus = undefined;
+
+      if (userId) {
+        const reporter = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { xpPoints: true, reliabilityScore: true },
+        });
+        reporterData = reporter;
+        reportsStatus = await calculateUserReportsStatus(userId);
+      }
+
+      // Create hazard data for confidence calculation
+      const hazardForCalculation: HazardForConfidenceCalculation = {
+        severity,
+        aiConfidence: aiConfidence || null,
+        upvoteCount: 0,
+        downvoteCount: 0,
+        createdAt: new Date(),
+        reportedBy: reporterData,
+        ...(reportsStatus && { reportsStatus }),
+      };
+
+      confidenceScore = calculateConfidenceScore(hazardForCalculation);
+    } catch (error) {
+      console.error("Error calculating confidence score:", error);
+      confidenceScore = 50; // Default fallback score
+    }
+
     const date = new Date();
     const hazard = await prisma.hazard.create({
       data: {
@@ -245,6 +284,8 @@ export const createHazard = async (
         longitude,
         locationName,
         severity,
+        confidenceScore,
+        confidenceScoreCalculatedAt: new Date(),
         ...(occurredAt && { occurredAt: new Date(occurredAt) }),
         ...(reviewStatus === HazardReviewStatus.accepted && {
           expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)),
@@ -709,17 +750,22 @@ export const voteHazard = async (
                 upvotesReceivedCount: upvotesReceived,
               },
             });
-
-            console.log(
-              `${
-                pointChange > 0 ? "+" : ""
-              }${pointChange} XP for ${voteType} on hazard ${hazardId}`
-            );
           }
         }
       } catch (error) {
-        console.error("Error updating XP points for engagement:", error);
-        // Don't fail the vote if XP calculation fails
+        console.error("Error updating engagement XP:", error);
+        // Don't fail the entire request if XP calculation fails
+      }
+
+      // Recalculate confidence score after vote change
+      try {
+        await recalculateHazardConfidenceScore(hazardId);
+      } catch (error) {
+        console.error(
+          "Error recalculating confidence score after vote:",
+          error
+        );
+        // Don't fail the request if confidence score calculation fails
       }
 
       // Send socket event about updated hazard to subscribers

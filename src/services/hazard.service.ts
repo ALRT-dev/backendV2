@@ -217,9 +217,7 @@ export const getHazardsApplyingFilters = async (
         },
       }),
     }),
-    orderBy: {
-      createdAt: "desc",
-    },
+    orderBy: [{ confidenceScore: "desc" }, { createdAt: "desc" }],
     skip: (page - 1) * pageSize,
     take: pageSize,
   });

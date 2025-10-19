@@ -10,6 +10,10 @@ import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import { getHazardExpiryDateFromSeverity } from "../utils/hazard.util.js";
+import {
+  calculateConfidenceScore,
+  type HazardForConfidenceCalculation,
+} from "./confidence_score.service.js";
 
 /**
  * Syncs hazards from different sources (RFS and BoM) to the database.
@@ -98,6 +102,28 @@ const summarizeAndPostHazards = async (
             longitude: Number(hazardData.longitude),
           })
             .then((summarized) => {
+              // Calculate confidence score for ingested hazard (official source)
+              let confidenceScore = 75; // Default high score for official sources
+              try {
+                const hazardForCalculation: HazardForConfidenceCalculation = {
+                  severity: summarized.severity,
+                  aiConfidence: summarized.confidence,
+                  upvoteCount: 0,
+                  downvoteCount: 0,
+                  createdAt: new Date(),
+                  reportedBy: null, // Official sources don't have reporters
+                };
+
+                confidenceScore =
+                  calculateConfidenceScore(hazardForCalculation);
+              } catch (error) {
+                console.error(
+                  "Error calculating confidence score for ingested hazard:",
+                  error
+                );
+                confidenceScore = 75; // Fallback for official sources
+              }
+
               return {
                 ...hazardData,
                 title: summarized.title || hazardData.title,
@@ -107,6 +133,8 @@ const summarizeAndPostHazards = async (
                 severity: summarized.severity,
                 reviewStatus: HazardReviewStatus.accepted,
                 reviewedAt: new Date(),
+                confidenceScore,
+                confidenceScoreCalculatedAt: new Date(),
                 expiresAt:
                   hazardData.expiresAt ||
                   getHazardExpiryDateFromSeverity(summarized.severity),
