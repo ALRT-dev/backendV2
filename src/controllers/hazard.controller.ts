@@ -59,6 +59,13 @@ export const getHazards = async (
     }: GetHazardsQuery = req.query;
     const { userId } = res;
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId! },
+      select: { latitude: true, longitude: true },
+    });
+    const userLat = user?.latitude || undefined;
+    const userLng = user?.longitude || undefined;
+
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       reportedById,
@@ -66,6 +73,8 @@ export const getHazards = async (
       categoryIds,
       userId,
       showExpired: parseBoolean(showExpired),
+      userLat,
+      userLng,
       page: Number(page),
       pageSize: Number(pageSize),
     });
@@ -98,6 +107,13 @@ export const getHazardsWithCategories = async (
     }: GetHazardsQuery = req.query;
     const { userId } = res;
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId! },
+      select: { latitude: true, longitude: true },
+    });
+    const userLat = user?.latitude || undefined;
+    const userLng = user?.longitude || undefined;
+
     const subscriptionPromise = prisma.locationSubscription.findFirst({
       where: {
         northeastLat: Number(northeastLat),
@@ -129,6 +145,8 @@ export const getHazardsWithCategories = async (
       southwestLat: Number(southwestLat),
       southwestLng: Number(southwestLng),
       userId,
+      userLat,
+      userLng,
       showExpired: parseBoolean(showExpired),
       page: Number(page),
       pageSize: Number(pageSize),
