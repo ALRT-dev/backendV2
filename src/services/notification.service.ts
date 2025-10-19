@@ -7,7 +7,9 @@ import { getFormattedHazardSeverity } from "../utils/hazard.util.js";
 /**
  * A function to get user push notification tokens of a specific user by their user ID.
  */
-const getUserPushNotificationTokens = async (userId: string) => {
+const getUserPushNotificationTokens = async (
+  userId: string
+): Promise<string[]> => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -29,6 +31,76 @@ const getUserPushNotificationTokens = async (userId: string) => {
   }
 };
 
+/**
+ * A function to get user push notification tokens subscribed to a hazard location and severity.
+ */
+const getUserPushNotificationTokensSubscribedToHazard = async (
+  hazard: Hazard
+): Promise<string[]> => {
+  try {
+    const { latitude, longitude, reportedById, severity } = hazard;
+    if (!latitude || !longitude) {
+      console.log(
+        "Hazard does not have valid coordinates to send notifications"
+      );
+      return [];
+    }
+
+    const subscriptions = await prisma.locationSubscription.findMany({
+      where: {
+        northeastLat: { gte: latitude },
+        northeastLng: { gte: longitude },
+        southwestLat: { lte: latitude },
+        southwestLng: { lte: longitude },
+
+        // don't notify the user who reported the hazard
+        ...(reportedById && { userId: { not: reportedById } }),
+
+        // Only get subscriptions for users who have notifications enabled for this severity
+        // OR users who don't have any explicit setting (default to enabled)
+        user: {
+          OR: [
+            // Users who don't have any setting for this severity (default to enabled)
+            {
+              pushNotificationSettings: {
+                none: {
+                  settingType: "severity",
+                  settingKey: severity,
+                },
+              },
+            },
+            // Users who have the setting enabled
+            {
+              pushNotificationSettings: {
+                some: {
+                  settingType: "severity",
+                  settingKey: severity,
+                  isEnabled: true,
+                },
+              },
+            },
+          ],
+        },
+      },
+      select: {
+        user: {
+          select: {
+            devices: true,
+          },
+        },
+      },
+    });
+
+    const userTokens = subscriptions.flatMap((sub) =>
+      sub.user.devices.map((device) => device.deviceToken)
+    );
+
+    return userTokens;
+  } catch (error) {
+    console.error("Error fetching user tokens subscribed to hazardå:", error);
+    return [];
+  }
+};
 /**
  * Sends push notifications to a list of device tokens.
  */
@@ -121,32 +193,8 @@ export const sendPushNotificationToUser = async ({
  */
 export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
   try {
-    const { latitude, longitude, title, reportedById } = hazard;
-    if (!latitude || !longitude) {
-      console.log(
-        "Hazard does not have valid coordinates to send notifications"
-      );
-      return;
-    }
-
-    const subscriptions = await prisma.locationSubscription.findMany({
-      where: {
-        northeastLat: { gte: latitude },
-        northeastLng: { gte: longitude },
-        southwestLat: { lte: latitude },
-        southwestLng: { lte: longitude },
-        // don't notify the user who reported the hazard
-        ...(reportedById && { userId: { not: reportedById } }),
-      },
-      select: {
-        user: {
-          select: { devices: true },
-        },
-      },
-    });
-
-    const userTokens = subscriptions.flatMap((sub) =>
-      sub.user.devices.map((device) => device.deviceToken)
+    const userTokens = await getUserPushNotificationTokensSubscribedToHazard(
+      hazard
     );
 
     await sendPushNotificationToTokens({
