@@ -119,6 +119,11 @@ export const getHazardsQuerySchema = z.object({
     .string()
     .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
     .optional(),
+
+  showExpired: z
+    .string()
+    .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
+    .optional(),
 });
 
 export type GetHazardsQuery = z.infer<typeof getHazardsQuerySchema>;

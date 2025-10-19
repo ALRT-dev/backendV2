@@ -27,17 +27,20 @@ export const buildHazardsWhereClause = (
     southwestLat,
     southwestLng,
     subscriptions,
+    showExpired,
   } = params;
 
   // Build the where clause for filtering hazards
   const andConditions: Prisma.HazardWhereInput[] = [];
 
   // Only include hazards that haven't expired yet
-  andConditions.push({
-    expiresAt: {
-      gt: new Date(),
-    },
-  });
+  if (!showExpired) {
+    andConditions.push({
+      expiresAt: {
+        gt: new Date(),
+      },
+    });
+  }
 
   // Apply search string filter if provided
   if (searchString) {
@@ -176,6 +179,7 @@ export const buildHazardsWhereClauseRaw = (
     southwestLat,
     southwestLng,
     subscriptions,
+    showExpired,
   } = params;
 
   const whereConditions: string[] = [];
@@ -183,9 +187,9 @@ export const buildHazardsWhereClauseRaw = (
   let paramIndex = 1;
 
   // Only include hazards that haven't expired yet
-  whereConditions.push(
-    `(h."expiresAt" IS NULL OR h."expiresAt" > NOW() AT TIME ZONE 'UTC')`
-  );
+  if (!showExpired) {
+    whereConditions.push(`(h."expiresAt" > NOW() AT TIME ZONE 'UTC')`);
+  }
 
   // Apply search string filter if provided
   if (searchString) {

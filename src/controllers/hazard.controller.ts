@@ -39,6 +39,7 @@ import {
   adjustExpirationTime,
   buildHazardInclude,
 } from "../utils/hazard.util.js";
+import { parseBoolean } from "../utils/parse.util.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -52,6 +53,7 @@ export const getHazards = async (
       categoryIds,
       reportedById,
       reviewStatus,
+      showExpired,
       page = "1",
       pageSize = "20",
     }: GetHazardsQuery = req.query;
@@ -63,6 +65,7 @@ export const getHazards = async (
       reviewStatus,
       categoryIds,
       userId,
+      showExpired: parseBoolean(showExpired),
       page: Number(page),
       pageSize: Number(pageSize),
     });
@@ -89,6 +92,7 @@ export const getHazardsWithCategories = async (
       northeastLng,
       southwestLat,
       southwestLng,
+      showExpired,
       page = "1",
       pageSize = "20",
     }: GetHazardsQuery = req.query;
@@ -113,6 +117,7 @@ export const getHazardsWithCategories = async (
       hazardNortheastLng: Number(northeastLng),
       hazardSouthwestLat: Number(southwestLat),
       hazardSouthwestLng: Number(southwestLng),
+      showExpiredHazards: parseBoolean(showExpired),
     });
 
     const hazardsPromise = getHazardsApplyingFiltersRaw({
@@ -124,6 +129,7 @@ export const getHazardsWithCategories = async (
       southwestLat: Number(southwestLat),
       southwestLng: Number(southwestLng),
       userId,
+      showExpired: parseBoolean(showExpired),
       page: Number(page),
       pageSize: Number(pageSize),
     });

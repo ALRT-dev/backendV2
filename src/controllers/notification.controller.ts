@@ -7,6 +7,7 @@ import type {
   GetNotificationsFeedQuery,
   PushNotificationTokenInput,
 } from "../validators/notification.validator.js";
+import { parseBoolean } from "../utils/parse.util.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -19,6 +20,7 @@ export const getNotificationsFeed = async (
       searchString,
       categoryIds,
       reviewStatus,
+      showExpired,
       page = "1",
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
@@ -41,6 +43,7 @@ export const getNotificationsFeed = async (
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
       hazardReviewStatus: reviewStatus,
+      showExpiredHazards: parseBoolean(showExpired),
       subscriptions,
     });
 
@@ -54,6 +57,7 @@ export const getNotificationsFeed = async (
       subscriptions,
       userLat,
       userLng,
+      showExpired: parseBoolean(showExpired),
     });
 
     const [categories, hazards] = await Promise.all([

@@ -10,6 +10,11 @@ export const getNotificationsFeedSchema = z.object({
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 
   pageSize: z.string().regex(/^\d+$/, "Page size must be a number").optional(),
+
+  showExpired: z
+    .string()
+    .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
+    .optional(),
 });
 
 export type GetNotificationsFeedQuery = z.infer<

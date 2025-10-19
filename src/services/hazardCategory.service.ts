@@ -10,6 +10,7 @@ export const getCategoriesApplyingFilters = async ({
   hazardNortheastLng,
   hazardSouthwestLat,
   hazardSouthwestLng,
+  showExpiredHazards,
   subscriptions,
 }: {
   hazardSearchString?: string | undefined;
@@ -19,6 +20,7 @@ export const getCategoriesApplyingFilters = async ({
   hazardNortheastLng?: number | undefined;
   hazardSouthwestLat?: number | undefined;
   hazardSouthwestLng?: number | undefined;
+  showExpiredHazards?: boolean | undefined;
   subscriptions?: LocationSubscription[] | undefined;
 }) => {
   const hazardsWhereClause = buildHazardsWhereClause({
@@ -29,6 +31,7 @@ export const getCategoriesApplyingFilters = async ({
     northeastLng: hazardNortheastLng,
     southwestLat: hazardSouthwestLat,
     southwestLng: hazardSouthwestLng,
+    showExpired: showExpiredHazards,
     subscriptions,
   });
 

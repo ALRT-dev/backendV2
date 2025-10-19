@@ -14,6 +14,8 @@ export interface HazardSearchParams {
   userLat?: number | undefined;
   userLng?: number | undefined;
 
+  showExpired?: boolean | undefined;
+
   page?: number | undefined;
   pageSize?: number | undefined;
 }
