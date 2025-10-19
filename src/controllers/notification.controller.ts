@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
-import { getHazardsApplyingFilters } from "../services/hazard.service.js";
+import { getHazardsApplyingFiltersRaw } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
 import type {
   GetNotificationsFeedQuery,
@@ -31,13 +31,20 @@ export const getNotificationsFeed = async (
       return res.status(200).json({ categories: [], hazards: [] });
     }
 
+    const user = await prisma.user.findUnique({
+      where: { id: userId! },
+      select: { latitude: true, longitude: true },
+    });
+    const userLat = user?.latitude || undefined;
+    const userLng = user?.longitude || undefined;
+
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
       hazardReviewStatus: reviewStatus,
       subscriptions,
     });
 
-    const hazardsPromise = getHazardsApplyingFilters({
+    const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
       reviewStatus,
@@ -45,6 +52,8 @@ export const getNotificationsFeed = async (
       page: Number(page),
       pageSize: Number(pageSize),
       subscriptions,
+      userLat,
+      userLng,
     });
 
     const [categories, hazards] = await Promise.all([

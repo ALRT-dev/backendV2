@@ -3,6 +3,7 @@ import {
   type LocationSubscription,
   HazardVoteType,
   HazardSeverity,
+  type Hazard,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -161,6 +162,348 @@ export const buildHazardInclude = (
     reportedBy: true,
     ...params,
   };
+};
+
+/**
+ * Builds the WHERE clause for raw SQL queries with parameters.
+ *
+ * @param params - Search parameters including filters and subscriptions
+ * @returns Object containing WHERE clause string, parameters array, and next parameter index
+ */
+export const buildHazardsWhereClauseRaw = (
+  params: HazardSearchParams & {
+    subscriptions?: LocationSubscription[] | undefined;
+  }
+): { whereClause: string; queryParams: any[]; paramIndex: number } => {
+  const {
+    searchString,
+    categoryIds,
+    reportedById,
+    reviewStatus,
+    northeastLat,
+    northeastLng,
+    southwestLat,
+    southwestLng,
+    subscriptions,
+  } = params;
+
+  const whereConditions: string[] = [];
+  const queryParams: any[] = [];
+  let paramIndex = 1;
+
+  // Only include hazards that haven't expired yet
+  whereConditions.push(
+    `(h."expiresAt" IS NULL OR h."expiresAt" > NOW() AT TIME ZONE 'UTC')`
+  );
+
+  // Apply search string filter if provided
+  if (searchString) {
+    whereConditions.push(
+      `(h.title ILIKE $${paramIndex} OR h."shortDescription" ILIKE $${paramIndex})`
+    );
+    queryParams.push(`%${searchString}%`);
+    paramIndex++;
+  }
+
+  // Apply category filter if provided
+  if (categoryIds) {
+    const categoryArray = Array.isArray(categoryIds)
+      ? categoryIds
+      : [categoryIds];
+    const placeholders = categoryArray.map(() => `$${paramIndex++}`).join(",");
+    whereConditions.push(`h."categoryId" IN (${placeholders})`);
+    queryParams.push(...categoryArray);
+  }
+
+  // Apply reporter filter if provided
+  if (reportedById) {
+    whereConditions.push(`h."reportedById" = $${paramIndex}`);
+    queryParams.push(reportedById);
+    paramIndex++;
+  }
+
+  // Apply review status filter if provided
+  if (reviewStatus) {
+    whereConditions.push(
+      `h."reviewStatus" = $${paramIndex}::"HazardReviewStatus"`
+    );
+    queryParams.push(reviewStatus);
+    paramIndex++;
+  }
+
+  // Apply geographic bounds filter if provided
+  if (northeastLat && northeastLng && southwestLat && southwestLng) {
+    // If we also have subscriptions, combine with OR
+    if (subscriptions && subscriptions.length > 0) {
+      // Build subscription conditions and regular bounds condition with OR
+      const allConditions = [];
+
+      // Add subscription conditions first
+      subscriptions.forEach(() => {
+        const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
+          paramIndex + 1
+        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+        allConditions.push(condition);
+        paramIndex += 4;
+      });
+
+      // Add regular bounds condition
+      const regularBounds = `(h.latitude BETWEEN $${paramIndex} AND $${
+        paramIndex + 1
+      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+      allConditions.push(regularBounds);
+      paramIndex += 4;
+
+      whereConditions.push(`(${allConditions.join(" OR ")})`);
+
+      // Add subscription parameters first (to match the parameter order)
+      subscriptions.forEach((sub) => {
+        queryParams.push(
+          sub.southwestLat,
+          sub.northeastLat,
+          sub.southwestLng,
+          sub.northeastLng
+        );
+      });
+
+      // Add regular bounds parameters
+      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
+    } else {
+      // Only regular bounds, no subscriptions
+      whereConditions.push(
+        `(h.latitude BETWEEN $${paramIndex} AND $${
+          paramIndex + 1
+        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`
+      );
+      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
+      paramIndex += 4;
+    }
+  } else if (subscriptions && subscriptions.length > 0) {
+    // Only subscription bounds, no regular bounds
+    const subscriptionConditions = subscriptions.map(() => {
+      const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
+        paramIndex + 1
+      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+      paramIndex += 4;
+      return condition;
+    });
+    whereConditions.push(`(${subscriptionConditions.join(" OR ")})`);
+
+    subscriptions.forEach((sub) => {
+      queryParams.push(
+        sub.southwestLat,
+        sub.northeastLat,
+        sub.southwestLng,
+        sub.northeastLng
+      );
+    });
+  }
+
+  const whereClause =
+    whereConditions.length > 0 ? whereConditions.join(" AND ") : "TRUE";
+
+  return { whereClause, queryParams, paramIndex };
+};
+
+/**
+ * Builds the ORDER BY clause for raw SQL queries with optimal database-level sorting.
+ * Implements the client's required sorting order:
+ * 1. Severity: Emergency -> Watch and Act -> Advice -> Info
+ * 2. Distance: Closer first (when user location provided)
+ * 3. Recency: Newer first
+ * 4. Confidence Score (ACS): Higher first
+ *
+ * @param userLat - User latitude for distance calculation (optional)
+ * @param userLng - User longitude for distance calculation (optional)
+ * @param paramIndex - Current parameter index for SQL placeholders
+ * @param queryParams - Parameters array to append distance parameters to
+ * @returns Object containing ORDER BY clause and updated parameter index
+ */
+export const buildHazardsOrderByClauseRaw = (
+  userLat?: number,
+  userLng?: number,
+  paramIndex: number = 1,
+  queryParams: any[] = []
+): { orderByClause: string; paramIndex: number } => {
+  // Start with severity ordering
+  let orderByClause = `
+    CASE h.severity
+      WHEN 'emergency' THEN 1
+      WHEN 'watchAndAct' THEN 2
+      WHEN 'advice' THEN 3
+      WHEN 'info' THEN 4
+      ELSE 5
+    END ASC`;
+
+  let currentParamIndex = paramIndex;
+
+  // Add distance ordering if user location is provided
+  if (userLat && userLng) {
+    orderByClause += `,
+    CASE 
+      WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
+        (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
+      currentParamIndex + 1
+    })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
+      ELSE 999999
+    END ASC`;
+    queryParams.push(userLat, userLng);
+    currentParamIndex += 2;
+  }
+
+  // Add recency and confidence score ordering
+  orderByClause += `,
+    h."createdAt" DESC,
+    COALESCE(h."confidenceScore", 0) DESC`;
+
+  return { orderByClause, paramIndex: currentParamIndex };
+};
+
+/**
+ * Fetches hazards using raw SQL with database-level sorting for optimal performance.
+ * This is the main function that combines WHERE and ORDER BY clause builders.
+ */
+export const getHazardsApplyingFiltersRaw = async (
+  searchParams: HazardSearchParams & {
+    userId?: string | undefined;
+    subscriptions?: LocationSubscription[] | undefined;
+  }
+): Promise<Hazard[]> => {
+  const { userLat, userLng, userId, page = 1, pageSize = 20 } = searchParams;
+
+  // Build WHERE clause and get initial parameters
+  const { whereClause, queryParams, paramIndex } =
+    buildHazardsWhereClauseRaw(searchParams);
+
+  // Build ORDER BY clause
+  const { orderByClause, paramIndex: updatedParamIndex } =
+    buildHazardsOrderByClauseRaw(userLat, userLng, paramIndex, queryParams);
+
+  // Add pagination parameters
+  queryParams.push(pageSize, (page - 1) * pageSize);
+  const paginationParamIndex = updatedParamIndex;
+  const limitClause = `LIMIT $${paginationParamIndex} OFFSET $${
+    paginationParamIndex + 1
+  }`;
+
+  // Add userId parameter for vote join if needed
+  let userVoteParamIndex: number | undefined;
+  if (userId) {
+    queryParams.push(userId);
+    userVoteParamIndex = queryParams.length;
+  }
+
+  // Build the complete query
+  let query = `
+    SELECT 
+      h.*,
+      hc.name as "categoryName",
+      hc.emoji as "categoryEmoji", 
+      hs.name as "sourceName",
+      hs.url as "sourceUrl",
+      u.id as "reportedByUserId",
+      u.name as "reportedByName",
+      u.email as "reportedByEmail"`;
+
+  if (userId) {
+    query += `, v."voteType" as "userVoteType"`;
+  }
+
+  query += `
+    FROM "Hazard" h
+    LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
+    LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id  
+    LEFT JOIN "User" u ON h."reportedById" = u.id`;
+
+  if (userId && userVoteParamIndex) {
+    query += ` LEFT JOIN "HazardVote" v ON h.id = v."hazardId" AND v."userId" = $${userVoteParamIndex}`;
+  }
+
+  query += `
+    WHERE ${whereClause}
+    ORDER BY ${orderByClause}
+    ${limitClause}`;
+
+  // Execute the query
+  const hazards = (await prisma.$queryRawUnsafe(
+    query,
+    ...queryParams
+  )) as any[];
+
+  console.log("Query: ", query);
+  console.log("Query Parameters: ", queryParams);
+  console.log("Query Results: ", hazards.length);
+
+  // Get unique reporter IDs from hazards that have reporters
+  const reporterIds = Array.from(
+    new Set(
+      hazards
+        .map((hazard: any) => hazard.reportedById)
+        .filter(Boolean) as string[]
+    )
+  );
+
+  // Calculate UserReportsStatus for each unique reporter
+  const reportersStatusMap = new Map<string, UserReportsStatus>();
+  if (reporterIds.length > 0) {
+    const statusPromises = reporterIds.map(async (reporterId) => {
+      const status = await calculateUserReportsStatus(reporterId);
+      return { reporterId, status };
+    });
+
+    const statusResults = await Promise.all(statusPromises);
+    statusResults.forEach(({ reporterId, status }) => {
+      reportersStatusMap.set(reporterId, status);
+    });
+  }
+
+  // Transform the result to include proper structure
+  return hazards.map((hazard: any) => {
+    // Create reportedBy object with reportsStatus
+    const enhancedReportedBy = hazard.reportedByUserId
+      ? {
+          id: hazard.reportedByUserId,
+          name: hazard.reportedByName,
+          email: hazard.reportedByEmail,
+          reportsStatus:
+            reportersStatusMap.get(hazard.reportedByUserId) ??
+            UserReportsStatus.unverified,
+        }
+      : null;
+
+    // Clean up the hazard object
+    const {
+      reportedByUserId,
+      reportedByName,
+      reportedByEmail,
+      categoryName,
+      categoryEmoji,
+      sourceName,
+      sourceUrl,
+      userVoteType,
+      ...cleanHazard
+    } = hazard;
+
+    return {
+      ...cleanHazard,
+      userVoteType: userVoteType || undefined,
+      reportedBy: enhancedReportedBy,
+      category: hazard.categoryId
+        ? {
+            id: hazard.categoryId,
+            name: categoryName,
+            emoji: categoryEmoji,
+          }
+        : null,
+      source: hazard.sourceId
+        ? {
+            id: hazard.sourceId,
+            name: sourceName,
+            url: sourceUrl,
+          }
+        : null,
+    };
+  });
 };
 
 /**

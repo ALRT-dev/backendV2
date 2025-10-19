@@ -11,6 +11,9 @@ export interface HazardSearchParams {
   southwestLat?: number | undefined;
   southwestLng?: number | undefined;
 
+  userLat?: number | undefined;
+  userLng?: number | undefined;
+
   page?: number | undefined;
   pageSize?: number | undefined;
 }
