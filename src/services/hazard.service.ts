@@ -10,6 +10,8 @@ import { HttpError } from "../models/http_error.js";
 import type { AISummaryResponse } from "../models/ai_summary_response_interface.js";
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
 import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
+import { UserReportsStatus } from "../enums/user_reports_status_types.js";
+import { calculateUserReportsStatus } from "./user.service.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -222,16 +224,51 @@ export const getHazardsApplyingFilters = async (
     take: pageSize,
   });
 
+  // Get unique reporter IDs from hazards that have reporters
+  const reporterIds = Array.from(
+    new Set(
+      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[]
+    )
+  );
+
+  // Calculate UserReportsStatus for each unique reporter
+  const reportersStatusMap = new Map<string, UserReportsStatus>();
+  if (reporterIds.length > 0) {
+    const statusPromises = reporterIds.map(async (reporterId) => {
+      const status = await calculateUserReportsStatus(reporterId);
+      return { reporterId, status };
+    });
+
+    const statusResults = await Promise.all(statusPromises);
+    statusResults.forEach(({ reporterId, status }) => {
+      reportersStatusMap.set(reporterId, status);
+    });
+  }
+
   type TransformedHazardPayload = Prisma.HazardGetPayload<{}> & {
     userVoteType?: HazardVoteType | undefined;
+    reportedBy?: any;
   };
 
-  // Transform the result to include userVoteType
+  // Transform the result to include userVoteType and reporterReportsStatus
   return hazards.map((hazard): TransformedHazardPayload => {
     const { votes, ...hazardWithoutVotes } = hazard;
+
+    // Create reportedBy object with reportsStatus
+    const enhancedReportedBy = hazard.reportedBy
+      ? {
+          ...hazard.reportedBy,
+          reportsStatus: hazard.reportedById
+            ? reportersStatusMap.get(hazard.reportedById) ??
+              UserReportsStatus.unverified
+            : UserReportsStatus.unverified,
+        }
+      : null;
+
     return {
       ...hazardWithoutVotes,
       userVoteType: votes?.[0]?.voteType,
+      reportedBy: enhancedReportedBy,
     };
   });
 };

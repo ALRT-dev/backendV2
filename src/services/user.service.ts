@@ -1,5 +1,6 @@
 import { HazardVoteType } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
+import { UserReportsStatus } from "../enums/user_reports_status_types.js";
 
 /**
  * Creates or updates a user's own location subscription when their lat/lng is updated.
@@ -96,18 +97,81 @@ export const getUserById = async (userId: string) => {
     },
   });
 
-  const [user, upvotesReceivedCount] = await Promise.all([
+  // Get last 3 hazards reported by this user and calculate user reports status
+  const userReportsStatusPromise = calculateUserReportsStatus(userId);
+
+  const [user, upvotesReceivedCount, userReportsStatus] = await Promise.all([
     userPromise,
     upvotesReceivedCountPromise,
+    userReportsStatusPromise,
   ]);
 
   if (user) {
-    // rename _count fields for clarity and add upvotesReceivedCount
+    // rename _count fields for clarity and add additional fields
     (user as any)["hazardsViewedCount"] = user._count.hazardViews;
     (user as any)["hazardsReportedCount"] = user._count.hazardsReported;
     (user as any)["upvotesReceivedCount"] = upvotesReceivedCount;
+    (user as any)["reportsStatus"] = userReportsStatus;
     delete (user as any)._count;
   }
 
   return user;
+};
+
+/**
+ * Calculates the UserReportsStatus for a given user based on their last 3 hazard reports.
+ *
+ * If the last 3 hazards each have at least 5 upvotes (excluding the user's own votes), the status is 'verified'.
+ * If the last 3 hazards each have at least 3 upvotes (excluding the user's own votes), the status is 'emerging'.
+ * Otherwise, the status is 'unverified'.
+ */
+export const calculateUserReportsStatus = async (
+  userId: string
+): Promise<UserReportsStatus> => {
+  // Get last 3 hazards reported by this user
+  const lastThreeHazards = await prisma.hazard.findMany({
+    where: {
+      reportedById: userId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 3,
+    select: {
+      id: true,
+    },
+  });
+
+  let userReportsStatus = UserReportsStatus.unverified;
+
+  if (lastThreeHazards.length === 3) {
+    // Get upvote counts for each of the last 3 hazards
+    const hazardUpvoteCounts = await Promise.all(
+      lastThreeHazards.map((hazard) =>
+        prisma.hazardVote.count({
+          where: {
+            hazardId: hazard.id,
+            voteType: HazardVoteType.upvote,
+            NOT: {
+              userId: userId, // Exclude user's own votes
+            },
+          },
+        })
+      )
+    );
+
+    // Check if all 3 hazards meet the criteria for each status
+    const allHaveMinUpvotes = (minUpvotes: number) =>
+      hazardUpvoteCounts.every((count) => count >= minUpvotes);
+
+    if (allHaveMinUpvotes(5)) {
+      userReportsStatus = UserReportsStatus.verified;
+    } else if (allHaveMinUpvotes(3)) {
+      userReportsStatus = UserReportsStatus.emerging;
+    } else {
+      userReportsStatus = UserReportsStatus.unverified;
+    }
+  }
+
+  return userReportsStatus;
 };
