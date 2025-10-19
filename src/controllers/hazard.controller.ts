@@ -7,7 +7,6 @@ import {
   type HazardSeverity,
 } from "@prisma/client";
 import {
-  buildHazardInclude,
   getHazardsApplyingFilters,
   reviewHazard,
 } from "../services/hazard.service.js";
@@ -36,7 +35,10 @@ import type {
   UpdateHazardInput,
   VoteHazardInput,
 } from "../validators/hazard.validator.js";
-import { adjustExpirationTime } from "../utils/hazard.util.js";
+import {
+  adjustExpirationTime,
+  buildHazardInclude,
+} from "../utils/hazard.util.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (

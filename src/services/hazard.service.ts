@@ -13,19 +13,26 @@ import type { AIReviewResponse } from "../models/ai_review_response_interface.js
 import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
 import { UserReportsStatus } from "../enums/user_reports_status_types.js";
 import { calculateUserReportsStatus } from "./user.service.js";
+import {
+  buildHazardInclude,
+  buildHazardsOrderByClauseRaw,
+  buildHazardsWhereClause,
+  buildHazardsWhereClauseRaw,
+} from "../utils/hazard.util.js";
 
 /**
- * Builds the where clause for querying hazards based on various filters.
+ * Fetches hazards from the database applying various filters and pagination.
  *
- * This function constructs a Prisma-compatible where clause object that can be used
- * to filter hazards based on search strings, categories, reporting user, review status,
- * geographic bounds, and user subscriptions.
+ * This function retrieves hazards based on search strings, categories, reporting user,
+ * review status, geographic bounds, and user subscriptions. It also supports pagination
+ * and includes related entities as specified.
  */
-export const buildHazardsWhereClause = (
+export const getHazardsApplyingFilters = async (
   params: HazardSearchParams & {
+    userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
   }
-): Prisma.HazardWhereInput => {
+) => {
   const {
     searchString,
     categoryIds,
@@ -36,327 +43,89 @@ export const buildHazardsWhereClause = (
     southwestLat,
     southwestLng,
     subscriptions,
+    userId,
+    page = 1,
+    pageSize = 20,
   } = params;
 
-  // Build the where clause for filtering hazards
-  const andConditions: Prisma.HazardWhereInput[] = [];
-
-  // Only include hazards that haven't expired yet
-  andConditions.push({
-    expiresAt: {
-      gt: new Date(),
-    },
+  const whereClause = buildHazardsWhereClause({
+    searchString,
+    categoryIds,
+    reportedById,
+    reviewStatus,
+    northeastLat,
+    northeastLng,
+    southwestLat,
+    southwestLng,
+    subscriptions,
   });
 
-  // Apply search string filter if provided
-  if (searchString) {
-    andConditions.push({
-      OR: [
-        {
-          title: {
-            contains: searchString,
-            mode: "insensitive",
+  const hazards = await prisma.hazard.findMany({
+    where: whereClause,
+    include: buildHazardInclude({
+      ...(userId && {
+        votes: {
+          where: {
+            userId: userId,
+          },
+          select: {
+            voteType: true,
           },
         },
-        {
-          shortDescription: {
-            contains: searchString,
-            mode: "insensitive",
-          },
-        },
-      ],
-    });
-  }
+      }),
+    }),
+    orderBy: [{ confidenceScore: "desc" }, { createdAt: "desc" }],
+    skip: (page - 1) * pageSize,
+    take: pageSize,
+  });
 
-  // Apply category filter if provided
-  if (categoryIds) {
-    const categoryIdArray = Array.isArray(categoryIds)
-      ? categoryIds
-      : categoryIds.split(",");
-
-    andConditions.push({
-      categoryId: {
-        in: categoryIdArray,
-      },
-    });
-  }
-
-  // Apply reportedById filter if provided
-  if (reportedById) {
-    andConditions.push({
-      reportedById: reportedById,
-    });
-  }
-
-  // Apply reviewStatus filter if provided
-  if (reviewStatus) {
-    andConditions.push({
-      reviewStatus: reviewStatus,
-    });
-  }
-
-  // Filter hazards that fall within subscription regions if provided
-  if (subscriptions && subscriptions.length > 0) {
-    andConditions.push({
-      OR: subscriptions.map((subscription) => ({
-        AND: [
-          {
-            latitude: {
-              gte: Math.min(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-              lte: Math.max(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-            },
-          },
-          {
-            longitude: {
-              gte: Math.min(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-              lte: Math.max(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-            },
-          },
-        ],
-      })),
-    });
-  }
-
-  // Filter hazards that fall within geographic bounds if provided
-  if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    andConditions.push({
-      latitude: {
-        gte: southwestLat,
-        lte: northeastLat,
-      },
-      longitude: {
-        gte: southwestLng,
-        lte: northeastLng,
-      },
-    });
-  }
-
-  return andConditions.length > 0 ? { AND: andConditions } : {};
-};
-
-/**
- * Builds the include object for fetching related entities with hazards.
- *
- * This function ensures that related entities such as category, source, and reportedBy
- * are always included when fetching hazards. Additional include parameters can be merged
- * in as needed.
- */
-export const buildHazardInclude = (
-  params?: Prisma.HazardInclude
-): Prisma.HazardInclude => {
-  return {
-    category: true,
-    source: true,
-    reportedBy: true,
-    ...params,
-  };
-};
-
-/**
- * Builds the WHERE clause for raw SQL queries with parameters.
- *
- * @param params - Search parameters including filters and subscriptions
- * @returns Object containing WHERE clause string, parameters array, and next parameter index
- */
-export const buildHazardsWhereClauseRaw = (
-  params: HazardSearchParams & {
-    subscriptions?: LocationSubscription[] | undefined;
-  }
-): { whereClause: string; queryParams: any[]; paramIndex: number } => {
-  const {
-    searchString,
-    categoryIds,
-    reportedById,
-    reviewStatus,
-    northeastLat,
-    northeastLng,
-    southwestLat,
-    southwestLng,
-    subscriptions,
-  } = params;
-
-  const whereConditions: string[] = [];
-  const queryParams: any[] = [];
-  let paramIndex = 1;
-
-  // Only include hazards that haven't expired yet
-  whereConditions.push(
-    `(h."expiresAt" IS NULL OR h."expiresAt" > NOW() AT TIME ZONE 'UTC')`
+  // Get unique reporter IDs from hazards that have reporters
+  const reporterIds = Array.from(
+    new Set(
+      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[]
+    )
   );
 
-  // Apply search string filter if provided
-  if (searchString) {
-    whereConditions.push(
-      `(h.title ILIKE $${paramIndex} OR h."shortDescription" ILIKE $${paramIndex})`
-    );
-    queryParams.push(`%${searchString}%`);
-    paramIndex++;
-  }
-
-  // Apply category filter if provided
-  if (categoryIds) {
-    const categoryArray = Array.isArray(categoryIds)
-      ? categoryIds
-      : [categoryIds];
-    const placeholders = categoryArray.map(() => `$${paramIndex++}`).join(",");
-    whereConditions.push(`h."categoryId" IN (${placeholders})`);
-    queryParams.push(...categoryArray);
-  }
-
-  // Apply reporter filter if provided
-  if (reportedById) {
-    whereConditions.push(`h."reportedById" = $${paramIndex}`);
-    queryParams.push(reportedById);
-    paramIndex++;
-  }
-
-  // Apply review status filter if provided
-  if (reviewStatus) {
-    whereConditions.push(
-      `h."reviewStatus" = $${paramIndex}::"HazardReviewStatus"`
-    );
-    queryParams.push(reviewStatus);
-    paramIndex++;
-  }
-
-  // Apply geographic bounds filter if provided
-  if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    // If we also have subscriptions, combine with OR
-    if (subscriptions && subscriptions.length > 0) {
-      // Build subscription conditions and regular bounds condition with OR
-      const allConditions = [];
-
-      // Add subscription conditions first
-      subscriptions.forEach(() => {
-        const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
-          paramIndex + 1
-        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
-        allConditions.push(condition);
-        paramIndex += 4;
-      });
-
-      // Add regular bounds condition
-      const regularBounds = `(h.latitude BETWEEN $${paramIndex} AND $${
-        paramIndex + 1
-      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
-      allConditions.push(regularBounds);
-      paramIndex += 4;
-
-      whereConditions.push(`(${allConditions.join(" OR ")})`);
-
-      // Add subscription parameters first (to match the parameter order)
-      subscriptions.forEach((sub) => {
-        queryParams.push(
-          sub.southwestLat,
-          sub.northeastLat,
-          sub.southwestLng,
-          sub.northeastLng
-        );
-      });
-
-      // Add regular bounds parameters
-      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
-    } else {
-      // Only regular bounds, no subscriptions
-      whereConditions.push(
-        `(h.latitude BETWEEN $${paramIndex} AND $${
-          paramIndex + 1
-        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`
-      );
-      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
-      paramIndex += 4;
-    }
-  } else if (subscriptions && subscriptions.length > 0) {
-    // Only subscription bounds, no regular bounds
-    const subscriptionConditions = subscriptions.map(() => {
-      const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
-        paramIndex + 1
-      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
-      paramIndex += 4;
-      return condition;
+  // Calculate UserReportsStatus for each unique reporter
+  const reportersStatusMap = new Map<string, UserReportsStatus>();
+  if (reporterIds.length > 0) {
+    const statusPromises = reporterIds.map(async (reporterId) => {
+      const status = await calculateUserReportsStatus(reporterId);
+      return { reporterId, status };
     });
-    whereConditions.push(`(${subscriptionConditions.join(" OR ")})`);
 
-    subscriptions.forEach((sub) => {
-      queryParams.push(
-        sub.southwestLat,
-        sub.northeastLat,
-        sub.southwestLng,
-        sub.northeastLng
-      );
+    const statusResults = await Promise.all(statusPromises);
+    statusResults.forEach(({ reporterId, status }) => {
+      reportersStatusMap.set(reporterId, status);
     });
   }
 
-  const whereClause =
-    whereConditions.length > 0 ? whereConditions.join(" AND ") : "TRUE";
+  type TransformedHazardPayload = Prisma.HazardGetPayload<{}> & {
+    userVoteType?: HazardVoteType | undefined;
+    reportedBy?: any;
+  };
 
-  return { whereClause, queryParams, paramIndex };
-};
+  // Transform the result to include userVoteType and reporterReportsStatus
+  return hazards.map((hazard): TransformedHazardPayload => {
+    const { votes, ...hazardWithoutVotes } = hazard;
 
-/**
- * Builds the ORDER BY clause for raw SQL queries with optimal database-level sorting.
- * Implements the client's required sorting order:
- * 1. Severity: Emergency -> Watch and Act -> Advice -> Info
- * 2. Distance: Closer first (when user location provided)
- * 3. Recency: Newer first
- * 4. Confidence Score (ACS): Higher first
- *
- * @param userLat - User latitude for distance calculation (optional)
- * @param userLng - User longitude for distance calculation (optional)
- * @param paramIndex - Current parameter index for SQL placeholders
- * @param queryParams - Parameters array to append distance parameters to
- * @returns Object containing ORDER BY clause and updated parameter index
- */
-export const buildHazardsOrderByClauseRaw = (
-  userLat?: number,
-  userLng?: number,
-  paramIndex: number = 1,
-  queryParams: any[] = []
-): { orderByClause: string; paramIndex: number } => {
-  // Start with severity ordering
-  let orderByClause = `
-    CASE h.severity
-      WHEN 'emergency' THEN 1
-      WHEN 'watchAndAct' THEN 2
-      WHEN 'advice' THEN 3
-      WHEN 'info' THEN 4
-      ELSE 5
-    END ASC`;
+    // Create reportedBy object with reportsStatus
+    const enhancedReportedBy = hazard.reportedBy
+      ? {
+          ...hazard.reportedBy,
+          reportsStatus: hazard.reportedById
+            ? reportersStatusMap.get(hazard.reportedById) ??
+              UserReportsStatus.unverified
+            : UserReportsStatus.unverified,
+        }
+      : null;
 
-  let currentParamIndex = paramIndex;
-
-  // Add distance ordering if user location is provided
-  if (userLat && userLng) {
-    orderByClause += `,
-    CASE 
-      WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-        (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-      currentParamIndex + 1
-    })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-      ELSE 999999
-    END ASC`;
-    queryParams.push(userLat, userLng);
-    currentParamIndex += 2;
-  }
-
-  // Add recency and confidence score ordering
-  orderByClause += `,
-    h."createdAt" DESC,
-    COALESCE(h."confidenceScore", 0) DESC`;
-
-  return { orderByClause, paramIndex: currentParamIndex };
+    return {
+      ...hazardWithoutVotes,
+      userVoteType: votes?.[0]?.voteType,
+      reportedBy: enhancedReportedBy,
+    };
+  });
 };
 
 /**
@@ -502,114 +271,6 @@ export const getHazardsApplyingFiltersRaw = async (
             url: sourceUrl,
           }
         : null,
-    };
-  });
-};
-
-/**
- * Fetches hazards from the database applying various filters and pagination.
- *
- * This function retrieves hazards based on search strings, categories, reporting user,
- * review status, geographic bounds, and user subscriptions. It also supports pagination
- * and includes related entities as specified.
- */
-export const getHazardsApplyingFilters = async (
-  params: HazardSearchParams & {
-    userId?: string | undefined;
-    subscriptions?: LocationSubscription[] | undefined;
-  }
-) => {
-  const {
-    searchString,
-    categoryIds,
-    reportedById,
-    reviewStatus,
-    northeastLat,
-    northeastLng,
-    southwestLat,
-    southwestLng,
-    subscriptions,
-    userId,
-    page = 1,
-    pageSize = 20,
-  } = params;
-
-  const whereClause = buildHazardsWhereClause({
-    searchString,
-    categoryIds,
-    reportedById,
-    reviewStatus,
-    northeastLat,
-    northeastLng,
-    southwestLat,
-    southwestLng,
-    subscriptions,
-  });
-
-  const hazards = await prisma.hazard.findMany({
-    where: whereClause,
-    include: buildHazardInclude({
-      ...(userId && {
-        votes: {
-          where: {
-            userId: userId,
-          },
-          select: {
-            voteType: true,
-          },
-        },
-      }),
-    }),
-    orderBy: [{ confidenceScore: "desc" }, { createdAt: "desc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  });
-
-  // Get unique reporter IDs from hazards that have reporters
-  const reporterIds = Array.from(
-    new Set(
-      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[]
-    )
-  );
-
-  // Calculate UserReportsStatus for each unique reporter
-  const reportersStatusMap = new Map<string, UserReportsStatus>();
-  if (reporterIds.length > 0) {
-    const statusPromises = reporterIds.map(async (reporterId) => {
-      const status = await calculateUserReportsStatus(reporterId);
-      return { reporterId, status };
-    });
-
-    const statusResults = await Promise.all(statusPromises);
-    statusResults.forEach(({ reporterId, status }) => {
-      reportersStatusMap.set(reporterId, status);
-    });
-  }
-
-  type TransformedHazardPayload = Prisma.HazardGetPayload<{}> & {
-    userVoteType?: HazardVoteType | undefined;
-    reportedBy?: any;
-  };
-
-  // Transform the result to include userVoteType and reporterReportsStatus
-  return hazards.map((hazard): TransformedHazardPayload => {
-    const { votes, ...hazardWithoutVotes } = hazard;
-
-    // Create reportedBy object with reportsStatus
-    const enhancedReportedBy = hazard.reportedBy
-      ? {
-          ...hazard.reportedBy,
-          reportsStatus: hazard.reportedById
-            ? reportersStatusMap.get(hazard.reportedById) ??
-              UserReportsStatus.unverified
-            : UserReportsStatus.unverified,
-        }
-      : null;
-
-    return {
-      ...hazardWithoutVotes,
-      userVoteType: votes?.[0]?.voteType,
-      reportedBy: enhancedReportedBy,
     };
   });
 };
