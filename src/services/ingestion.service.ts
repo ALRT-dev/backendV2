@@ -5,11 +5,14 @@ import {
 } from "../utils/ingestion.util.js";
 import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
-import { buildHazardInclude, summarizeHazard } from "./hazard.service.js";
+import { summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
-import { getHazardExpiryDateFromSeverity } from "../utils/hazard.util.js";
+import {
+  buildHazardInclude,
+  getHazardExpiryDateFromSeverity,
+} from "../utils/hazard.util.js";
 import {
   calculateConfidenceScore,
   type HazardForConfidenceCalculation,

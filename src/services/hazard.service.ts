@@ -295,33 +295,35 @@ export const reviewHazard = async ({
   occurredAt: string | Date;
 }): Promise<AIReviewResponse> => {
   const systemPrompt = `
-You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
+    You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
 
-CONFIDENCE LEVELS:
-- "high": Detailed, specific, credible information with clear location and time
-- "medium": Reasonable detail but some ambiguity or missing information
-- "low": Vague, unclear, or potentially unreliable information
+    CONFIDENCE LEVELS:
+    - "high": Detailed, specific, credible information with clear location and time
+    - "medium": Reasonable detail but some ambiguity or missing information
+    - "low": Vague, unclear, or potentially unreliable information
 
-Always respond with valid JSON containing these exact fields:
-{
-  "reviewStatus": "accepted|rejected (accepted if the description is a valid hazard report (not spam or nonsense or profanity), rejected otherwise)",
-  "reviewFeedback": "string (constructive feedback for the reporter, max 200 chars)"
-  "title": "string (a concise, clear title for the hazard, max 80 chars)",
-  "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-  "summary": "string (a 3-4 sentence summary of the hazard)",
-  "confidence": "high|medium|low (based on detail quality and specificity)",
-}
-`;
+    Always respond with valid JSON containing these exact fields:
+    {
+      "reviewStatus": "accepted|rejected (accepted if the description is a valid hazard report (not spam or nonsense or profanity), rejected otherwise)",
+      "reviewFeedback": "string (constructive feedback for the reporter, max 200 chars)"
+      "title": "string (a concise, clear title for the hazard, max 80 chars)",
+      "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
+      "summary": "string (a 3-4 sentence summary of the hazard)",
+      "confidence": "high|medium|low (based on detail quality and specificity)",
+    }
+    `;
 
   const userPrompt = `
-Evaluate this hazard:
+    Evaluate this hazard:
 
-Title: ${title}
-Description: ${description}
-Location: ${locationName ? `${locationName}, ` : ""}(${latitude}, ${longitude})
-Severity Level: ${severity}
-Occurred At: ${occurredAt}
-`;
+    Title: ${title}
+    Description: ${description}
+    Location: ${
+      locationName ? `${locationName}, ` : ""
+    }(${latitude}, ${longitude})
+    Severity Level: ${severity}
+    Occurred At: ${occurredAt}
+    `;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -368,36 +370,36 @@ export const summarizeHazard = async ({
   longitude: number;
 }): Promise<AISummaryResponse> => {
   const systemPrompt = `
-You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
+    You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
 
-SEVERITY LEVELS:
-- "info": General awareness, no immediate action needed (traffic updates, minor incidents)
-- "advice": Caution recommended (weather warnings, road closures)
-- "watchAndAct": Active monitoring and preparation needed (approaching storms, evacuation warnings)
-- "emergency": Immediate danger requiring urgent action (active fires, severe flooding)
+    SEVERITY LEVELS:
+    - "info": General awareness, no immediate action needed (traffic updates, minor incidents)
+    - "advice": Caution recommended (weather warnings, road closures)
+    - "watchAndAct": Active monitoring and preparation needed (approaching storms, evacuation warnings)
+    - "emergency": Immediate danger requiring urgent action (active fires, severe flooding)
 
-CONFIDENCE LEVELS:
-- "high": Detailed, specific, credible information with clear location and time
-- "medium": Reasonable detail but some ambiguity or missing information
-- "low": Vague, unclear, or potentially unreliable information
+    CONFIDENCE LEVELS:
+    - "high": Detailed, specific, credible information with clear location and time
+    - "medium": Reasonable detail but some ambiguity or missing information
+    - "low": Vague, unclear, or potentially unreliable information
 
-Always respond with valid JSON containing these exact fields:
-{
-  "title": "string (a concise, clear title for the hazard, max 80 chars)",
-  "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-  "summary": "string (a 3-4 sentence summary of the hazard)",
-  "confidence": "high|medium|low (based on detail quality and specificity)",
-  "severity": "info|advice|watchAndAct|emergency (based on immediate danger level)"
-}
-`;
+    Always respond with valid JSON containing these exact fields:
+    {
+      "title": "string (a concise, clear title for the hazard, max 80 chars)",
+      "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
+      "summary": "string (a 3-4 sentence summary of the hazard)",
+      "confidence": "high|medium|low (based on detail quality and specificity)",
+      "severity": "info|advice|watchAndAct|emergency (based on immediate danger level)"
+    }
+    `;
 
   const userPrompt = `
-Analyze this hazard report:
+    Analyze this hazard report:
 
-TITLE: ${title}
-DESCRIPTION: ${description}
-LOCATION: ${latitude}, ${longitude}
-`;
+    TITLE: ${title}
+    DESCRIPTION: ${description}
+    LOCATION: ${latitude}, ${longitude}
+    `;
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",

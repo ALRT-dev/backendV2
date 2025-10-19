@@ -7,7 +7,7 @@ import {
   type HazardSeverity,
 } from "@prisma/client";
 import {
-  getHazardsApplyingFilters,
+  getHazardsApplyingFiltersRaw,
   reviewHazard,
 } from "../services/hazard.service.js";
 import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
@@ -57,7 +57,7 @@ export const getHazards = async (
     }: GetHazardsQuery = req.query;
     const { userId } = res;
 
-    const hazards = await getHazardsApplyingFilters({
+    const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       reportedById,
       reviewStatus,
@@ -115,7 +115,7 @@ export const getHazardsWithCategories = async (
       hazardSouthwestLng: Number(southwestLng),
     });
 
-    const hazardsPromise = getHazardsApplyingFilters({
+    const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
       reviewStatus,
