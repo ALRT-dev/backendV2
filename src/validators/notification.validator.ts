@@ -15,6 +15,17 @@ export const getNotificationsFeedSchema = z.object({
     .string()
     .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
     .optional(),
+
+  sortSettings: z
+    .array(
+      z.object({
+        severity: z.enum(["asc", "desc"]).optional(),
+        distance: z.enum(["asc", "desc"]).optional(),
+        createdAt: z.enum(["asc", "desc"]).optional(),
+        confidenceScore: z.enum(["asc", "desc"]).optional(),
+      })
+    )
+    .optional(),
 });
 
 export type GetNotificationsFeedQuery = z.infer<

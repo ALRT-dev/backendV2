@@ -3,6 +3,7 @@ import env from "dotenv";
 import express from "express";
 import cors from "cors";
 import { Server } from "socket.io";
+import qs from "qs";
 import { config } from "./utils/config.js";
 import {
   authRouter,
@@ -21,6 +22,12 @@ import { initializeScheduledTasks } from "./services/scheduler.service.js";
 env.config();
 
 const app = express();
+
+// Configure Express to use qs for parsing query strings with nested objects
+app.set("query parser", (str: string) =>
+  qs.parse(str, { allowDots: true, arrayLimit: 100 })
+);
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {

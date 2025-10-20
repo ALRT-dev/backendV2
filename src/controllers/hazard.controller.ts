@@ -54,6 +54,7 @@ export const getHazards = async (
       reportedById,
       reviewStatus,
       showExpired,
+      sortSettings,
       page = "1",
       pageSize = "20",
     }: GetHazardsQuery = req.query;
@@ -75,6 +76,7 @@ export const getHazards = async (
       showExpired: parseBoolean(showExpired),
       userLat,
       userLng,
+      sortSettings,
       page: Number(page),
       pageSize: Number(pageSize),
     });
@@ -102,6 +104,7 @@ export const getHazardsWithCategories = async (
       southwestLat,
       southwestLng,
       showExpired,
+      sortSettings,
       page = "1",
       pageSize = "20",
     }: GetHazardsQuery = req.query;
@@ -148,6 +151,7 @@ export const getHazardsWithCategories = async (
       userLat,
       userLng,
       showExpired: parseBoolean(showExpired),
+      sortSettings,
       page: Number(page),
       pageSize: Number(pageSize),
     });

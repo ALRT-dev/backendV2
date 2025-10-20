@@ -21,6 +21,7 @@ export const getNotificationsFeed = async (
       categoryIds,
       reviewStatus,
       showExpired,
+      sortSettings,
       page = "1",
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
@@ -57,6 +58,7 @@ export const getNotificationsFeed = async (
       subscriptions,
       userLat,
       userLng,
+      sortSettings,
       showExpired: parseBoolean(showExpired),
     });
 

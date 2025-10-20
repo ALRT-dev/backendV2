@@ -3,7 +3,10 @@ import {
   Prisma,
   type LocationSubscription,
 } from "@prisma/client";
-import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
+import type {
+  HazardSearchParams,
+  SortSetting,
+} from "../models/hazard_search_params_interface.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -312,45 +315,108 @@ export const buildHazardsWhereClauseRaw = (
  * @param userLng - User longitude for distance calculation (optional)
  * @param paramIndex - Current parameter index for SQL placeholders
  * @param queryParams - Parameters array to append distance parameters to
+ * @param sortSettings - Array of sort settings to apply custom ordering
  * @returns Object containing ORDER BY clause and updated parameter index
  */
 export const buildHazardsOrderByClauseRaw = (
   userLat?: number,
   userLng?: number,
   paramIndex: number = 1,
-  queryParams: any[] = []
+  queryParams: any[] = [],
+  sortSettings?: SortSetting[]
 ): { orderByClause: string; paramIndex: number } => {
-  // Start with severity ordering
-  let orderByClause = `
-    CASE h.severity
-      WHEN 'emergency' THEN 1
-      WHEN 'watchAndAct' THEN 2
-      WHEN 'advice' THEN 3
-      WHEN 'info' THEN 4
-      ELSE 5
-    END ASC`;
-
   let currentParamIndex = paramIndex;
+  const orderByClauses: string[] = [];
 
-  // Add distance ordering if user location is provided
-  if (userLat && userLng) {
-    orderByClause += `,
-    CASE 
-      WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-        (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-      currentParamIndex + 1
-    })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-      ELSE 999999
-    END ASC`;
-    queryParams.push(userLat, userLng);
-    currentParamIndex += 2;
+  // If sortSettings are provided, use them for ordering
+  if (sortSettings && sortSettings.length > 0) {
+    for (const setting of sortSettings) {
+      // Handle severity sorting
+      if (
+        setting.severity &&
+        (setting.severity === "asc" || setting.severity === "desc")
+      ) {
+        const direction = setting.severity.toUpperCase();
+        orderByClauses.push(`
+            CASE h.severity
+              WHEN 'info' THEN 1
+              WHEN 'advice' THEN 2
+              WHEN 'watchAndAct' THEN 3
+              WHEN 'emergency' THEN 4
+              ELSE 5
+            END ${direction}`);
+      }
+
+      // Handle distance sorting
+      if (
+        setting.distance &&
+        (setting.distance === "asc" || setting.distance === "desc") &&
+        userLat &&
+        userLng
+      ) {
+        const direction = setting.distance.toUpperCase();
+        orderByClauses.push(`
+          CASE 
+            WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
+              (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
+          currentParamIndex + 1
+        })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
+            ELSE 999999
+          END ${direction}`);
+        queryParams.push(userLat, userLng);
+        currentParamIndex += 2;
+      }
+
+      // Handle createdAt sorting
+      if (
+        setting.createdAt &&
+        (setting.createdAt === "asc" || setting.createdAt === "desc")
+      ) {
+        const direction = setting.createdAt.toUpperCase();
+        orderByClauses.push(`h."createdAt" ${direction}`);
+      }
+
+      // Handle confidenceScore sorting
+      if (
+        setting.confidenceScore &&
+        (setting.confidenceScore === "asc" ||
+          setting.confidenceScore === "desc")
+      ) {
+        const direction = setting.confidenceScore.toUpperCase();
+        orderByClauses.push(`COALESCE(h."confidenceScore", 0) ${direction}`);
+      }
+    }
+  } else {
+    // Default sorting when no sortSettings are provided
+    orderByClauses.push(`
+      CASE h.severity
+        WHEN 'emergency' THEN 1
+        WHEN 'watchAndAct' THEN 2
+        WHEN 'advice' THEN 3
+        WHEN 'info' THEN 4
+        ELSE 5
+      END ASC`);
+
+    // Add distance ordering if user location is provided
+    if (userLat && userLng) {
+      orderByClauses.push(`
+        CASE 
+          WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
+            (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
+        currentParamIndex + 1
+      })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
+          ELSE 999999
+        END ASC`);
+      queryParams.push(userLat, userLng);
+      currentParamIndex += 2;
+    }
+
+    // Add default recency and confidence score ordering
+    orderByClauses.push(`h."createdAt" DESC`);
+    orderByClauses.push(`COALESCE(h."confidenceScore", 0) DESC`);
   }
 
-  // Add recency and confidence score ordering
-  orderByClause += `,
-    h."createdAt" DESC,
-    COALESCE(h."confidenceScore", 0) DESC`;
-
+  const orderByClause = orderByClauses.join(", ");
   return { orderByClause, paramIndex: currentParamIndex };
 };
 

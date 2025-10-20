@@ -138,7 +138,14 @@ export const getHazardsApplyingFiltersRaw = async (
     subscriptions?: LocationSubscription[] | undefined;
   }
 ): Promise<Hazard[]> => {
-  const { userLat, userLng, userId, page = 1, pageSize = 20 } = searchParams;
+  const {
+    userLat,
+    userLng,
+    userId,
+    sortSettings,
+    page = 1,
+    pageSize = 20,
+  } = searchParams;
 
   // Build WHERE clause and get initial parameters
   const { whereClause, queryParams, paramIndex } =
@@ -146,7 +153,13 @@ export const getHazardsApplyingFiltersRaw = async (
 
   // Build ORDER BY clause
   const { orderByClause, paramIndex: updatedParamIndex } =
-    buildHazardsOrderByClauseRaw(userLat, userLng, paramIndex, queryParams);
+    buildHazardsOrderByClauseRaw(
+      userLat,
+      userLng,
+      paramIndex,
+      queryParams,
+      sortSettings
+    );
 
   // Add pagination parameters
   queryParams.push(pageSize, (page - 1) * pageSize);

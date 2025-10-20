@@ -1,5 +1,12 @@
 import type { HazardReviewStatus } from "@prisma/client";
 
+export interface SortSetting {
+  severity?: "asc" | "desc" | undefined;
+  distance?: "asc" | "desc" | undefined;
+  createdAt?: "asc" | "desc" | undefined;
+  confidenceScore?: "asc" | "desc" | undefined;
+}
+
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
@@ -15,6 +22,8 @@ export interface HazardSearchParams {
   userLng?: number | undefined;
 
   showExpired?: boolean | undefined;
+
+  sortSettings?: SortSetting[] | undefined;
 
   page?: number | undefined;
   pageSize?: number | undefined;
