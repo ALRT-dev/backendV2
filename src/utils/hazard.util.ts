@@ -157,6 +157,11 @@ export const buildHazardInclude = (
     category: true,
     source: true,
     reportedBy: true,
+    medias: {
+      orderBy: {
+        isPrimary: "desc",
+      },
+    },
     ...params,
   };
 };

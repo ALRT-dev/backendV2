@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import {
   HazardReviewStatus,
   HazardVoteType,
+  MediaType,
   type Hazard,
   type HazardSeverity,
 } from "@prisma/client";
@@ -10,7 +11,7 @@ import {
   getHazardsApplyingFiltersRaw,
   reviewHazard,
 } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
+import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import {
   sendPushNotificationAboutNewHazard,
   sendPushNotificationToUser,
@@ -40,6 +41,12 @@ import {
   buildHazardInclude,
 } from "../utils/hazard.util.js";
 import { parseBoolean } from "../utils/parse.util.js";
+import {
+  uploadMultipleFilesToS3,
+  deleteMultipleFilesFromS3,
+  enrichHazardsWithPresignedUrls,
+} from "../services/s3.service.js";
+import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -81,7 +88,12 @@ export const getHazards = async (
       pageSize: Number(pageSize),
     });
 
-    res.status(200).json(hazards);
+    // Enrich hazards with presigned URLs for media access
+    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
+      hazards
+    );
+
+    res.status(200).json(hazardsWithPresignedUrls);
   } catch (error) {
     next(error);
   }
@@ -171,7 +183,14 @@ export const getHazardsWithCategories = async (
         .json({ subscriptionId, categories: [], hazards: [] });
     }
 
-    res.status(200).json({ subscriptionId, categories, hazards });
+    // Enrich hazards with presigned URLs for media access
+    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
+      hazards
+    );
+
+    res
+      .status(200)
+      .json({ subscriptionId, categories, hazards: hazardsWithPresignedUrls });
   } catch (error) {
     next(error);
   }
@@ -198,7 +217,12 @@ export const getHazardById = async (
       return res.status(404).json({ message: "Hazard not found" });
     }
 
-    res.status(200).json(hazard);
+    // Enrich hazard with presigned URLs for media access
+    const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
+      hazard,
+    ]);
+
+    res.status(200).json(hazardWithPresignedUrls[0]);
   } catch (error) {
     next(error);
   }
@@ -211,6 +235,7 @@ export const createHazard = async (
   next: NextFunction
 ) => {
   try {
+    const { hazard: hazardData }: CreateHazardInput = req.body;
     const {
       title,
       description,
@@ -220,7 +245,7 @@ export const createHazard = async (
       locationName,
       severity,
       occurredAt,
-    }: CreateHazardInput = req.body;
+    } = hazardData;
     const { userId } = res;
 
     // Validate that category exists
@@ -231,7 +256,31 @@ export const createHazard = async (
       throw new HttpError(400, "Invalid Category ID");
     }
 
-    // Perform AI review of the hazard report
+    console.log("File upload - req.files:", req.files);
+
+    // Upload media files to S3 if provided <----------------------------------------------------------------------------------
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+    let mediaUploadResults: MediaUploadResult[] = [];
+
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      try {
+        mediaUploadResults = await uploadMultipleFilesToS3(
+          uploadedFiles,
+          "hazards"
+        );
+        console.log(
+          `Successfully uploaded ${mediaUploadResults.length} media files to S3`
+        );
+      } catch (error) {
+        console.error("Error uploading media files:", error);
+        throw new HttpError(
+          500,
+          "Failed to upload media files. Please try again."
+        );
+      }
+    }
+
+    // Perform AI review of the hazard report <----------------------------------------------------------------------------------
     let review: any;
     try {
       review = await reviewHazard({
@@ -262,7 +311,7 @@ export const createHazard = async (
       confidence: aiConfidence,
     } = review;
 
-    // Calculate confidence score for the new hazard
+    // Calculate confidence score for the new hazard <----------------------------------------------------------------------------------
     let confidenceScore = 0;
     try {
       // Get reporter data if user is creating the hazard
@@ -296,37 +345,93 @@ export const createHazard = async (
     }
 
     const date = new Date();
-    const hazard = await prisma.hazard.create({
-      data: {
-        title: suggestedTitle || title,
-        description,
-        reviewStatus,
-        reviewFeedback,
-        ...(reviewStatus === HazardReviewStatus.accepted && {
-          reviewedAt: new Date(),
-        }),
-        shortDescription,
-        aiSummary,
-        ...(aiConfidence && { aiConfidence }),
-        categoryId,
-        reportedById: userId,
-        latitude,
-        longitude,
-        locationName,
-        severity,
-        confidenceScore,
-        confidenceScoreCalculatedAt: new Date(),
-        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
-        ...(reviewStatus === HazardReviewStatus.accepted && {
-          expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)),
-        }),
-      },
-      include: buildHazardInclude(),
+
+    // Create hazard with media in a transaction <----------------------------------------------------------------------------------
+    const result = await prisma.$transaction(async (tx) => {
+      // Create the hazard first
+      const hazard = await tx.hazard.create({
+        data: {
+          title: suggestedTitle || title,
+          description,
+          reviewStatus,
+          reviewFeedback,
+          ...(reviewStatus === HazardReviewStatus.accepted && {
+            reviewedAt: new Date(),
+          }),
+          shortDescription,
+          aiSummary,
+          ...(aiConfidence && { aiConfidence }),
+          categoryId,
+          reportedById: userId,
+          latitude,
+          longitude,
+          locationName,
+          severity,
+          confidenceScore,
+          confidenceScoreCalculatedAt: new Date(),
+          ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+          ...(reviewStatus === HazardReviewStatus.accepted && {
+            expiresAt: new Date(date.setMinutes(date.getMinutes() + 30)),
+          }),
+        },
+      });
+
+      // Create media records if there are uploaded files
+      if (mediaUploadResults.length > 0 && userId) {
+        const mediaPromises = mediaUploadResults.map((mediaResult, index) => {
+          const isImage = mediaResult.mimeType.startsWith("image/");
+          const isVideo = mediaResult.mimeType.startsWith("video/");
+
+          let mediaType: MediaType = "image";
+          if (isVideo) {
+            mediaType = "video";
+          } else if (isImage) {
+            mediaType = "image";
+          }
+
+          return tx.hazardMedia.create({
+            data: {
+              hazardId: hazard.id,
+              userId: userId,
+              url: mediaResult.url,
+              s3Key: mediaResult.key,
+              type: mediaType,
+              mimeType: mediaResult.mimeType,
+              fileSize: mediaResult.size,
+              originalName: mediaResult.originalName,
+              isPrimary: index === 0, // First media is primary
+            },
+          });
+        });
+
+        await Promise.all(mediaPromises);
+      }
+
+      // Return hazard with all relations
+      return await tx.hazard.findUnique({
+        where: { id: hazard.id },
+        include: buildHazardInclude(),
+      });
     });
 
-    console.log("Created hazard with review feedback:", hazard.reviewFeedback);
+    // If hazard creation failed, cleanup uploaded S3 files <-----------------------------------------------------------------
+    if (!result) {
+      if (mediaUploadResults.length > 0) {
+        try {
+          await deleteMultipleFilesFromS3(mediaUploadResults.map((r) => r.key));
+        } catch (cleanupError) {
+          console.error(
+            "Error cleaning up S3 files after failed hazard creation:",
+            cleanupError
+          );
+        }
+      }
+      throw new HttpError(500, "Failed to create hazard");
+    }
 
-    // Award XP points to the user based on AI review
+    const hazard = result;
+
+    // Award XP points to the user based on AI review <----------------------------------------------------------------------------
     let xpResult = null;
     if (userId && hazard.reviewStatus !== HazardReviewStatus.pending) {
       try {
@@ -380,7 +485,12 @@ export const createHazard = async (
       });
     }
 
-    res.status(201).json(hazard);
+    // Enrich hazard with presigned URLs for media access
+    const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
+      hazard,
+    ]);
+
+    res.status(201).json(hazardWithPresignedUrls[0]);
   } catch (error) {
     next(error);
   }
@@ -403,6 +513,9 @@ export const updateHazard = async (
 
     const existingHazard = await prisma.hazard.findUnique({
       where: { id },
+      include: {
+        medias: true,
+      },
     });
     if (!existingHazard) {
       throw new HttpError(404, "Hazard not found");
@@ -424,7 +537,29 @@ export const updateHazard = async (
       occurredAt,
     }: UpdateHazardInput = req.body;
 
-    // Perform AI review of the hazard report
+    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+    let mediaUploadResults: MediaUploadResult[] = [];
+
+    if (uploadedFiles && uploadedFiles.length > 0) {
+      try {
+        mediaUploadResults = await uploadMultipleFilesToS3(
+          uploadedFiles,
+          "hazards"
+        );
+        console.log(
+          `Successfully uploaded ${mediaUploadResults.length} new media files to S3`
+        );
+      } catch (error) {
+        console.error("Error uploading new media files:", error);
+        throw new HttpError(
+          500,
+          "Failed to upload media files. Please try again."
+        );
+      }
+    }
+
+    // Perform AI review of the hazard report <----------------------------------------------------------------------------------
     let review: any;
     try {
       review = await reviewHazard({
@@ -456,33 +591,103 @@ export const updateHazard = async (
     } = review;
 
     const date = new Date();
-    const updatedHazard = await prisma.hazard.update({
-      where: { id },
-      data: {
-        title: suggestedTitle || title || existingHazard.title,
-        ...(description && { description }),
-        reviewStatus,
-        reviewFeedback,
-        ...(reviewStatus === HazardReviewStatus.accepted && {
-          reviewedAt: new Date(),
-        }),
-        shortDescription,
-        aiSummary,
-        ...(aiConfidence && { aiConfidence }),
-        ...(categoryId && { categoryId }),
-        ...(latitude && { latitude }),
-        ...(longitude && { longitude }),
-        ...(locationName && { locationName }),
-        ...(severity && { severity }),
-        ...(occurredAt && { occurredAt: new Date(occurredAt) }),
-        ...(reviewStatus === HazardReviewStatus.accepted && {
-          expiresAt:
-            existingHazard.expiresAt ||
-            new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
-        }),
-      },
-      include: buildHazardInclude(),
+
+    // Update hazard with new media in a transaction <----------------------------------------------------------------------------------
+    const result = await prisma.$transaction(async (tx) => {
+      // Update the hazard
+      const updatedHazard = await tx.hazard.update({
+        where: { id },
+        data: {
+          title: suggestedTitle || title || existingHazard.title,
+          ...(description && { description }),
+          reviewStatus,
+          reviewFeedback,
+          ...(reviewStatus === HazardReviewStatus.accepted && {
+            reviewedAt: new Date(),
+          }),
+          shortDescription,
+          aiSummary,
+          ...(aiConfidence && { aiConfidence }),
+          ...(categoryId && { categoryId }),
+          ...(latitude && { latitude }),
+          ...(longitude && { longitude }),
+          ...(locationName && { locationName }),
+          ...(severity && { severity }),
+          ...(occurredAt && { occurredAt: new Date(occurredAt) }),
+          ...(reviewStatus === HazardReviewStatus.accepted && {
+            expiresAt:
+              existingHazard.expiresAt ||
+              new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
+          }),
+        },
+      });
+
+      // Add new media records if there are uploaded files
+      if (mediaUploadResults.length > 0) {
+        // If this is the first media being added, mark it as primary
+        const hasPrimaryMedia = existingHazard.medias?.some(
+          (media) => media.isPrimary
+        );
+
+        const mediaPromises = mediaUploadResults.map((mediaResult, index) => {
+          const isImage = mediaResult.mimeType.startsWith("image/");
+          const isVideo = mediaResult.mimeType.startsWith("video/");
+
+          let mediaType: MediaType = "image";
+          if (isVideo) {
+            mediaType = "video";
+          } else if (isImage) {
+            mediaType = "image";
+          }
+
+          return tx.hazardMedia.create({
+            data: {
+              hazardId: updatedHazard.id,
+              userId: userId,
+              url: mediaResult.url,
+              s3Key: mediaResult.key,
+              type: mediaType,
+              mimeType: mediaResult.mimeType,
+              fileSize: mediaResult.size,
+              originalName: mediaResult.originalName,
+              isPrimary: !hasPrimaryMedia && index === 0, // Mark first new media as primary if no primary exists
+            },
+          });
+        });
+
+        await Promise.all(mediaPromises);
+      }
+
+      // Return updated hazard with all relations
+      return await tx.hazard.findUnique({
+        where: { id: updatedHazard.id },
+        include: {
+          ...buildHazardInclude(),
+          medias: {
+            orderBy: {
+              isPrimary: "desc",
+            },
+          },
+        },
+      });
     });
+
+    // If hazard update failed, cleanup uploaded S3 files <-----------------------------------------------------------------
+    if (!result) {
+      if (mediaUploadResults.length > 0) {
+        try {
+          await deleteMultipleFilesFromS3(mediaUploadResults.map((r) => r.key));
+        } catch (cleanupError) {
+          console.error(
+            "Error cleaning up S3 files after failed hazard update:",
+            cleanupError
+          );
+        }
+      }
+      throw new HttpError(500, "Failed to update hazard");
+    }
+
+    const updatedHazard = result;
 
     // Send socket event about updated hazard to subscribers
     sendSocketEventAboutHazardToSubscribers({
@@ -490,7 +695,12 @@ export const updateHazard = async (
       socketEvent: SocketEvent.updateHazard,
     });
 
-    res.status(200).json(updatedHazard);
+    // Enrich hazard with presigned URLs for media access
+    const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
+      updatedHazard,
+    ]);
+
+    res.status(200).json(hazardWithPresignedUrls[0]);
   } catch (error) {
     next(error);
   }
@@ -515,7 +725,15 @@ export const deleteHazard = async (
 
     const hazard = await prisma.hazard.findUnique({
       where: { id },
-      select: { id: true, reportedById: true },
+      select: {
+        id: true,
+        reportedById: true,
+        medias: {
+          select: {
+            s3Key: true,
+          },
+        },
+      },
     });
 
     if (!hazard) {
@@ -527,10 +745,35 @@ export const deleteHazard = async (
       throw new HttpError(403, "Forbidden: You cannot delete this hazard");
     }
 
+    // Extract S3 keys from media URLs for cleanup
+    const s3KeysToDelete: string[] = [];
+
+    if (hazard.medias?.length > 0) {
+      for (const media of hazard.medias) {
+        if (media.s3Key) {
+          s3KeysToDelete.push(media.s3Key);
+        }
+      }
+    }
+
     const deletedHazard = await prisma.hazard.delete({
       where: { id },
       include: buildHazardInclude(),
     });
+
+    // Delete media files from S3 after successful hazard deletion
+    if (s3KeysToDelete.length > 0) {
+      try {
+        await deleteMultipleFilesFromS3(s3KeysToDelete);
+        console.log(
+          `Successfully deleted ${s3KeysToDelete.length} media files from S3`
+        );
+      } catch (s3Error) {
+        console.error("Error deleting media files from S3:", s3Error);
+        // Don't fail the entire request if S3 cleanup fails
+        // The hazard is already deleted from the database
+      }
+    }
 
     // Notify subscribers about the deleted hazard
     sendSocketEventAboutHazardToSubscribers({

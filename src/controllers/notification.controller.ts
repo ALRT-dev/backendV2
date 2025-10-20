@@ -2,12 +2,13 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { getHazardsApplyingFiltersRaw } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazardCategory.service.js";
+import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import type {
   GetNotificationsFeedQuery,
   PushNotificationTokenInput,
 } from "../validators/notification.validator.js";
 import { parseBoolean } from "../utils/parse.util.js";
+import { enrichHazardsWithPresignedUrls } from "../services/s3.service.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -72,7 +73,12 @@ export const getNotificationsFeed = async (
       return res.status(200).json({ categories: [], hazards: [] });
     }
 
-    res.status(200).json({ categories, hazards });
+    // Enrich hazards with presigned URLs for media access
+    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
+      hazards
+    );
+
+    res.status(200).json({ categories, hazards: hazardsWithPresignedUrls });
   } catch (error) {
     next(error);
   }

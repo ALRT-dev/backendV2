@@ -30,6 +30,7 @@ model User {
   hazardsReported          Hazard[]
   hazardVotes              HazardVote[]
   hazardViews              HazardView[]
+  hazardMedias             HazardMedia[]
   pushNotificationSettings UserPushNotificationSetting[]
 
   createdAt DateTime @default(now())
@@ -101,6 +102,7 @@ model Hazard {
   reportedBy User?          @relation(fields: [reportedById], references: [id])
   votes      HazardVote[]
   views      HazardView[]
+  medias     HazardMedia[]
 }
 
 model HazardVote {
@@ -137,6 +139,34 @@ model HazardView {
   @@unique([hazardId, userId])
   @@index([hazardId])
   @@index([userId])
+}
+
+model HazardMedia {
+  id           String    @id @default(uuid())
+  hazardId     String
+  userId       String
+  url          String
+  s3Key        String? // S3 object key for easy deletion
+  type         MediaType
+  mimeType     String? // MIME type of the file
+  fileSize     Int? // File size in bytes
+  originalName String? // Original filename
+  thumbnailUrl String? // For videos, a thumbnail image URL
+  isPrimary    Boolean   @default(false) // True if this media is the primary media for the hazard
+
+  hazard Hazard @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hazardId])
+  @@index([userId])
+}
+
+enum MediaType {
+  image
+  video
 }
 
 enum HazardVoteType {

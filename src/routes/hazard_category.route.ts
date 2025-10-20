@@ -3,7 +3,7 @@ import {
   createHazardCategory,
   getHazardCategories,
   populateCategories,
-} from "../controllers/hazardCategory.controller.js";
+} from "../controllers/hazard_category.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 
 const hazardCategoryRouter = Router();

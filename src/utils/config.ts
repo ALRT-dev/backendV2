@@ -53,4 +53,13 @@ export const config = {
   openAI: {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
   },
+
+  // AWS S3
+  aws: {
+    region: getRequiredEnv("AWS_REGION"),
+    accessKeyId: getRequiredEnv("AWS_ACCESS_KEY_ID"),
+    secretAccessKey: getRequiredEnv("AWS_SECRET_ACCESS_KEY"),
+    s3BucketName: getRequiredEnv("AWS_S3_BUCKET_NAME"),
+    cloudfrontDomain: getOptionalEnv("AWS_CLOUDFRONT_DOMAIN", ""),
+  },
 };

@@ -185,7 +185,32 @@ export const getHazardsApplyingFiltersRaw = async (
       hs.url as "sourceUrl",
       u.id as "reportedByUserId",
       u.name as "reportedByName",
-      u.email as "reportedByEmail"`;
+      u.email as "reportedByEmail",
+      COALESCE(
+        JSON_AGG(
+          CASE 
+            WHEN hm.id IS NOT NULL THEN
+              JSON_BUILD_OBJECT(
+                'id', hm.id,
+                'hazardId', hm."hazardId",
+                'userId', hm."userId",
+                'url', hm.url,
+                's3Key', hm."s3Key",
+                'type', hm.type,
+                'mimeType', hm."mimeType",
+                'fileSize', hm."fileSize",
+                'originalName', hm."originalName",
+                'thumbnailUrl', hm."thumbnailUrl",
+                'isPrimary', hm."isPrimary",
+                'createdAt', hm."createdAt",
+                'updatedAt', hm."updatedAt"
+              )
+            ELSE NULL
+          END
+          ORDER BY hm."isPrimary" DESC, hm."createdAt" ASC
+        ) FILTER (WHERE hm.id IS NOT NULL),
+        '[]'::json
+      ) as "medias"`;
 
   if (userId) {
     query += `, v."voteType" as "userVoteType"`;
@@ -195,7 +220,8 @@ export const getHazardsApplyingFiltersRaw = async (
     FROM "Hazard" h
     LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
     LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id  
-    LEFT JOIN "User" u ON h."reportedById" = u.id`;
+    LEFT JOIN "User" u ON h."reportedById" = u.id
+    LEFT JOIN "HazardMedia" hm ON h.id = hm."hazardId"`;
 
   if (userId && userVoteParamIndex) {
     query += ` LEFT JOIN "HazardVote" v ON h.id = v."hazardId" AND v."userId" = $${userVoteParamIndex}`;
@@ -203,6 +229,13 @@ export const getHazardsApplyingFiltersRaw = async (
 
   query += `
     WHERE ${whereClause}
+    GROUP BY h.id, hc.name, hc.emoji, hs.name, hs.url, u.id, u.name, u.email`;
+
+  if (userId) {
+    query += `, v."voteType"`;
+  }
+
+  query += `
     ORDER BY ${orderByClause}
     ${limitClause}`;
 
@@ -259,6 +292,7 @@ export const getHazardsApplyingFiltersRaw = async (
       sourceName,
       sourceUrl,
       userVoteType,
+      medias,
       ...cleanHazard
     } = hazard;
 
@@ -280,6 +314,7 @@ export const getHazardsApplyingFiltersRaw = async (
             url: sourceUrl,
           }
         : null,
+      medias: medias || [],
     };
   });
 };

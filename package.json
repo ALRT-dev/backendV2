@@ -12,6 +12,8 @@
     "prisma:migrate:reset": "dotenv -e .env.dev -- npx prisma migrate reset"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.913.0",
+    "@aws-sdk/s3-request-presigner": "^3.913.0",
     "@prisma/client": "^6.16.3",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
@@ -22,10 +24,12 @@
     "geojson": "^0.5.0",
     "google-auth-library": "^10.3.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "node-cron": "^4.2.1",
     "openai": "^6.3.0",
     "qs": "^6.14.0",
     "socket.io": "^4.8.1",
+    "uuid": "^13.0.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -35,6 +39,8 @@
     "@types/geojson": "^7946.0.16",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/qs": "^6.14.0",
+    "@types/multer": "^2.0.0",
+    "@types/uuid": "^10.0.0",
     "dotenv-cli": "^10.0.0",
     "prisma": "^6.16.2",
     "tsx": "^4.20.5",

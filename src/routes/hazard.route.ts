@@ -10,6 +10,10 @@ import {
   viewHazard,
   updateHazard,
 } from "../controllers/hazard.controller.js";
+import {
+  deleteHazardMedia,
+  updateHazardMedia,
+} from "../controllers/hazard_media.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
@@ -18,6 +22,10 @@ import {
   getHazardsQuerySchema,
   updateHazardSchema,
 } from "../validators/hazard.validator.js";
+import {
+  uploadMultiple,
+  handleMulterError,
+} from "../middlewares/upload.middleware.js";
 
 const hazardRouter = Router();
 
@@ -29,15 +37,23 @@ hazardRouter.get(
   getHazardsWithCategories
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
-hazardRouter.post("/", requireAuth, validate(createHazardSchema), createHazard);
+
+hazardRouter.post(
+  "/",
+  requireAuth,
+  uploadMultiple,
+  handleMulterError,
+  validate(createHazardSchema),
+  createHazard
+);
 hazardRouter.put(
   "/:id",
   requireAuth,
+  uploadMultiple,
+  handleMulterError,
   validate(updateHazardSchema),
   updateHazard
 );
-hazardRouter.delete("/:id", requireAuth, deleteHazard);
-hazardRouter.post("/populate", requireAuth, populateHazards);
 hazardRouter.post(
   "/:id/vote",
   requireAuth,
@@ -45,5 +61,15 @@ hazardRouter.post(
   voteHazard
 );
 hazardRouter.post("/:id/view", requireAuth, viewHazard);
+hazardRouter.post("/populate", requireAuth, populateHazards);
+
+hazardRouter.delete("/:id", requireAuth, deleteHazard);
+
+hazardRouter.delete(
+  "/:hazardId/media/:mediaId",
+  requireAuth,
+  deleteHazardMedia
+);
+hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
 
 export default hazardRouter;
