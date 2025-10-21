@@ -40,6 +40,9 @@ const upload = multer({
 // Middleware for single file upload
 export const uploadSingle = upload.single("mediaFile");
 
+// Middleware for profile picture upload
+export const uploadProfilePicture = upload.single("profilePictureFile");
+
 // Middleware for multiple file upload
 export const uploadMultiple = upload.array("mediaFiles", 10);
 

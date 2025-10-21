@@ -1,6 +1,7 @@
 import { HazardVoteType } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import { UserReportsStatus } from "../enums/user_reports_status_types.js";
+import { extractS3KeyFromUrl, generatePresignedUrl } from "./s3.service.js";
 
 /**
  * Creates or updates a user's own location subscription when their lat/lng is updated.
@@ -113,6 +114,23 @@ export const getUserById = async (userId: string) => {
     (user as any)["upvotesReceivedCount"] = upvotesReceivedCount;
     (user as any)["reportsStatus"] = userReportsStatus;
     delete (user as any)._count;
+
+    // Add presigned URL for profile picture if it exists
+    if (user.profilePictureUrl) {
+      try {
+        const s3Key = extractS3KeyFromUrl(user.profilePictureUrl);
+        if (s3Key) {
+          (user as any)["profilePicturePresignedUrl"] =
+            await generatePresignedUrl(s3Key);
+        }
+      } catch (error) {
+        console.error(
+          "Error generating presigned URL for profile picture:",
+          error
+        );
+        // Don't fail the request if presigned URL generation fails
+      }
+    }
   }
 
   return user;

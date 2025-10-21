@@ -25,6 +25,8 @@ model User {
   geoLocation  String? // PostGIS geometry as string (WKT or WKB)
   locationName String? // Human-readable location name or address
 
+  profilePictureUrl String? // S3 URL for user's profile picture
+
   locationSubscriptions    LocationSubscription[]
   devices                  UserDevice[]
   hazardsReported          Hazard[]

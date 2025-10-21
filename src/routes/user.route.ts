@@ -7,6 +7,7 @@ import {
   getUserPushNotificationSettings,
   updateUserNotificationSettings,
   updateUserProfile,
+  updateUserProfilePicture,
 } from "../controllers/user.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
@@ -15,11 +16,22 @@ import {
   updateNotificationSettingsSchema,
   updateUserSchema,
 } from "../validators/user.validator.js";
+import {
+  handleMulterError,
+  uploadProfilePicture,
+} from "../middlewares/upload.middleware.js";
 
 const userRouter = Router();
 
 userRouter.get("/", requireAuth, getUserProfile);
 userRouter.put("/", requireAuth, validate(updateUserSchema), updateUserProfile);
+userRouter.put(
+  "/profile-picture",
+  requireAuth,
+  uploadProfilePicture,
+  handleMulterError,
+  updateUserProfilePicture
+);
 
 userRouter.post(
   "/subscribe-location",

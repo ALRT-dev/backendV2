@@ -11,6 +11,11 @@ import type {
   UpdateNotificationSettingsInput,
   UpdateUserInput,
 } from "../validators/user.validator.js";
+import {
+  deleteFileFromS3,
+  extractS3KeyFromUrl,
+  uploadFileToS3,
+} from "../services/s3.service.js";
 
 /// Controller to handle fetching the profile of the authenticated user.
 export const getUserProfile = async (
@@ -87,6 +92,72 @@ export const updateUserProfile = async (
     const updatedUser = await getUserById(userId);
     if (!updatedUser) {
       throw new HttpError(404, "User not found after update");
+    }
+
+    res.status(200).json(updatedUser);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle updating user's profile picture.
+export const updateUserProfilePicture = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const file = req.file;
+    if (!file) {
+      throw new HttpError(400, "Profile picture file is required");
+    }
+
+    // Validate file type (should be image only for profile pictures)
+    if (!file.mimetype.startsWith("image/")) {
+      throw new HttpError(400, "Profile picture must be an image file");
+    }
+
+    // Get current user to check for existing profile picture
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { profilePictureUrl: true },
+    });
+
+    if (!currentUser) {
+      throw new Error("User not found");
+    }
+
+    // Upload new profile picture to S3
+    const uploadResult = await uploadFileToS3(file, "profile-pictures");
+
+    // Update user with new profile picture URL
+    await prisma.user.update({
+      where: { id: userId },
+      data: { profilePictureUrl: uploadResult.url },
+      omit: { passwordHash: true },
+    });
+
+    // Delete old profile picture from S3 if it exists
+    if (currentUser.profilePictureUrl) {
+      try {
+        const oldS3Key = extractS3KeyFromUrl(currentUser.profilePictureUrl);
+        if (oldS3Key) {
+          await deleteFileFromS3(oldS3Key);
+        }
+      } catch (error) {
+        console.error("Error deleting old profile picture:", error);
+        // Don't fail the request if old file deletion fails
+      }
+    }
+
+    const updatedUser = await getUserById(userId);
+    if (!updatedUser) {
+      throw new HttpError(404, "User not found after updating profile picture");
     }
 
     res.status(200).json(updatedUser);
