@@ -45,6 +45,7 @@ import {
   uploadMultipleFilesToS3,
   deleteMultipleFilesFromS3,
   enrichHazardsWithPresignedUrls,
+  enrichHazardWithPresignedUrls,
 } from "../services/s3.service.js";
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
 
@@ -429,7 +430,7 @@ export const createHazard = async (
       throw new HttpError(500, "Failed to create hazard");
     }
 
-    const hazard = result;
+    const hazard = await enrichHazardWithPresignedUrls(result);
 
     // Award XP points to the user based on AI review <----------------------------------------------------------------------------
     let xpResult = null;
@@ -485,12 +486,7 @@ export const createHazard = async (
       });
     }
 
-    // Enrich hazard with presigned URLs for media access
-    const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
-      hazard,
-    ]);
-
-    res.status(201).json(hazardWithPresignedUrls[0]);
+    res.status(201).json(hazard);
   } catch (error) {
     next(error);
   }
@@ -687,7 +683,7 @@ export const updateHazard = async (
       throw new HttpError(500, "Failed to update hazard");
     }
 
-    const updatedHazard = result;
+    const updatedHazard = await enrichHazardWithPresignedUrls(result);
 
     // Send socket event about updated hazard to subscribers
     sendSocketEventAboutHazardToSubscribers({
@@ -695,12 +691,7 @@ export const updateHazard = async (
       socketEvent: SocketEvent.updateHazard,
     });
 
-    // Enrich hazard with presigned URLs for media access
-    const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
-      updatedHazard,
-    ]);
-
-    res.status(200).json(hazardWithPresignedUrls[0]);
+    res.status(200).json(updatedHazard);
   } catch (error) {
     next(error);
   }
