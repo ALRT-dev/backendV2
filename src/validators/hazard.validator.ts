@@ -1,6 +1,6 @@
 import z from "zod";
 
-export const hazardDataSchema = z.object({
+export const createHazardDataSchema = z.object({
   title: z
     .string()
     .min(1, "Title is required")
@@ -41,7 +41,7 @@ export const createHazardSchema = z.object({
   hazard: z.string().transform((str, ctx) => {
     try {
       const parsed = JSON.parse(str);
-      return hazardDataSchema.parse(parsed);
+      return createHazardDataSchema.parse(parsed);
     } catch (error) {
       ctx.addIssue({
         code: "custom",
@@ -54,9 +54,8 @@ export const createHazardSchema = z.object({
 });
 
 export type CreateHazardInput = z.infer<typeof createHazardSchema>;
-export type HazardDataInput = z.infer<typeof hazardDataSchema>;
 
-export const updateHazardSchema = z.object({
+export const updateHazardDataSchema = z.object({
   title: z
     .string()
     .min(1, "Title is required")
@@ -92,6 +91,33 @@ export const updateHazardSchema = z.object({
   severity: z.enum(["info", "advice", "watchAndAct", "emergency"]).optional(),
 
   occurredAt: z.iso.datetime().optional(),
+});
+
+export const updateHazardSchema = z.object({
+  hazard: z.string().transform((str, ctx) => {
+    try {
+      const parsed = JSON.parse(str);
+      return updateHazardDataSchema.parse(parsed);
+    } catch (error) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Invalid JSON format for hazard data",
+      });
+      return z.NEVER;
+    }
+  }),
+
+  removedMediaIds: z
+    .union([
+      z.array(z.string().uuid()),
+      z.string().transform((str) => {
+        return str.split(",").map((id) => id.trim());
+      }),
+    ])
+    .pipe(z.array(z.string().uuid()))
+    .optional(),
+
+  // mediaFiles field are handled by multer middleware and will be available in req.files so no need to validate here
 });
 
 export type UpdateHazardInput = z.infer<typeof updateHazardSchema>;

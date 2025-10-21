@@ -522,6 +522,8 @@ export const updateHazard = async (
       throw new HttpError(403, "Forbidden: You cannot update this hazard");
     }
 
+    const { hazard: hazardData, removedMediaIds }: UpdateHazardInput = req.body;
+
     const {
       title,
       description,
@@ -531,7 +533,7 @@ export const updateHazard = async (
       locationName,
       severity,
       occurredAt,
-    }: UpdateHazardInput = req.body;
+    } = hazardData;
 
     // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
@@ -652,6 +654,37 @@ export const updateHazard = async (
         });
 
         await Promise.all(mediaPromises);
+      }
+
+      // Delete removed media files from S3 and database
+      if (removedMediaIds && removedMediaIds.length > 0) {
+        const mediaToRemove = existingHazard.medias.filter((media) =>
+          removedMediaIds.includes(media.id)
+        );
+
+        // Delete media files from S3
+        if (mediaToRemove.length > 0) {
+          try {
+            const s3Keys = mediaToRemove
+              .map((media) => media.s3Key)
+              .filter((media) => media != null);
+            await deleteMultipleFilesFromS3(s3Keys);
+          } catch (cleanupError) {
+            console.error(
+              "Error cleaning up S3 files after failed hazard update:",
+              cleanupError
+            );
+          }
+
+          // Delete media records from database
+          await tx.hazardMedia.deleteMany({
+            where: {
+              id: {
+                in: mediaToRemove.map((media) => media.id),
+              },
+            },
+          });
+        }
       }
 
       // Return updated hazard with all relations
