@@ -62,4 +62,9 @@ export const config = {
     s3BucketName: getRequiredEnv("AWS_S3_BUCKET_NAME"),
     cloudfrontDomain: getOptionalEnv("AWS_CLOUDFRONT_DOMAIN", ""),
   },
+
+  // NSW Transport API
+  nswTransportApi: {
+    apiKey: getOptionalEnv("NSW_TRANSPORT_API_KEY", ""),
+  },
 };

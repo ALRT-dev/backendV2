@@ -17,6 +17,7 @@ import {
   calculateConfidenceScore,
   type HazardForConfidenceCalculation,
 } from "./confidence_score.service.js";
+import { config } from "../utils/config.js";
 
 /**
  * Syncs hazards from different sources (RFS and BoM) to the database.
@@ -26,7 +27,11 @@ import {
  */
 export const syncHazardsFromDifferentSources = async () => {
   try {
-    await Promise.all([syncHazardsFromRFS(), syncHazardsFromBoM()]);
+    await Promise.all([
+      syncHazardsFromRFS(),
+      syncHazardsFromBoM(),
+      syncHazardsFromLiveTrafficHazards(),
+    ]);
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
   }
@@ -69,6 +74,31 @@ export const syncHazardsFromBoM = async () => {
     console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
   } catch (error) {
     console.error("Error during BoM hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the NSW Transport live traffic hazards feed to the database.
+ *
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromLiveTrafficHazards = async () => {
+  try {
+    const trafficHazards = await getHazardsDataFromLiveTrafficHazards();
+
+    console.log(
+      `Fetched ${trafficHazards.length} hazards from NSW Transport live traffic hazards feed.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(trafficHazards);
+
+    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+  } catch (error) {
+    console.error(
+      "Error during NSW Transport live traffic hazards sync:",
+      error
+    );
   }
 };
 
@@ -209,9 +239,9 @@ export const getHazardsDataFromRFS = async (): Promise<
   Prisma.HazardCreateInput[]
 > => {
   try {
-    const response = await fetch(
-      "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json"
-    );
+    const url = "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json";
+
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch RFS data: ${response.statusText}`);
     }
@@ -227,11 +257,11 @@ export const getHazardsDataFromRFS = async (): Promise<
     // Ensure the source exists before creating hazards
     const rfsSource = await prisma.hazardSource.upsert({
       where: {
-        url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+        url,
       },
       create: {
         name: "NSW Rural Fire Service",
-        url: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+        url,
       },
       update: {},
     });
@@ -262,9 +292,9 @@ export const getHazardsDataFromBoM = async (): Promise<
   Prisma.HazardCreateInput[]
 > => {
   try {
-    const response = await fetch(
-      "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20"
-    );
+    const url =
+      "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20";
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`Failed to fetch BoM data: ${response.statusText}`);
     }
@@ -280,11 +310,11 @@ export const getHazardsDataFromBoM = async (): Promise<
     // Ensure the source exists before creating hazards
     const bomSource = await prisma.hazardSource.upsert({
       where: {
-        url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
+        url,
       },
       create: {
         name: "Bureau of Meteorology",
-        url: "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records",
+        url,
       },
       update: {},
     });
@@ -303,6 +333,98 @@ export const getHazardsDataFromBoM = async (): Promise<
     }));
   } catch (error) {
     console.error("Error fetching BoM data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the NSW Transport live traffic hazards feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    if (config.nswTransportApi.apiKey.length === 0) {
+      console.warn(
+        "NSW Transport API key is not set. Skipping live traffic hazards fetch."
+      );
+      return [];
+    }
+
+    const urls = [
+      "https://api.transport.nsw.gov.au/v1/live/hazards/alpine/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/fire/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/flood/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/incident/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/roadwork/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/regional-lga-incident/all",
+    ];
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Traffic & Transport" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Traffic & Transport' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url: "https://opendata.transport.nsw.gov.au/dataset/live-traffic-hazards",
+      },
+      create: {
+        name: "NSW Transport Live Traffic Hazards",
+        url: "https://opendata.transport.nsw.gov.au/dataset/live-traffic-hazards",
+      },
+      update: {},
+    });
+
+    const hazardsPromises: Promise<Prisma.HazardCreateInput[]>[] = [];
+
+    for (const url of urls) {
+      const promise = fetch(url, {
+        headers: {
+          Authorization: `apikey ${config.nswTransportApi.apiKey}`,
+        },
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(
+              `Failed to fetch live traffic hazards data: ${response.statusText}`
+            );
+          }
+
+          const data = await response.json();
+          const hazards = parseGeoJsonToHazards(data, category.id);
+
+          return hazards.map((hazard) => ({
+            ...hazard,
+            source: {
+              connect: {
+                id: source.id,
+              },
+            },
+            id: generateHazardId(hazard),
+          }));
+        })
+        .catch((error) => {
+          console.error(
+            `Error fetching live traffic hazards from ${url}:`,
+            error
+          );
+          return [];
+        });
+
+      hazardsPromises.push(promise);
+    }
+
+    const hazardsArrays = await Promise.all(hazardsPromises);
+    return hazardsArrays.flat();
+  } catch (error) {
+    console.error("Error fetching live traffic hazards:", error);
     return [];
   }
 };

@@ -11,21 +11,27 @@ export function parseGeoJsonToHazards(
   if (!data.features?.length) return [];
 
   return data.features.map((feature) => {
-    const { properties, geometry } = feature as any;
+    const { properties, geometry } = feature;
 
     const point = extractFirstPoint(geometry);
     const latitude = point?.[1] ?? null;
     const longitude = point?.[0] ?? null;
 
+    const title =
+      properties?.title || properties?.displayName || "Untitled Hazard";
+    const description = cleanDescription(
+      properties?.description || properties?.otherAdvice || ""
+    );
+
     const hazard: Prisma.HazardCreateInput = {
-      title: properties.title || "Untitled Hazard",
-      description: cleanDescription(properties.description || ""),
+      title,
+      description,
       category: {
         connect: { id: categoryId },
       },
       latitude,
       longitude,
-      occurredAt: parseValidDate(properties.pubDate),
+      occurredAt: parseValidDate(properties?.pubDate),
     };
 
     return hazard;
