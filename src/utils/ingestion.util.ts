@@ -1,4 +1,5 @@
 import { HazardSeverity, type Prisma } from "@prisma/client";
+import { CONNREFUSED } from "dns";
 import type { FeatureCollection, Geometry, Point } from "geojson";
 
 /**
@@ -61,6 +62,157 @@ export function parseBoMWarningsToHazards(
 
     return hazard;
   });
+}
+
+/**
+ * Converts air quality data into an array of Hazard objects
+ *
+ * @param data - Array of air quality objects containing site information, pollutant data, and measurements
+ * @param categoryId - The hazard category ID to associate with these air quality hazards
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const airQualityData = [
+ *   {
+ *     "Site_Id": "33",
+ *     "SiteName": "Randwick",
+ *     "Longitude": "151.24278",
+ *     "Latitude": "-33.93175",
+ *     "Region": "East Sydney",
+ *     "AirQualityCategory": "GOOD",
+ *     "DeterminingPollutant": "PM2.5",
+ *     // ... other fields
+ *   }
+ * ];
+ * const hazards = parseAirQualityToHazards(airQualityData, categoryId);
+ * ```
+ */
+export function parseAirQualityToHazards(
+  data: any[],
+  categoryId: string
+): Prisma.HazardCreateInput[] {
+  if (!Array.isArray(data) || !data.length) return [];
+
+  return data
+    .map((item: any) => {
+      if (
+        item.AirQualityCategory &&
+        item.AirQualityCategory.trim() === "INACTIVE"
+      ) {
+        return null;
+      }
+
+      const title = `Air Quality Alert - ${item.SiteName}`;
+
+      // Build comprehensive description using all relevant fields
+      const descriptionParts: string[] = [];
+
+      if (item.Region) descriptionParts.push(`Region: ${item.Region}`);
+      if (item.AirQualityCategory)
+        descriptionParts.push(
+          `Air Quality Category: ${item.AirQualityCategory}`
+        );
+      if (item.DeterminingPollutant)
+        descriptionParts.push(
+          `Determining Pollutant: ${item.DeterminingPollutant}`
+        );
+      if (item.DeterminingPollutantValue)
+        descriptionParts.push(
+          `Pollutant Value: ${item.DeterminingPollutantValue}`
+        );
+      if (item.WDR) descriptionParts.push(`Wind Direction: ${item.WDR}°`);
+      if (item.WSP) descriptionParts.push(`Wind Speed: ${item.WSP} km/h`);
+      if (item.SiteType) descriptionParts.push(`Site Type: ${item.SiteType}`);
+      if (item.SitePurpose)
+        descriptionParts.push(`Site Purpose: ${item.SitePurpose}`);
+      if (item.ContributeToNewRegionalAQC)
+        descriptionParts.push(
+          `Regional AQC: ${item.ContributeToNewRegionalAQC}`
+        );
+      if (item.HourDescription)
+        descriptionParts.push(`Time Period: ${item.HourDescription}`);
+      if (item.Date) descriptionParts.push(`Date: ${item.Date}`);
+
+      const description = descriptionParts.join("\n");
+
+      // Determine severity based on air quality category
+      const severity = getAirQualitySeverity(item.AirQualityCategory);
+
+      // Parse coordinates
+      const latitude = item.Latitude ? parseFloat(item.Latitude) : null;
+      const longitude = item.Longitude ? parseFloat(item.Longitude) : null;
+
+      // Parse occurrence date from Date and Hour fields
+      let occurredAt = new Date();
+      if (item.Date && item.Hour) {
+        try {
+          const dateStr = `${item.Date}T${String(item.Hour).padStart(
+            2,
+            "0"
+          )}:00:00`;
+          occurredAt = new Date(dateStr);
+          if (isNaN(occurredAt.getTime())) {
+            occurredAt = new Date();
+          }
+        } catch {
+          occurredAt = new Date();
+        }
+      }
+
+      const id = item.Site_Id && `airquality-${item.Site_Id}`;
+
+      const hazard: Prisma.HazardCreateInput = {
+        id,
+        title,
+        description,
+        category: {
+          connect: { id: categoryId },
+        },
+        latitude,
+        longitude,
+        occurredAt,
+        severity,
+      };
+
+      return hazard;
+    })
+    .filter((hazard): hazard is Prisma.HazardCreateInput => hazard !== null);
+}
+
+/**
+ * Maps air quality category to hazard severity based on standard air quality classifications
+ *
+ * @param category - Air quality category string (e.g., "GOOD", "POOR", "HAZARDOUS")
+ * @returns Corresponding HazardSeverity enum value
+ *
+ * Mapping:
+ * - GOOD, FAIR → info
+ * - POOR → advice
+ * - VERY POOR → watchAndAct
+ * - EXTREMELY POOR, HAZARDOUS → emergency
+ */
+function getAirQualitySeverity(category?: string): HazardSeverity {
+  if (!category) return HazardSeverity.info;
+
+  const normalizedCategory = category.toUpperCase();
+
+  switch (normalizedCategory) {
+    case "GOOD":
+      return HazardSeverity.info;
+    case "FAIR":
+      return HazardSeverity.info;
+    case "POOR":
+      return HazardSeverity.advice;
+    case "VERY POOR":
+      return HazardSeverity.watchAndAct;
+    case "EXTREMELY POOR":
+      return HazardSeverity.emergency;
+    case "HAZARDOUS":
+      return HazardSeverity.emergency;
+    default:
+      return HazardSeverity.info;
+  }
 }
 
 /**

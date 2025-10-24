@@ -1,5 +1,6 @@
 import { HazardReviewStatus, type Hazard, type Prisma } from "@prisma/client";
 import {
+  parseAirQualityToHazards,
   parseBoMWarningsToHazards,
   parseGeoJsonToHazards,
 } from "../utils/ingestion.util.js";
@@ -31,6 +32,7 @@ export const syncHazardsFromDifferentSources = async () => {
       syncHazardsFromRFS(),
       syncHazardsFromBoM(),
       syncHazardsFromLiveTrafficHazards(),
+      syncHazardsAirQuality(),
     ]);
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
@@ -99,6 +101,28 @@ export const syncHazardsFromLiveTrafficHazards = async () => {
       "Error during NSW Transport live traffic hazards sync:",
       error
     );
+  }
+};
+
+/**
+ * Syncs hazards from the NSW Air Quality feed to the database.
+ *
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsAirQuality = async () => {
+  try {
+    const airQualityHazards = await getHazardsDataFromAirQuality();
+
+    console.log(
+      `Fetched ${airQualityHazards.length} hazards from air quality feed.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(airQualityHazards);
+
+    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+  } catch (error) {
+    console.error("Error during NSW Air Quality sync:", error);
   }
 };
 
@@ -425,6 +449,61 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
     return hazardsArrays.flat();
   } catch (error) {
     console.error("Error fetching live traffic hazards:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the NSW Air Quality feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromAirQuality = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url =
+      "https://www.airquality.nsw.gov.au/_design/air-quality-api/connect-data-files/rest-observations";
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch NSW Air Quality data: ${response.statusText}`
+      );
+    }
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "NSW Air Quality",
+        url,
+      },
+      update: {},
+    });
+
+    const data = await response.json();
+    const hazards = parseAirQualityToHazards(data, category.id);
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching NSW Air Quality data:", error);
     return [];
   }
 };
