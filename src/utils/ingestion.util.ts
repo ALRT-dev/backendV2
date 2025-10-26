@@ -1,18 +1,45 @@
 import { HazardSeverity, type Prisma } from "@prisma/client";
-import { CONNREFUSED } from "dns";
 import type { FeatureCollection, Geometry, Point } from "geojson";
+import Parser from "rss-parser";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
+ *
+ * @param data - The GeoJSON FeatureCollection
+ * @param categoryId - The hazard category ID to associate with these hazards
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const geoJsonData = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [151.2093, -33.8688]
+ *       },
+ *       "properties": {
+ *         "title": "Flood Warning",
+ *         "description": "<p>Heavy rains expected...</p>",
+ *         "pubDate": "2023-10-01T10:00:00+10:00"
+ *       }
+ *     }
+ *   ]
+ * };
+ * const hazards = parseGeoJsonToHazards(geoJsonData, categoryId);
+ * ```
  */
 export function parseGeoJsonToHazards(
   data: FeatureCollection,
-  categoryId: string
+  categoryId: string,
+  idPrefix: string = "geojson"
 ): Prisma.HazardCreateInput[] {
   if (!data.features?.length) return [];
 
   return data.features.map((feature) => {
-    const { properties, geometry } = feature;
+    const { id, properties, geometry } = feature;
 
     const point = extractFirstPoint(geometry);
     const latitude = point?.[1] ?? null;
@@ -24,7 +51,10 @@ export function parseGeoJsonToHazards(
       properties?.description || properties?.otherAdvice || ""
     );
 
+    const hazardId = id && `${idPrefix}-${id}`;
+
     const hazard: Prisma.HazardCreateInput = {
+      ...(hazardId && { id: hazardId }),
       title,
       description,
       category: {
@@ -41,6 +71,25 @@ export function parseGeoJsonToHazards(
 
 /**
  * Converts the BoM weather warnings JSON into an array of Hazard objects
+ *
+ * @param data - The BoM warnings JSON object
+ * @param categoryId - The hazard category ID to associate with these warnings
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const bomWarningsData = {
+ *   "results": [
+ *     {
+ *       "warning_title": "Severe Thunderstorm Warning",
+ *       "summary": "<p>Severe thunderstorms are expected...</p>",
+ *       "begin_time": "2023-10-01T14:00:00+10:00",
+ *       "end_time": "2023-10-01T16:00:00+10:00"
+ *     }
+ *   ]
+ * };
+ * const hazards = parseBoMWarningsToHazards(bomWarningsData, categoryId);
+ * ```
  */
 export function parseBoMWarningsToHazards(
   data: any,
@@ -50,7 +99,9 @@ export function parseBoMWarningsToHazards(
 
   return data.results.map((item: any) => {
     const description = cleanDescription(item.summary || "");
+    const id = item.identifier && `bom-${item.warning_id}`;
     const hazard: Prisma.HazardCreateInput = {
+      id,
       title: item.warning_title || "Unnamed Warning",
       description,
       category: {
@@ -183,6 +234,79 @@ export function parseAirQualityToHazards(
 }
 
 /**
+ * Converts RSS feed XML string to an array of Hazard objects
+ *
+ * @param xmlString - The RSS XML string to parse
+ * @param categoryId - The hazard category ID to associate with these RSS feed hazards
+ * @returns Promise that resolves to array of Prisma HazardCreateInput objects
+ *
+ * @example
+ * ```typescript
+ * const rssXml = `
+ * <rss xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+ *   <channel>
+ *     <title>Country Fire Service - South Australia - Current Incidents</title>
+ *     <item>
+ *       <title>RANGE ROAD, WAITPINGA (Tree Down)</title>
+ *       <identifier>1668093</identifier>
+ *       <description>First Reported: Sunday, 26 Oct 2025 16:03:00<br>Status: GOING<br>Region: 1</description>
+ *       <pubDate>Sun, 26 Oct 2025 16:23:04 +1030</pubDate>
+ *     </item>
+ *   </channel>
+ * </rss>
+ * `;
+ * const hazards = await parseRSSFeedToHazards(rssXml, categoryId);
+ * ```
+ */
+export async function parseRSSFeedToHazards(
+  url: string,
+  categoryId: string,
+  idPrefix: string = "rss"
+): Promise<Prisma.HazardCreateInput[]> {
+  const parser = new Parser({
+    customFields: {
+      item: ["identifier", "description", "georss:point", "id", "published"],
+    },
+  });
+  const feed = await parser.parseURL(url);
+
+  if (!feed.items?.length) return [];
+
+  return feed.items.map((item) => {
+    const title = cleanRSSTitle(item.title || "Untitled Incident");
+    const description = cleanDescription(
+      item.content || item.description || ""
+    );
+
+    const severity = determineRSSSeverity(description, title);
+
+    const { latitude, longitude } = extractRSSCoordinates(item);
+
+    const id =
+      (item.identifier && `${idPrefix}-${item.identifier}`) ||
+      (item.guid && `${idPrefix}-${cleanGUID(item.guid)}`) ||
+      (item.id && `${idPrefix}-${item.id}`);
+
+    const hazard: Prisma.HazardCreateInput = {
+      id,
+      title,
+      description,
+      category: {
+        connect: { id: categoryId },
+      },
+      latitude,
+      longitude,
+      occurredAt: parseValidDate(item.pubDate),
+      severity,
+    };
+
+    return hazard;
+  });
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
+
+/**
  * Maps air quality category to hazard severity based on standard air quality classifications
  *
  * @param category - Air quality category string (e.g., "GOOD", "POOR", "HAZARDOUS")
@@ -226,6 +350,47 @@ function cleanDescription(html?: string): string {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<[^>]+>/g, "")
     .trim();
+}
+
+/**
+ * Extracts ID from GUID URLs or cleans GUID by removing HTML tags and trimming whitespace
+ *
+ * @param guid - The GUID string which may contain URLs with IDs
+ * @returns Extracted ID from URL or cleaned GUID string
+ *
+ * @example
+ * extractIdFromGUID("http://emergency.vic.gov.au/respond/#!/incident/242688/moreinfo") // returns "242688"
+ * extractIdFromGUID("https://data.eso.sa.gov.au/prod/cfs/criimson/1668103") // returns "1668103"
+ * extractIdFromGUID("some-plain-guid") // returns "some-plain-guid"
+ */
+function cleanGUID(guid: string): string {
+  // First clean HTML tags
+  const cleaned = guid
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+
+  // Try to extract ID from URL patterns
+  // Pattern 1: http://emergency.vic.gov.au/respond/#!/incident/242688/moreinfo
+  const vicGovMatch = cleaned.match(/\/incident\/(\d+)/);
+  if (vicGovMatch && vicGovMatch[1]) {
+    return vicGovMatch[1];
+  }
+
+  // Pattern 2: https://data.eso.sa.gov.au/prod/cfs/criimson/1668103
+  const saGovMatch = cleaned.match(/\/criimson\/(\d+)/);
+  if (saGovMatch && saGovMatch[1]) {
+    return saGovMatch[1];
+  }
+
+  // General pattern: extract last numeric segment from URL path
+  const urlMatch = cleaned.match(/https?:\/\/[^\/]+\/.*\/(\d+)(?:\/|$)/);
+  if (urlMatch && urlMatch[1]) {
+    return urlMatch[1];
+  }
+
+  // If no URL pattern matches, return the cleaned string
+  return cleaned;
 }
 
 /**
@@ -286,4 +451,142 @@ function parseValidDate(dateInput?: string | number | Date): Date {
   }
 
   return parsedDate;
+}
+
+/**
+ * Cleans RSS title by extracting the main incident description
+ * and removing location prefixes if they seem redundant
+ */
+function cleanRSSTitle(title: string): string {
+  if (!title) return "Untitled Incident";
+
+  // If title contains parentheses, extract the content in parentheses as the main title
+  const parenthesesMatch = title.match(/\(([^)]+)\)$/);
+  if (parenthesesMatch) {
+    const incidentType = parenthesesMatch[1];
+    const location = title.replace(/\s*\([^)]+\)$/, "").trim();
+    return `${incidentType} - ${location}`;
+  }
+
+  return title.trim();
+}
+
+/**
+ * Determines hazard severity based on RSS content
+ */
+function determineRSSSeverity(
+  description: string,
+  title: string
+): HazardSeverity {
+  const content = `${description} ${title}`.toLowerCase();
+
+  // Emergency indicators
+  if (
+    content.includes("emergency") ||
+    content.includes("evacuation") ||
+    content.includes("immediate threat") ||
+    content.includes("life threatening")
+  ) {
+    return HazardSeverity.emergency;
+  }
+
+  // Watch and Act indicators
+  if (
+    content.includes("watch and act") ||
+    content.includes("prepare to evacuate") ||
+    content.includes("going") ||
+    content.includes("out of control")
+  ) {
+    return HazardSeverity.watchAndAct;
+  }
+
+  // Advice level indicators
+  if (
+    content.includes("advice") ||
+    content.includes("monitor") ||
+    content.includes("tree down") ||
+    content.includes("road closure")
+  ) {
+    return HazardSeverity.advice;
+  }
+
+  // Default to info for general incidents
+  return HazardSeverity.info;
+}
+
+/**
+ * Extracts latitude and longitude coordinates from RSS feed items
+ *
+ * This function handles multiple coordinate sources:
+ * 1. GeoRSS point tags (e.g., <georss:point>-35.3872755399 149.0929348399</georss:point>)
+ * 2. Coordinates embedded in description text (e.g., Latitude: -37.81758764384293, Longitude: 144.67545946890297)
+ *
+ * @param item - RSS feed item object from rss-parser
+ * @returns Object containing latitude and longitude as numbers, or null values if not found
+ *
+ * @example
+ * ```typescript
+ * const rssItem = {
+ *   title: "Fire Alert",
+ *   description: "<strong>Latitude:</strong> -37.81758764384293<br><strong>Longitude:</strong> 144.67545946890297<br>",
+ *   'georss:point': "-35.3872755399 149.0929348399"
+ * };
+ *
+ * const coords = extractRSSCoordinates(rssItem);
+ * // Returns: { latitude: -35.3872755399, longitude: 149.0929348399 }
+ * ```
+ */
+export function extractRSSCoordinates(item: any): {
+  latitude: number | null;
+  longitude: number | null;
+} {
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+
+  // Method 1: Check for GeoRSS point tag
+  // Format: <georss:point xmlns:georss="http://www.georss.org/georss">lat lon</georss:point>
+  const georssPoint = item["georss:point"] || item.georss?.point;
+  if (georssPoint && typeof georssPoint === "string") {
+    const coords = georssPoint.trim().split(/\s+/);
+    if (coords.length === 2 && coords[0] && coords[1]) {
+      const lat = parseFloat(coords[0]);
+      const lon = parseFloat(coords[1]);
+
+      if (!isNaN(lat) && !isNaN(lon)) {
+        latitude = lat;
+        longitude = lon;
+        return { latitude, longitude };
+      }
+    }
+  }
+
+  // Method 2: Extract from description text
+  // Look for patterns like "Latitude: -37.81758764384293" and "Longitude: 144.67545946890297"
+  const description = item.description || item.content || "";
+  if (typeof description === "string") {
+    // Match latitude pattern (case insensitive)
+    const latMatch =
+      description.match(/<strong>Latitude:<\/strong>\s*(-?\d+\.?\d*)/i) ||
+      description.match(/Latitude:\s*(-?\d+\.?\d*)/i) ||
+      description.match(/lat:\s*(-?\d+\.?\d*)/i);
+
+    // Match longitude pattern (case insensitive)
+    const lonMatch =
+      description.match(/<strong>Longitude:<\/strong>\s*(-?\d+\.?\d*)/i) ||
+      description.match(/Longitude:\s*(-?\d+\.?\d*)/i) ||
+      description.match(/lon:\s*(-?\d+\.?\d*)/i) ||
+      description.match(/lng:\s*(-?\d+\.?\d*)/i);
+
+    if (latMatch && latMatch[1] && lonMatch && lonMatch[1]) {
+      const lat = parseFloat(latMatch[1]);
+      const lon = parseFloat(lonMatch[1]);
+
+      if (!isNaN(lat) && !isNaN(lon)) {
+        latitude = lat;
+        longitude = lon;
+      }
+    }
+  }
+
+  return { latitude, longitude };
 }

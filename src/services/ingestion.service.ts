@@ -3,6 +3,7 @@ import {
   parseAirQualityToHazards,
   parseBoMWarningsToHazards,
   parseGeoJsonToHazards,
+  parseRSSFeedToHazards,
 } from "../utils/ingestion.util.js";
 import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -33,6 +34,10 @@ export const syncHazardsFromDifferentSources = async () => {
       syncHazardsFromBoM(),
       syncHazardsFromLiveTrafficHazards(),
       syncHazardsAirQuality(),
+      syncHazardsFromACT(),
+      syncHazardsFromCFS(),
+      syncHazardsFromViceFireServices(),
+      syncHazardsFromQLDFireDepartment(),
     ]);
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
@@ -49,11 +54,15 @@ export const syncHazardsFromRFS = async () => {
   try {
     const rfsHazards = await getHazardsDataFromRFS();
 
-    console.log(`Fetched ${rfsHazards.length} hazards from RFS feed.`);
+    console.log(
+      `------------------------------------> Fetched ${rfsHazards.length} hazards from RFS.`
+    );
 
     const createdHazards = await summarizeAndPostHazards(rfsHazards);
 
-    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from RFS.`
+    );
   } catch (error) {
     console.error("Error during RFS hazard sync:", error);
   }
@@ -69,11 +78,15 @@ export const syncHazardsFromBoM = async () => {
   try {
     const bomHazards = await getHazardsDataFromBoM();
 
-    console.log(`Fetched ${bomHazards.length} hazards from BoM feed.`);
+    console.log(
+      `------------------------------------> Fetched ${bomHazards.length} hazards from BoM.`
+    );
 
     const createdHazards = await summarizeAndPostHazards(bomHazards);
 
-    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from BoM.`
+    );
   } catch (error) {
     console.error("Error during BoM hazard sync:", error);
   }
@@ -90,12 +103,14 @@ export const syncHazardsFromLiveTrafficHazards = async () => {
     const trafficHazards = await getHazardsDataFromLiveTrafficHazards();
 
     console.log(
-      `Fetched ${trafficHazards.length} hazards from NSW Transport live traffic hazards feed.`
+      `------------------------------------> Fetched ${trafficHazards.length} hazards from NSW Transport live traffic hazards.`
     );
 
     const createdHazards = await summarizeAndPostHazards(trafficHazards);
 
-    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from NSW Transport live traffic hazards.`
+    );
   } catch (error) {
     console.error(
       "Error during NSW Transport live traffic hazards sync:",
@@ -115,14 +130,109 @@ export const syncHazardsAirQuality = async () => {
     const airQualityHazards = await getHazardsDataFromAirQuality();
 
     console.log(
-      `Fetched ${airQualityHazards.length} hazards from air quality feed.`
+      `------------------------------------> Fetched ${airQualityHazards.length} hazards from NSW air quality.`
     );
 
     const createdHazards = await summarizeAndPostHazards(airQualityHazards);
 
-    console.log(`Sync complete. Created ${createdHazards.length} new hazards.`);
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from NSW air quality.`
+    );
   } catch (error) {
     console.error("Error during NSW Air Quality sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the ACT Emergency Services feed to the database.
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromACT = async () => {
+  try {
+    const actHazards = await getHazardsDataFromACT();
+
+    console.log(
+      `------------------------------------> Fetched ${actHazards.length} hazards from ACT Emergency Services.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(actHazards);
+
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from ACT Emergency Services.`
+    );
+  } catch (error) {
+    console.error("Error during ACT Emergency Services hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the SA Country Fire Service (CFS) feed to the database.
+ *
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromCFS = async () => {
+  try {
+    const cfsHazards = await getHazardsDataFromCFS();
+
+    console.log(
+      `------------------------------------> Fetched ${cfsHazards.length} hazards from CFS.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(cfsHazards);
+
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from CFS.`
+    );
+  } catch (error) {
+    console.error("Error during CFS hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the Vice Fire Services feed to the database.
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromViceFireServices = async () => {
+  try {
+    const viceFireHazards = await getHazardsDataFromViceFireServices();
+
+    console.log(
+      `------------------------------------> Fetched ${viceFireHazards.length} hazards from Vice Fire Services.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(viceFireHazards);
+
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from Vice Fire Services.`
+    );
+  } catch (error) {
+    console.error("Error during Vice Fire Services hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the QLD Fire Department feed to the database.
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromQLDFireDepartment = async () => {
+  try {
+    const qldFireHazards = await getHazardsDataFromQLDFireDepartment();
+
+    console.log(
+      `------------------------------------> Fetched ${qldFireHazards.length} hazards from QLD Fire Department feed.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(qldFireHazards);
+
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from QLD Fire Department.`
+    );
+  } catch (error) {
+    console.error("Error during QLD Fire Department hazard sync:", error);
   }
 };
 
@@ -140,13 +250,17 @@ const summarizeAndPostHazards = async (
 
     for (const hazardData of hazardDatas) {
       if (!hazardData.id) continue;
+      if (!hazardData.latitude || !hazardData.longitude) {
+        console.log("Hazard missing coordinates, skipping:", hazardData.title);
+        continue;
+      }
 
       const promise = prisma.hazard
         .findUnique({
           where: { id: hazardData.id },
         })
         .then((existing) => {
-          if (existing) {
+          if (existing?.description === hazardData.description) {
             console.log("Hazard already exists, skipping:", hazardData.title);
             return null;
           }
@@ -216,10 +330,13 @@ const summarizeAndPostHazards = async (
 
     for (const summarizedHazard of summarizedHazards) {
       if (!summarizedHazard) continue;
+      if (!summarizedHazard.id) continue;
 
       const promise = prisma.hazard
-        .create({
-          data: summarizedHazard,
+        .upsert({
+          where: { id: summarizedHazard.id! },
+          create: summarizedHazard,
+          update: summarizedHazard,
           include: buildHazardInclude(),
         })
         .then((createdHazard) => {
@@ -291,7 +408,7 @@ export const getHazardsDataFromRFS = async (): Promise<
     });
 
     const data = await response.json();
-    const hazards = parseGeoJsonToHazards(data, category.id);
+    const hazards = parseGeoJsonToHazards(data, category.id, "rfs");
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -300,7 +417,7 @@ export const getHazardsDataFromRFS = async (): Promise<
           id: rfsSource.id,
         },
       },
-      id: generateHazardId(hazard),
+      id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
     console.error("Error fetching RFS data:", error);
@@ -353,7 +470,7 @@ export const getHazardsDataFromBoM = async (): Promise<
           id: bomSource.id,
         },
       },
-      id: generateHazardId(hazard),
+      id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
     console.error("Error fetching BoM data:", error);
@@ -377,13 +494,13 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
     }
 
     const urls = [
-      "https://api.transport.nsw.gov.au/v1/live/hazards/alpine/open",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/fire/open",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/flood/open",
+      // "https://api.transport.nsw.gov.au/v1/live/hazards/alpine/open",
+      // "https://api.transport.nsw.gov.au/v1/live/hazards/fire/open",
+      // "https://api.transport.nsw.gov.au/v1/live/hazards/flood/open",
       "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
       "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/roadwork/open",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/regional-lga-incident/open",
+      // "https://api.transport.nsw.gov.au/v1/live/hazards/roadwork/open",
+      // "https://api.transport.nsw.gov.au/v1/live/hazards/regional-lga-incident/open",
     ];
 
     const category = await prisma.hazardCategory.findFirst({
@@ -422,7 +539,11 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
           }
 
           const data = await response.json();
-          const hazards = parseGeoJsonToHazards(data, category.id);
+          const hazards = parseGeoJsonToHazards(
+            data,
+            category.id,
+            "nsw-transport"
+          );
 
           return hazards.map((hazard) => ({
             ...hazard,
@@ -431,7 +552,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
                 id: source.id,
               },
             },
-            id: generateHazardId(hazard),
+            id: hazard.id || generateHazardId(hazard),
           }));
         })
         .catch((error) => {
@@ -504,6 +625,196 @@ export const getHazardsDataFromAirQuality = async (): Promise<
     }));
   } catch (error) {
     console.error("Error fetching NSW Air Quality data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the ACT Emergency Services feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromACT = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url = "https://esa.act.gov.au/feeds/currentincidents.xml";
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "ACT Emergency Services",
+        url,
+      },
+      update: {},
+    });
+
+    const hazards = await parseRSSFeedToHazards(url, category.id, "act-es");
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching ACT Emergency Services data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the SA Country Fire Service (CFS) feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromCFS = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url =
+      "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.xml";
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "SA Country Fire Service",
+        url,
+      },
+      update: {},
+    });
+
+    const hazards = await parseRSSFeedToHazards(url, category.id, "cfs");
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching CFS data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the Vice Fire Service feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromViceFireServices = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url = "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS";
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "Vice Fire Service",
+        url,
+      },
+      update: {},
+    });
+
+    const hazards = await parseRSSFeedToHazards(url, category.id, "vice-fire");
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching Vice Fire Service data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the QLD Fire Department feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsDataFromQLDFireDepartment = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url =
+      "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml";
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "QLD Fire Department",
+        url,
+      },
+      update: {},
+    });
+
+    const hazards = await parseRSSFeedToHazards(url, category.id, "qld-fire");
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching Vice Fire Service data:", error);
     return [];
   }
 };
