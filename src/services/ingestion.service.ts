@@ -377,13 +377,13 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
     }
 
     const urls = [
-      "https://api.transport.nsw.gov.au/v1/live/hazards/alpine/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/fire/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/flood/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/incident/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/roadwork/all",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/regional-lga-incident/all",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/alpine/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/fire/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/flood/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/roadwork/open",
+      "https://api.transport.nsw.gov.au/v1/live/hazards/regional-lga-incident/open",
     ];
 
     const category = await prisma.hazardCategory.findFirst({

@@ -96,9 +96,14 @@ export function parseAirQualityToHazards(
 
   return data
     .map((item: any) => {
+      // Determine severity based on air quality category
+      const severity = getAirQualitySeverity(item.AirQualityCategory);
+
+      // Only create hazards for significant air quality issues i.e (POOR, VERY POOR, EXTREMELY POOR, HAZARDOUS)
       if (
-        item.AirQualityCategory &&
-        item.AirQualityCategory.trim() === "INACTIVE"
+        severity !== HazardSeverity.emergency &&
+        severity !== HazardSeverity.watchAndAct &&
+        severity !== HazardSeverity.advice
       ) {
         return null;
       }
@@ -135,9 +140,6 @@ export function parseAirQualityToHazards(
       if (item.Date) descriptionParts.push(`Date: ${item.Date}`);
 
       const description = descriptionParts.join("\n");
-
-      // Determine severity based on air quality category
-      const severity = getAirQualitySeverity(item.AirQualityCategory);
 
       // Parse coordinates
       const latitude = item.Latitude ? parseFloat(item.Latitude) : null;
