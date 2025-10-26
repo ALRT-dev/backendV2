@@ -5,6 +5,10 @@ export const getNotificationsFeedSchema = z.object({
 
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
+  severities: z
+    .array(z.enum(["info", "advice", "watchAndAct", "emergency"]))
+    .optional(),
+
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),
 
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),

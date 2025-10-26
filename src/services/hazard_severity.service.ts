@@ -6,9 +6,12 @@ import type {
   LocationSubscription,
 } from "@prisma/client";
 
-export const getCategoriesApplyingFilters = async ({
+/**
+ * Fetches hazard severities and the count of hazards for each severity applying various filters.
+ */
+export const getSeveritiesApplyingFilters = async ({
   hazardSearchString,
-  hazardSeverities,
+  hazardCategoryIds,
   hazardReviewStatus,
   hazardReportedById,
   hazardNortheastLat,
@@ -19,7 +22,7 @@ export const getCategoriesApplyingFilters = async ({
   subscriptions,
 }: {
   hazardSearchString?: string | undefined;
-  hazardSeverities?: HazardSeverity[] | undefined;
+  hazardCategoryIds?: string | string[] | undefined;
   hazardReviewStatus?: HazardReviewStatus | undefined;
   hazardReportedById?: string | undefined;
   hazardNortheastLat?: number | undefined;
@@ -28,10 +31,15 @@ export const getCategoriesApplyingFilters = async ({
   hazardSouthwestLng?: number | undefined;
   showExpiredHazards?: boolean | undefined;
   subscriptions?: LocationSubscription[] | undefined;
-}) => {
+}): Promise<
+  {
+    severity: HazardSeverity;
+    hazardsCount: number;
+  }[]
+> => {
   const hazardsWhereClause = buildHazardsWhereClause({
     searchString: hazardSearchString,
-    severities: hazardSeverities,
+    categoryIds: hazardCategoryIds,
     reviewStatus: hazardReviewStatus,
     reportedById: hazardReportedById,
     northeastLat: hazardNortheastLat,
@@ -42,31 +50,19 @@ export const getCategoriesApplyingFilters = async ({
     subscriptions,
   });
 
-  const categories = await prisma.hazardCategory.findMany({
-    where: {
-      hazards: { some: hazardsWhereClause },
-    },
-    include: {
-      _count: {
-        select: {
-          hazards: {
-            where: hazardsWhereClause,
-          },
-        },
-      },
+  const severities = await prisma.hazard.groupBy({
+    by: ["severity"],
+    where: hazardsWhereClause,
+    _count: {
+      id: true,
     },
     orderBy: {
-      hazards: {
-        _count: "desc",
-      },
+      severity: "desc",
     },
   });
 
-  const transformedCategories = categories.map((category) => ({
-    ...category,
-    hazardsCount: category._count.hazards,
-    _count: undefined,
+  return severities.map((item) => ({
+    severity: item.severity,
+    hazardsCount: item._count.id,
   }));
-
-  return transformedCategories;
 };

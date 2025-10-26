@@ -9,6 +9,7 @@ import type {
 } from "../validators/notification.validator.js";
 import { parseBoolean } from "../utils/parse.util.js";
 import { enrichHazardsWithPresignedUrls } from "../services/s3.service.js";
+import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -20,6 +21,7 @@ export const getNotificationsFeed = async (
     const {
       searchString,
       categoryIds,
+      severities,
       reviewStatus,
       showExpired,
       sortSettings,
@@ -44,6 +46,15 @@ export const getNotificationsFeed = async (
 
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
+      hazardSeverities: severities,
+      hazardReviewStatus: reviewStatus,
+      showExpiredHazards: parseBoolean(showExpired),
+      subscriptions,
+    });
+
+    const severitiesPromise = getSeveritiesApplyingFilters({
+      hazardSearchString: searchString,
+      hazardCategoryIds: categoryIds,
       hazardReviewStatus: reviewStatus,
       showExpiredHazards: parseBoolean(showExpired),
       subscriptions,
@@ -52,6 +63,7 @@ export const getNotificationsFeed = async (
     const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
+      severities,
       reviewStatus,
       userId,
       page: Number(page),
@@ -63,14 +75,17 @@ export const getNotificationsFeed = async (
       showExpired: parseBoolean(showExpired),
     });
 
-    const [categories, hazards] = await Promise.all([
+    const [categoryFilters, severityFilters, hazards] = await Promise.all([
       categoriesPromise,
+      severitiesPromise,
       hazardsPromise,
     ]);
 
     // If no hazards found, return empty categories and hazards
     if (hazards.length === 0) {
-      return res.status(200).json({ categories: [], hazards: [] });
+      return res
+        .status(200)
+        .json({ categoryFilters: [], severityFilters: [], hazards: [] });
     }
 
     // Enrich hazards with presigned URLs for media access
@@ -78,7 +93,11 @@ export const getNotificationsFeed = async (
       hazards
     );
 
-    res.status(200).json({ categories, hazards: hazardsWithPresignedUrls });
+    res.status(200).json({
+      categoryFilters,
+      severityFilters,
+      hazards: hazardsWithPresignedUrls,
+    });
   } catch (error) {
     next(error);
   }

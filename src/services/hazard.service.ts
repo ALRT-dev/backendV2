@@ -33,32 +33,9 @@ export const getHazardsApplyingFilters = async (
     subscriptions?: LocationSubscription[] | undefined;
   }
 ): Promise<Hazard[]> => {
-  const {
-    searchString,
-    categoryIds,
-    reportedById,
-    reviewStatus,
-    northeastLat,
-    northeastLng,
-    southwestLat,
-    southwestLng,
-    subscriptions,
-    userId,
-    page = 1,
-    pageSize = 20,
-  } = params;
+  const { userId, page = 1, pageSize = 20 } = params;
 
-  const whereClause = buildHazardsWhereClause({
-    searchString,
-    categoryIds,
-    reportedById,
-    reviewStatus,
-    northeastLat,
-    northeastLng,
-    southwestLat,
-    southwestLng,
-    subscriptions,
-  });
+  const whereClause = buildHazardsWhereClause(params);
 
   const hazards = await prisma.hazard.findMany({
     where: whereClause,
@@ -133,7 +110,7 @@ export const getHazardsApplyingFilters = async (
  * This is the main function that combines WHERE and ORDER BY clause builders.
  */
 export const getHazardsApplyingFiltersRaw = async (
-  searchParams: HazardSearchParams & {
+  params: HazardSearchParams & {
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
   }
@@ -145,11 +122,11 @@ export const getHazardsApplyingFiltersRaw = async (
     sortSettings,
     page = 1,
     pageSize = 20,
-  } = searchParams;
+  } = params;
 
   // Build WHERE clause and get initial parameters
   const { whereClause, queryParams, paramIndex } =
-    buildHazardsWhereClauseRaw(searchParams);
+    buildHazardsWhereClauseRaw(params);
 
   // Build ORDER BY clause
   const { orderByClause, paramIndex: updatedParamIndex } =

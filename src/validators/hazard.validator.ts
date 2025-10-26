@@ -133,7 +133,11 @@ export type VoteHazardInput = z.infer<typeof voteHazardSchema>;
 export const getHazardsQuerySchema = z.object({
   searchString: z.string().optional(),
 
-  categoryIds: z.string().optional(), // Comma-separated list of UUIDs "2025-10-14T15:40:00.000"
+  categoryIds: z.string().optional(), // Comma-separated list of UUIDs
+
+  severities: z
+    .array(z.enum(["info", "advice", "watchAndAct", "emergency"]))
+    .optional(),
 
   reportedById: z.string().uuid().optional(),
 

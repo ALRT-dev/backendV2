@@ -1,4 +1,4 @@
-import type { HazardReviewStatus } from "@prisma/client";
+import type { HazardReviewStatus, HazardSeverity } from "@prisma/client";
 
 export interface SortSetting {
   severity?: "asc" | "desc" | undefined;
@@ -10,6 +10,7 @@ export interface SortSetting {
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
+  severities?: string | HazardSeverity[] | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 

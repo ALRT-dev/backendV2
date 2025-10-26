@@ -48,6 +48,7 @@ import {
   enrichHazardWithPresignedUrls,
 } from "../services/s3.service.js";
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
+import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -59,6 +60,7 @@ export const getHazards = async (
     const {
       searchString,
       categoryIds,
+      severities,
       reportedById,
       reviewStatus,
       showExpired,
@@ -80,6 +82,7 @@ export const getHazards = async (
       reportedById,
       reviewStatus,
       categoryIds,
+      severities,
       userId,
       showExpired: parseBoolean(showExpired),
       userLat,
@@ -110,6 +113,7 @@ export const getHazardsWithCategories = async (
     const {
       searchString,
       categoryIds,
+      severities,
       reportedById,
       reviewStatus,
       northeastLat,
@@ -143,6 +147,19 @@ export const getHazardsWithCategories = async (
 
     const categoriesPromise = getCategoriesApplyingFilters({
       hazardSearchString: searchString,
+      hazardSeverities: severities,
+      hazardReviewStatus: reviewStatus,
+      hazardReportedById: reportedById,
+      hazardNortheastLat: Number(northeastLat),
+      hazardNortheastLng: Number(northeastLng),
+      hazardSouthwestLat: Number(southwestLat),
+      hazardSouthwestLng: Number(southwestLng),
+      showExpiredHazards: parseBoolean(showExpired),
+    });
+
+    const severitiesPromise = getSeveritiesApplyingFilters({
+      hazardSearchString: searchString,
+      hazardCategoryIds: categoryIds,
       hazardReviewStatus: reviewStatus,
       hazardReportedById: reportedById,
       hazardNortheastLat: Number(northeastLat),
@@ -155,6 +172,7 @@ export const getHazardsWithCategories = async (
     const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
+      severities,
       reviewStatus,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
@@ -169,19 +187,24 @@ export const getHazardsWithCategories = async (
       pageSize: Number(pageSize),
     });
 
-    const [subscription, categories, hazards] = await Promise.all([
-      subscriptionPromise,
-      categoriesPromise,
-      hazardsPromise,
-    ]);
+    const [subscription, categoryFilters, severityFilters, hazards] =
+      await Promise.all([
+        subscriptionPromise,
+        categoriesPromise,
+        severitiesPromise,
+        hazardsPromise,
+      ]);
 
     const subscriptionId = subscription?.id;
 
     // If no hazards found, return empty categories and hazards
     if (hazards.length === 0) {
-      return res
-        .status(200)
-        .json({ subscriptionId, categories: [], hazards: [] });
+      return res.status(200).json({
+        subscriptionId,
+        categoryFilters: [],
+        severityFilters: [],
+        hazards: [],
+      });
     }
 
     // Enrich hazards with presigned URLs for media access
@@ -189,9 +212,12 @@ export const getHazardsWithCategories = async (
       hazards
     );
 
-    res
-      .status(200)
-      .json({ subscriptionId, categories, hazards: hazardsWithPresignedUrls });
+    res.status(200).json({
+      subscriptionId,
+      categoryFilters,
+      severityFilters,
+      hazards: hazardsWithPresignedUrls,
+    });
   } catch (error) {
     next(error);
   }

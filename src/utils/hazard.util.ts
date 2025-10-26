@@ -23,6 +23,7 @@ export const buildHazardsWhereClause = (
   const {
     searchString,
     categoryIds,
+    severities,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -74,6 +75,16 @@ export const buildHazardsWhereClause = (
     andConditions.push({
       categoryId: {
         in: categoryIdArray,
+      },
+    });
+  }
+
+  // Apply severities filter if provided
+  if (severities && severities.length > 0) {
+    const severityArray = Array.isArray(severities) ? severities : [severities];
+    andConditions.push({
+      severity: {
+        in: severityArray as HazardSeverity[],
       },
     });
   }
@@ -180,6 +191,7 @@ export const buildHazardsWhereClauseRaw = (
   const {
     searchString,
     categoryIds,
+    severities,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -216,6 +228,16 @@ export const buildHazardsWhereClauseRaw = (
     const placeholders = categoryArray.map(() => `$${paramIndex++}`).join(",");
     whereConditions.push(`h."categoryId" IN (${placeholders})`);
     queryParams.push(...categoryArray);
+  }
+
+  // Apply severities filter if provided
+  if (severities && severities.length > 0) {
+    const severityArray = Array.isArray(severities) ? severities : [severities];
+    const severityPlaceholders = severityArray
+      .map(() => `$${paramIndex++}::"HazardSeverity"`)
+      .join(",");
+    whereConditions.push(`h.severity IN (${severityPlaceholders})`);
+    queryParams.push(...severityArray);
   }
 
   // Apply reporter filter if provided
