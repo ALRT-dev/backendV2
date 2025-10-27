@@ -2,6 +2,7 @@ import { HazardReviewStatus, type Hazard, type Prisma } from "@prisma/client";
 import {
   parseAirQualityToHazards,
   parseBoMWarningsToHazards,
+  parseCFSFeedToHazards,
   parseGeoJsonToHazards,
   parseRSSFeedToHazards,
 } from "../utils/ingestion.util.js";
@@ -692,7 +693,11 @@ export const getHazardsDataFromCFS = async (): Promise<
 > => {
   try {
     const url =
-      "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.xml";
+      "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json";
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch CFS data: ${response.statusText}`);
+    }
 
     const category = await prisma.hazardCategory.findFirst({
       where: { name: "Weather & Environment" },
@@ -714,7 +719,8 @@ export const getHazardsDataFromCFS = async (): Promise<
       update: {},
     });
 
-    const hazards = await parseRSSFeedToHazards(url, category.id, "cfs");
+    const data = await response.json();
+    const hazards = parseCFSFeedToHazards(data, category.id);
 
     return hazards.map((hazard) => ({
       ...hazard,

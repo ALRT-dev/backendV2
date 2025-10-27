@@ -308,6 +308,72 @@ export async function parseRSSFeedToHazards(
   });
 }
 
+/**
+ * Converts CFS (Country Fire Service) incident data into an array of Hazard objects
+ *
+ * @param data - Array of CFS incident objects
+ * @param categoryId - The hazard category ID to associate with these incidents
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const cfsData = [
+ *   {
+ *     "IncidentNo": "1668253",
+ *     "Date": "27/10/2025",
+ *     "Time": "17:17",
+ *     "Type": "Vehicle Accident",
+ *     "Status": "GOING",
+ *     "Level": 1,
+ *     "Location_name": "MUNNO PARA DOWNS, STEBONHEATH RD/DALKEITH RD",
+ *     "Location": "-34.6420957116545,138.688921293742"
+ *   }
+ * ];
+ * const hazards = parseCFSFeedToHazards(cfsData, categoryId);
+ * ```
+ */
+export function parseCFSFeedToHazards(
+  data: any[],
+  categoryId: string
+): Prisma.HazardCreateInput[] {
+  if (!Array.isArray(data) || !data.length) return [];
+
+  return data.filter(Boolean).map((incident) => {
+    const { IncidentNo, Date, Time, Location_name, Type, Location } = incident;
+
+    // Parse coordinates from Location field (format: "lat,lng")
+    const coordinates = parseLocationCoordinates(Location);
+
+    // Create date from Date and Time fields
+    const occurredAt = parseCFSIncidentDateTime(Date, Time);
+
+    // Create title from incident type and location
+    const title = `${Type || "Incident"} - ${
+      Location_name || "Unknown Location"
+    }`;
+
+    // Build description with available details
+    const description = buildCFSDescription(incident);
+
+    // Generate unique ID for the incident
+    const hazardId = IncidentNo && `cfs-${IncidentNo}`;
+
+    const hazard: Prisma.HazardCreateInput = {
+      id: hazardId,
+      title,
+      description,
+      category: {
+        connect: { id: categoryId },
+      },
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      occurredAt,
+    };
+
+    return hazard;
+  });
+}
+
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
 
 /**
@@ -593,4 +659,94 @@ export function extractRSSCoordinates(item: any): {
   }
 
   return { latitude, longitude };
+}
+
+/**
+ * Parses location coordinates from Location field
+ * @param location - Location string in format "lat,lng"
+ * @returns Object with latitude and longitude or null values
+ */
+function parseLocationCoordinates(location?: string): {
+  latitude: number | null;
+  longitude: number | null;
+} {
+  if (!location || typeof location !== "string") {
+    return { latitude: null, longitude: null };
+  }
+
+  const parts = location.split(",");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return { latitude: null, longitude: null };
+  }
+
+  const lat = parseFloat(parts[0].trim());
+  const lng = parseFloat(parts[1].trim());
+
+  if (isNaN(lat) || isNaN(lng)) {
+    return { latitude: null, longitude: null };
+  }
+
+  return { latitude: lat, longitude: lng };
+}
+
+/**
+ * Parses CFS date and time into a JavaScript Date object
+ * @param date - Date string in DD/MM/YYYY format
+ * @param time - Time string in HH:MM format
+ * @returns Date object
+ */
+function parseCFSIncidentDateTime(date?: string, time?: string): Date {
+  if (!date) {
+    return new Date();
+  }
+
+  let dateTimeString = date;
+  if (time) {
+    dateTimeString += ` ${time}`;
+  }
+
+  return parseValidDate(dateTimeString);
+}
+
+/**
+ * Builds a descriptive text for CFS incidents
+ * @param incident - CFS incident object
+ * @returns Formatted description string
+ */
+function buildCFSDescription(incident: any): string {
+  const parts: string[] = [];
+
+  if (incident.Type) {
+    parts.push(`Incident Type: ${incident.Type}`);
+  }
+
+  if (incident.Status) {
+    parts.push(`Status: ${incident.Status}`);
+  }
+
+  if (incident.Level) {
+    parts.push(`Level: ${incident.Level}`);
+  }
+
+  if (incident.FBD) {
+    parts.push(`Fire Ban District: ${incident.FBD}`);
+  }
+
+  if (incident.Region) {
+    parts.push(`Region: ${incident.Region}`);
+  }
+
+  if (incident.Resources) {
+    parts.push(`Resources: ${incident.Resources}`);
+  }
+
+  if (incident.Aircraft) {
+    parts.push(`Aircraft: ${incident.Aircraft}`);
+  }
+
+  if (incident.Message && incident.Message.trim()) {
+    parts.push(`Message: ${incident.Message.trim()}`);
+  }
+
+  return parts.join("\n");
 }
