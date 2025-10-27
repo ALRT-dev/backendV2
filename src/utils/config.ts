@@ -67,4 +67,9 @@ export const config = {
   nswTransportApi: {
     apiKey: getOptionalEnv("NSW_TRANSPORT_API_KEY", ""),
   },
+
+  // Google Maps API
+  googleMapsApi: {
+    apiKey: getOptionalEnv("GOOGLE_MAPS_API_KEY", ""),
+  },
 };

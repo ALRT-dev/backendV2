@@ -98,12 +98,16 @@ export function parseBoMWarningsToHazards(
   if (!data?.results?.length) return [];
 
   return data.results.map((item: any) => {
-    const description = cleanDescription(item.summary || "");
-    const id = item.identifier && `bom-${item.warning_id}`;
+    const description = cleanDescription(
+      item.summary || item.warning_title || ""
+    );
+    const id = item.identifier && `bom-${item.identifier}`;
+
     const hazard: Prisma.HazardCreateInput = {
       id,
       title: item.warning_title || "Unnamed Warning",
       description,
+      locationName: item.location,
       category: {
         connect: { id: categoryId },
       },

@@ -20,6 +20,10 @@ import {
   type HazardForConfidenceCalculation,
 } from "./confidence_score.service.js";
 import { config } from "../utils/config.js";
+import {
+  convertAddressToLatLng,
+  convertLatLngToAddress,
+} from "./google_map.service.js";
 
 /**
  * Syncs hazards from different sources (RFS and BoM) to the database.
@@ -244,6 +248,9 @@ const summarizeAndPostHazards = async (
   hazardDatas: Prisma.HazardCreateInput[]
 ): Promise<Hazard[]> => {
   try {
+    // First, populate missing geocoding information if any
+    hazardDatas = await populateHazardsWithGeocoding(hazardDatas);
+
     const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
       [];
     const createdHazardPromises: Promise<Hazard | null>[] = [];
@@ -837,3 +844,76 @@ export function generateHazardId(obj: Prisma.HazardCreateInput): string {
   const str = JSON.stringify(data);
   return crypto.createHash("sha256").update(str).digest("hex").slice(0, 16);
 }
+
+/**
+ * Populates hazards with missing geocoding information.
+ * If latitude/longitude is missing, it uses the locationName to fetch coordinates.
+ * If locationName is missing, it uses latitude/longitude to fetch the address.
+ */
+const populateHazardsWithGeocoding = async (
+  hazards: Prisma.HazardCreateInput[]
+): Promise<Prisma.HazardCreateInput[]> => {
+  const populatedHazardsPromise: Promise<Prisma.HazardCreateInput>[] = [];
+
+  for (const hazard of hazards) {
+    if (!hazard.latitude || !hazard.longitude) {
+      if (hazard.locationName) {
+        const promise = convertAddressToLatLng(hazard.locationName)
+          .then((result) => {
+            if (result && result.geometry && result.geometry.location) {
+              hazard.latitude = result.geometry.location.lat;
+              hazard.longitude = result.geometry.location.lng;
+            } else {
+              console.warn(
+                `Geocoding failed for hazard location: ${hazard.locationName}`
+              );
+            }
+            return hazard;
+          })
+          .catch((error) => {
+            console.error(
+              `Error during geocoding for hazard location: ${hazard.locationName}`,
+              error
+            );
+            return hazard;
+          });
+
+        populatedHazardsPromise.push(promise);
+        continue;
+      }
+    }
+
+    if (hazard.latitude && hazard.longitude) {
+      if (!hazard.locationName) {
+        const promise = convertLatLngToAddress(
+          hazard.latitude,
+          hazard.longitude
+        )
+          .then((address) => {
+            if (address) {
+              hazard.locationName = address;
+            } else {
+              console.warn(
+                `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
+              );
+            }
+            return hazard;
+          })
+          .catch((error) => {
+            console.error(
+              `Error during reverse geocoding for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`,
+              error
+            );
+            return hazard;
+          });
+
+        populatedHazardsPromise.push(promise);
+        continue;
+      }
+    }
+
+    populatedHazardsPromise.push(Promise.resolve(hazard));
+  }
+
+  return Promise.all(populatedHazardsPromise);
+};
