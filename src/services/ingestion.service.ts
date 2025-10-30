@@ -4,6 +4,7 @@ import {
   parseBoMWarningsToHazards,
   parseCFSFeedToHazards,
   parseGeoJsonToHazards,
+  parseNTFireAndRescueToHazards,
   parseRSSFeedToHazards,
 } from "../utils/ingestion.util.js";
 import crypto from "crypto";
@@ -43,6 +44,7 @@ export const syncHazardsFromDifferentSources = async () => {
       syncHazardsFromCFS(),
       syncHazardsFromViceFireServices(),
       syncHazardsFromQLDFireDepartment(),
+      syncHazardsFromNTFireAndRescue(),
     ]);
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
@@ -238,6 +240,29 @@ export const syncHazardsFromQLDFireDepartment = async () => {
     );
   } catch (error) {
     console.error("Error during QLD Fire Department hazard sync:", error);
+  }
+};
+
+/**
+ * Syncs hazards from the NT Fire and Rescue feed to the database.
+ * Fetches data, summarizes it using AI, and stores new hazards in the database.
+ * Sends notifications for newly created hazards.
+ */
+export const syncHazardsFromNTFireAndRescue = async () => {
+  try {
+    const ntFireHazards = await getHazardsFromNTFireAndRescue();
+
+    console.log(
+      `------------------------------------> Fetched ${ntFireHazards.length} hazards from NT Fire and Rescue.`
+    );
+
+    const createdHazards = await summarizeAndPostHazards(ntFireHazards);
+
+    console.log(
+      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from NT Fire and Rescue.`
+    );
+  } catch (error) {
+    console.error("Error during NT Fire and Rescue hazard sync:", error);
   }
 };
 
@@ -828,6 +853,59 @@ export const getHazardsDataFromQLDFireDepartment = async (): Promise<
     }));
   } catch (error) {
     console.error("Error fetching Vice Fire Service data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the NT Fire and Rescue feed
+ * and converts it into an array of HazardCreateInput objects.
+ */
+export const getHazardsFromNTFireAndRescue = async (): Promise<
+  Prisma.HazardCreateInput[]
+> => {
+  try {
+    const url = "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json";
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch RFS data: ${response.statusText}`);
+    }
+
+    const category = await prisma.hazardCategory.findFirst({
+      where: { name: "Weather & Environment" },
+      select: { id: true },
+    });
+    if (!category) {
+      throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        url,
+      },
+      create: {
+        name: "NT Fire and Rescue",
+        url,
+      },
+      update: {},
+    });
+
+    const data = await response.json();
+    const hazards = parseNTFireAndRescueToHazards(data, category.id);
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: {
+        connect: {
+          id: source.id,
+        },
+      },
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching NT Fire and Rescue data:", error);
     return [];
   }
 };

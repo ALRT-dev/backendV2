@@ -1,5 +1,11 @@
 import { HazardSeverity, type Prisma } from "@prisma/client";
-import type { FeatureCollection, Geometry, Point } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  Geometry,
+  Point,
+} from "geojson";
 import Parser from "rss-parser";
 
 /**
@@ -38,35 +44,43 @@ export function parseGeoJsonToHazards(
 ): Prisma.HazardCreateInput[] {
   if (!data.features?.length) return [];
 
-  return data.features.map((feature) => {
-    const { id, properties, geometry } = feature;
+  return data.features
+    .map((feature) => {
+      const { id, properties, geometry } = feature;
 
-    const point = extractFirstPoint(geometry);
-    const latitude = point?.[1] ?? null;
-    const longitude = point?.[0] ?? null;
+      const point = extractFirstPoint(geometry);
+      const latitude = point?.[1] ?? null;
+      const longitude = point?.[0] ?? null;
 
-    const title =
-      properties?.title || properties?.displayName || "Untitled Hazard";
-    const description = cleanDescription(
-      properties?.description || properties?.otherAdvice || ""
-    );
+      // If no coordinates, skip this hazard
+      if (!latitude && !longitude) {
+        return null;
+      }
 
-    const hazardId = id && `${idPrefix}-${id}`;
+      const title =
+        properties?.title || properties?.displayName || "Untitled Hazard";
 
-    const hazard: Prisma.HazardCreateInput = {
-      ...(hazardId && { id: hazardId }),
-      title,
-      description,
-      category: {
-        connect: { id: categoryId },
-      },
-      latitude,
-      longitude,
-      occurredAt: parseValidDate(properties?.pubDate),
-    };
+      const description = cleanDescription(
+        properties?.description || properties?.otherAdvice || ""
+      );
 
-    return hazard;
-  });
+      const hazardId = id && `${idPrefix}-${id}`;
+
+      const hazard: Prisma.HazardCreateInput = {
+        ...(hazardId && { id: hazardId }),
+        title,
+        description,
+        category: {
+          connect: { id: categoryId },
+        },
+        latitude,
+        longitude,
+        occurredAt: parseValidDate(properties?.pubDate),
+      };
+
+      return hazard;
+    })
+    .filter((hazard): hazard is Prisma.HazardCreateInput => hazard !== null);
 }
 
 /**
@@ -372,6 +386,106 @@ export function parseCFSFeedToHazards(
 
     return hazard;
   });
+}
+
+/**
+ * Converts NT Fire and Rescue incident data into an array of Hazard objects
+ *
+ * @param data - NT Fire and Rescue response object containing incidents FeatureCollection
+ * @param categoryId - The hazard category ID to associate with these incidents
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const ntFireData = {
+ *   "title": "NT Incident Map",
+ *   "lastupdated": "2025-10-30T21:30:02.2119132+09:30",
+ *   "incidents": {
+ *     "type": "FeatureCollection",
+ *     "features": [
+ *       {
+ *         "type": "Feature",
+ *         "geometry": {
+ *           "type": "Point",
+ *           "coordinates": [130.83513366511, -12.45823778393]
+ *         },
+ *         "properties": {
+ *           "_category": "fire",
+ *           "_status": "active",
+ *           "_eventtype": "Grass and Scrub Fire",
+ *           "_location": "BAGOT RD, EATON",
+ *           "_datenotified": "2025-10-30T18:50:31+09:30",
+ *           "Alert Level": "Advice"
+ *         }
+ *       }
+ *     ]
+ *   }
+ * };
+ * const hazards = parseNTFireToHazards(ntFireData, categoryId);
+ * ```
+ */
+export function parseNTFireAndRescueToHazards(
+  data: any,
+  categoryId: string
+): Prisma.HazardCreateInput[] {
+  if (!data?.incidents?.features?.length) return [];
+
+  return data.incidents.features
+    .map((feature: Feature<Geometry, GeoJsonProperties>) => {
+      const { geometry, properties } = feature;
+
+      if (properties?._status === "closed") {
+        return null;
+      }
+
+      // Extract coordinates from geometry
+      const coordinates = extractNTFireAndRescueCoordinates(geometry);
+
+      // Create unique ID from internal properties
+      const hazardId = generateNTFireAndRescueId(properties);
+
+      // Create title from event type and location
+      const title = `${
+        properties?._eventtype || properties?.["Fire Type"] || "Incident"
+      } - ${
+        properties?._location || properties?.Location || "Unknown Location"
+      }`;
+
+      // Build description with available details
+      const description = buildNTFireAndRescueDescription(properties);
+
+      // Parse notification date
+      const occurredAt = parseValidDate(
+        properties?._datenotified || properties?.Notified
+      );
+
+      // Parse closed date for expiry if available
+      const expiresAt = properties?._dateclosed
+        ? parseValidDate(properties._dateclosed)
+        : null;
+
+      const hazard: Prisma.HazardCreateInput = {
+        ...(hazardId && { id: hazardId }),
+        title,
+        description,
+        locationName:
+          properties?._location || properties?.Location || undefined,
+        category: {
+          connect: { id: categoryId },
+        },
+        latitude: coordinates.latitude,
+        longitude: coordinates.longitude,
+        occurredAt,
+        expiresAt,
+      };
+
+      return hazard;
+    })
+    .filter(
+      (
+        hazard: Prisma.HazardCreateInput | null
+      ): hazard is Prisma.HazardCreateInput => hazard !== null
+    );
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
@@ -746,6 +860,142 @@ function buildCFSDescription(incident: any): string {
 
   if (incident.Message && incident.Message.trim()) {
     parts.push(`Message: ${incident.Message.trim()}`);
+  }
+
+  return parts.join("\n");
+}
+
+/**
+ * Extracts coordinates from NT Fire geometry (supports Point and Polygon)
+ * @param geometry - GeoJSON geometry object
+ * @returns Object with latitude and longitude or null values
+ */
+function extractNTFireAndRescueCoordinates(geometry?: any): {
+  latitude: number | null;
+  longitude: number | null;
+} {
+  if (!geometry?.coordinates) {
+    return { latitude: null, longitude: null };
+  }
+
+  try {
+    if (geometry.type === "Point") {
+      const [lng, lat] = geometry.coordinates;
+      return {
+        latitude: typeof lat === "number" ? lat : null,
+        longitude: typeof lng === "number" ? lng : null,
+      };
+    } else if (geometry.type === "Polygon") {
+      // For polygons, use the centroid of the first ring
+      const ring = geometry.coordinates[0];
+      if (Array.isArray(ring) && ring.length > 0) {
+        let latSum = 0;
+        let lngSum = 0;
+        let validPoints = 0;
+
+        for (const point of ring) {
+          if (Array.isArray(point) && point.length >= 2) {
+            const [lng, lat] = point;
+            if (typeof lng === "number" && typeof lat === "number") {
+              lngSum += lng;
+              latSum += lat;
+              validPoints++;
+            }
+          }
+        }
+
+        if (validPoints > 0) {
+          return {
+            latitude: latSum / validPoints,
+            longitude: lngSum / validPoints,
+          };
+        }
+      }
+    }
+  } catch (error) {
+    console.warn("Error parsing NT Fire coordinates:", error);
+  }
+
+  return { latitude: null, longitude: null };
+}
+
+/**
+ * Generates a unique ID for NT Fire incidents
+ * @param properties - Feature properties object
+ * @returns Generated ID string or undefined
+ */
+function generateNTFireAndRescueId(properties: any): string | undefined {
+  // Try to create a unique ID from available properties
+  const location = properties._location || properties.Location || "";
+  const eventType = properties._eventtype || properties["Fire Type"] || "";
+  const dateNotified = properties._datenotified || properties.Notified || "";
+
+  if (location && eventType && dateNotified) {
+    // Create a hash-like ID from key properties
+    const identifier = `${eventType}-${location}-${dateNotified}`
+      .replace(/[^a-zA-Z0-9]/g, "-")
+      .toLowerCase();
+    return `ntfire-${identifier.substring(0, 50)}`; // Limit length
+  }
+
+  return undefined;
+}
+
+/**
+ * Builds a descriptive text for NT Fire incidents
+ * @param properties - Feature properties object
+ * @returns Formatted description string
+ */
+function buildNTFireAndRescueDescription(properties: any): string {
+  const parts: string[] = [];
+
+  // Basic incident information
+  if (properties._eventtype || properties["Fire Type"]) {
+    parts.push(
+      `Event Type: ${properties._eventtype || properties["Fire Type"]}`
+    );
+  }
+
+  if (properties._status || properties.Status) {
+    parts.push(`Status: ${properties._status || properties.Status}`);
+  }
+
+  if (properties["Alert Level"]) {
+    parts.push(`Alert Level: ${properties["Alert Level"]}`);
+  }
+
+  if (properties["Current Situation"]) {
+    parts.push(`Current Situation: ${properties["Current Situation"]}`);
+  }
+
+  // Risk and advice information
+  if (properties.Risks) {
+    parts.push(`Risks: ${properties.Risks}`);
+  }
+
+  if (properties["What to do"]) {
+    parts.push(`What to do: ${properties["What to do"]}`);
+  }
+
+  if (properties["Advice to the Public"]) {
+    parts.push(`Advice: ${properties["Advice to the Public"]}`);
+  }
+
+  // Agency and timing information
+  if (properties["Responsible Agency"]) {
+    parts.push(`Responsible Agency: ${properties["Responsible Agency"]}`);
+  }
+
+  if (properties["Last Update"]) {
+    parts.push(`Last Update: ${properties["Last Update"]}`);
+  }
+
+  if (properties.Notified) {
+    parts.push(`Notified: ${properties.Notified}`);
+  }
+
+  if (properties.Closed) {
+    parts.push(`Closed: ${properties.Closed}`);
   }
 
   return parts.join("\n");
