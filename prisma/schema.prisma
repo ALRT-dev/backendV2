@@ -1,4 +1,4 @@
-// Run `npx prisma migrate dev` to update your database schema.
+// Run `yarn prisma:migrate:dev` to update your database schema.
 
 generator client {
   provider        = "prisma-client-js"
@@ -40,9 +40,9 @@ model User {
 }
 
 model HazardCategory {
-  id    String  @id @default(uuid())
-  name  String  @unique
-  emoji String?
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
 
   hazards Hazard[]
 

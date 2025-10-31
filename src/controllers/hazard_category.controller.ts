@@ -43,7 +43,7 @@ export const createHazardCategory = async (
   next: NextFunction
 ) => {
   try {
-    const { name, emoji }: CreateHazardCategoryInput = req.body;
+    const { name, description }: CreateHazardCategoryInput = req.body;
 
     const existingCategory = await prisma.hazardCategory.findUnique({
       where: { name },
@@ -53,7 +53,7 @@ export const createHazardCategory = async (
     }
 
     const newCategory = await prisma.hazardCategory.create({
-      data: { name, emoji: emoji || null },
+      data: { name, description: description || null },
     });
 
     res.status(201).json(newCategory);
@@ -68,26 +68,120 @@ export const populateCategories = async (
   next: NextFunction
 ) => {
   try {
-    const categories = [
-      { name: "Safety & Security", emoji: "🔒" },
-      { name: "Traffic & Transport", emoji: "🚗" },
-      { name: "Weather & Environment", emoji: "🌧️" },
-      { name: "Health & Emergency", emoji: "🚑" },
-      { name: "Infrastructure & Services", emoji: "🏗️" },
+    const categories: Prisma.HazardCategoryCreateInput[] = [
+      {
+        id: "safetyAndSecurity",
+        name: "Safety & Security",
+        description: "Crime, Civil Unrest, Terror Threat",
+      },
+      {
+        id: "healthAndEmergency",
+        name: "Health & Emergency",
+        description: "Outbreaks, Mass Casualty Incidents",
+      },
+      {
+        id: "weatherAndEnvironment",
+        name: "Weather & Environment",
+        description: "Storms, Flood, Fire, Smoke",
+      },
+      {
+        id: "transportAndTravel",
+        name: "Transport & Travel",
+        description: "Road, Transport Disruptions",
+      },
+      {
+        id: "infrastructureAndServices",
+        name: "Infrastructure & Services",
+        description: "Power, Communications, Hazmat",
+      },
+      {
+        id: "crowdsAndEvents",
+        name: "Crowds & Events",
+        description: "Festivals, Protests, Large Groups",
+      },
+      {
+        id: "bushfire",
+        name: "Bushfire",
+        description: "Wildfires, Forest Fires, Grass Fires",
+      },
+      {
+        id: "coastalHazard",
+        name: "Coastal Hazard",
+        description: "Tsunami, Coastal Flooding, Storm Surge",
+      },
+      {
+        id: "cyclone",
+        name: "Cyclone",
+        description: "Tropical Cyclones, Hurricanes, Typhoons",
+      },
+      {
+        id: "damagingWinds",
+        name: "Damaging Winds",
+        description: "Derecho, Straight-line Winds, Downbursts",
+      },
+      {
+        id: "earthquake",
+        name: "Earthquake",
+        description: "Seismic Activity, Tremors, Aftershocks",
+      },
+      {
+        id: "flood",
+        name: "Flood",
+        description: "Riverine Flooding, Flash Flooding, Urban Flooding",
+      },
+      {
+        id: "hazmat",
+        name: "Hazmat",
+        description:
+          "Chemical Spills, Radiological Incidents, Biological Hazards",
+      },
+      {
+        id: "heatwave",
+        name: "Heatwave",
+        description: "Extreme Heat Events, Prolonged High Temperatures",
+      },
+      {
+        id: "humanPandemic",
+        name: "Human Pandemic",
+        description: "Widespread Infectious Diseases, Global Health Crises",
+      },
+      {
+        id: "smoke",
+        name: "Smoke",
+        description: "Air Quality Issues, Smoke from Fires, Pollution Events",
+      },
+      {
+        id: "storm",
+        name: "Storm",
+        description: "Severe Thunderstorms, Hailstorms, Tornadoes",
+      },
+      {
+        id: "structuralFire",
+        name: "Structural Fire",
+        description: "Building Fires, Residential and Commercial Fires",
+      },
+      {
+        id: "tsunami",
+        name: "Tsunami",
+        description: "Seismic Sea Waves, Coastal Inundation Events",
+      },
+      {
+        id: "powerOutage",
+        name: "Power Outage",
+        description: "Electrical Failures, Blackouts, Grid Disruptions",
+      },
+      {
+        id: "other",
+        name: "Other",
+        description: "Miscellaneous Hazards Not Classified Elsewhere",
+      },
     ];
-
-    const categoriesData: Prisma.HazardCategoryCreateInput[] = categories.map(
-      (category) => ({
-        name: category.name,
-        emoji: category.emoji,
-      })
-    );
 
     const createdCategories = [];
 
-    for (const categoryData of categoriesData) {
+    for (const categoryData of categories) {
       const existingCategory = await prisma.hazardCategory.findUnique({
-        where: { name: categoryData.name },
+        where: { id: categoryData.id! },
       });
       if (existingCategory) {
         continue; // Skip creation if category already exists

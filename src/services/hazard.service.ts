@@ -157,7 +157,7 @@ export const getHazardsApplyingFiltersRaw = async (
     SELECT 
       h.*,
       hc.name as "categoryName",
-      hc.emoji as "categoryEmoji", 
+      hc.description as "categoryDescription", 
       hs.name as "sourceName",
       hs.url as "sourceUrl",
       u.id as "reportedByUserId",
@@ -206,7 +206,7 @@ export const getHazardsApplyingFiltersRaw = async (
 
   query += `
     WHERE ${whereClause}
-    GROUP BY h.id, hc.name, hc.emoji, hs.name, hs.url, u.id, u.name, u.email`;
+    GROUP BY h.id, hc.name, hc.description, hs.name, hs.url, u.id, u.name, u.email`;
 
   if (userId) {
     query += `, v."voteType"`;
@@ -265,7 +265,7 @@ export const getHazardsApplyingFiltersRaw = async (
       reportedByName,
       reportedByEmail,
       categoryName,
-      categoryEmoji,
+      categoryDescription,
       sourceName,
       sourceUrl,
       userVoteType,
@@ -281,7 +281,7 @@ export const getHazardsApplyingFiltersRaw = async (
         ? {
             id: hazard.categoryId,
             name: categoryName,
-            emoji: categoryEmoji,
+            description: categoryDescription,
           }
         : null,
       source: hazard.sourceId
@@ -398,10 +398,10 @@ export const summarizeHazard = async ({
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
 
     SEVERITY LEVELS:
-    - "info": General awareness, no immediate action needed (traffic updates, minor incidents)
-    - "advice": Caution recommended (weather warnings, road closures)
-    - "watchAndAct": Active monitoring and preparation needed (approaching storms, evacuation warnings)
-    - "emergency": Immediate danger requiring urgent action (active fires, severe flooding)
+    - "info": General information about a hazard. (Eg: Smoke visible near city outskirts, Minor road blockage, Air quality advisory etc.)
+    - "advice": An incident has started. There is no immediate danger. Stay up to date in case the situation changes. (Eg: Small bushfire contained, Floodwater rising, Gas leak under investigation etc.)
+    - "watchAndAct": There is a heightened level of threat. Conditions are changing and you need to start taking action now to protect you and your family. (Eg: Bushfire approaching, Flash flood possible, Landslide warning etc.)
+    - "emergency": An Emergency Warning is the highest level of warning. You may be in danger and need to take action immediately. Any delay now puts your life at risk. (Eg: Major fire emergency, Severe flood warning, Evacuate immediately etc.)
 
     CONFIDENCE LEVELS:
     - "high": Detailed, specific, credible information with clear location and time
@@ -412,9 +412,9 @@ export const summarizeHazard = async ({
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (a 3-4 sentence summary of the hazard)",
-      "confidence": "high|medium|low (based on detail quality and specificity)",
-      "severity": "info|advice|watchAndAct|emergency (based on immediate danger level)"
+      "summary": "string (a 2-3 sentence summary of the hazard)",
+      "severity": "info|advice|watchAndAct|emergency (based on SEVERITY LEVELS described above)"
+      "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
     }
     `;
 

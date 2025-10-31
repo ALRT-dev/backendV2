@@ -421,11 +421,11 @@ export const getHazardsDataFromRFS = async (): Promise<
     }
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "bushfire" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Weather & Environment' not found");
+      throw new Error("Hazard category 'Bushfire' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -474,7 +474,7 @@ export const getHazardsDataFromBoM = async (): Promise<
     }
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "weatherAndEnvironment" },
       select: { id: true },
     });
     if (!category) {
@@ -537,11 +537,11 @@ export const getHazardsDataFromLiveTrafficHazards = async (): Promise<
     ];
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Traffic & Transport" },
+      where: { id: "transportAndTravel" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Traffic & Transport' not found");
+      throw new Error("Hazard category 'Transport & Travel' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -625,7 +625,7 @@ export const getHazardsDataFromAirQuality = async (): Promise<
     }
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "weatherAndEnvironment" },
       select: { id: true },
     });
     if (!category) {
@@ -672,12 +672,32 @@ export const getHazardsDataFromACT = async (): Promise<
   try {
     const url = "https://esa.act.gov.au/feeds/currentincidents.xml";
 
-    const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+    const categories = await prisma.hazardCategory.findMany({
+      where: {
+        id: {
+          in: ["bushfire", "weatherAndEnvironment", "healthAndEmergency"],
+        },
+      },
       select: { id: true },
     });
-    if (!category) {
+
+    const bushfireCategory = categories.find((cat) => cat.id === "bushfire");
+    if (!bushfireCategory) {
+      throw new Error("Hazard category 'Bushfire' not found");
+    }
+
+    const weatherAndEnvCategory = categories.find(
+      (cat) => cat.id === "weatherAndEnvironment"
+    );
+    if (!weatherAndEnvCategory) {
       throw new Error("Hazard category 'Weather & Environment' not found");
+    }
+
+    const healthAndEmergencyCategory = categories.find(
+      (cat) => cat.id === "healthAndEmergency"
+    );
+    if (!healthAndEmergencyCategory) {
+      throw new Error("Hazard category 'Health & Emergency' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -692,13 +712,26 @@ export const getHazardsDataFromACT = async (): Promise<
       update: {},
     });
 
-    const hazards = await parseRSSFeedToHazards(url, category.id, "act-es");
+    const hazards = await parseRSSFeedToHazards(
+      url,
+      weatherAndEnvCategory.id,
+      "act-es"
+    );
 
     return hazards.map((hazard) => ({
       ...hazard,
       source: {
         connect: {
           id: source.id,
+        },
+      },
+      category: {
+        connect: {
+          id: hazard.description?.toLowerCase().includes("agency: fire")
+            ? bushfireCategory.id
+            : hazard.description?.toLowerCase().includes("agency: ambulance")
+            ? healthAndEmergencyCategory.id
+            : weatherAndEnvCategory.id,
         },
       },
       id: hazard.id || generateHazardId(hazard),
@@ -725,11 +758,11 @@ export const getHazardsDataFromCFS = async (): Promise<
     }
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "bushfire" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Weather & Environment' not found");
+      throw new Error("Hazard category 'Bushfire' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -773,11 +806,11 @@ export const getHazardsDataFromViceFireServices = async (): Promise<
     const url = "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS";
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "bushfire" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Weather & Environment' not found");
+      throw new Error("Hazard category 'Bushfire' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -821,11 +854,11 @@ export const getHazardsDataFromQLDFireDepartment = async (): Promise<
       "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml";
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "bushfire" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Weather & Environment' not found");
+      throw new Error("Hazard category 'Bushfire' not found");
     }
 
     // Ensure the source exists before creating hazards
@@ -873,11 +906,11 @@ export const getHazardsFromNTFireAndRescue = async (): Promise<
     }
 
     const category = await prisma.hazardCategory.findFirst({
-      where: { name: "Weather & Environment" },
+      where: { id: "bushfire" },
       select: { id: true },
     });
     if (!category) {
-      throw new Error("Hazard category 'Weather & Environment' not found");
+      throw new Error("Hazard category 'Bushfire' not found");
     }
 
     // Ensure the source exists before creating hazards
