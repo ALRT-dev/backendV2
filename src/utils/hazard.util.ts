@@ -366,11 +366,12 @@ export const buildHazardsOrderByClauseRaw = (
         const direction = setting.severity.toUpperCase();
         orderByClauses.push(`
             CASE h.severity
-              WHEN 'info' THEN 1
-              WHEN 'advice' THEN 2
-              WHEN 'watchAndAct' THEN 3
-              WHEN 'emergency' THEN 4
-              ELSE 5
+              WHEN 'unknown' THEN 1
+              WHEN 'info' THEN 2
+              WHEN 'advice' THEN 3
+              WHEN 'watchAndAct' THEN 4
+              WHEN 'emergency' THEN 5
+              ELSE 6
             END ${direction}`);
       }
 
