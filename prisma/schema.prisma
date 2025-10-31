@@ -51,6 +51,7 @@ model HazardCategory {
 }
 
 enum HazardSeverity {
+  unknown
   info
   advice
   watchAndAct
@@ -71,7 +72,7 @@ model Hazard {
   aiSummary        String?
   aiSeverity       HazardSeverity?
   aiConfidence     AIConfidence?
-  severity         HazardSeverity  @default(info)
+  severity         HazardSeverity  @default(unknown)
 
   latitude     Float?
   longitude    Float?

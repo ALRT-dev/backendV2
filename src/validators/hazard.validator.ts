@@ -11,7 +11,7 @@ export const createHazardDataSchema = z.object({
     .min(1, "Description is required")
     .max(1000, "Description must be less than 1000 characters"),
 
-  categoryId: z.string().uuid("Category ID must be a valid UUID"),
+  categoryId: z.string(),
 
   latitude: z
     .number()
@@ -28,11 +28,6 @@ export const createHazardDataSchema = z.object({
     .min(1, "Location name is required")
     .max(200, "Location name must be less than 200 characters")
     .optional(),
-
-  severity: z
-    .enum(["info", "advice", "watchAndAct", "emergency"])
-    .optional()
-    .default("info"),
 
   occurredAt: z.string().datetime().optional(),
 });
@@ -68,7 +63,7 @@ export const updateHazardDataSchema = z.object({
     .max(1000, "Description must be less than 1000 characters")
     .optional(),
 
-  categoryId: z.string().uuid("Category ID must be a valid UUID").optional(),
+  categoryId: z.string().optional(),
 
   latitude: z
     .number()
@@ -87,8 +82,6 @@ export const updateHazardDataSchema = z.object({
     .min(1, "Location name is required")
     .max(200, "Location name must be less than 200 characters")
     .optional(),
-
-  severity: z.enum(["info", "advice", "watchAndAct", "emergency"]).optional(),
 
   occurredAt: z.iso.datetime().optional(),
 });

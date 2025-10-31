@@ -9,7 +9,10 @@
     "build": "tsc",
     "start": "NODE_ENV=prod node dist/index.js",
     "prisma:migrate:dev": "dotenv -e .env.dev -- npx prisma migrate dev",
-    "prisma:migrate:reset": "dotenv -e .env.dev -- npx prisma migrate reset"
+    "prisma:migrate:reset": "dotenv -e .env.dev -- npx prisma migrate reset",
+    "prisma:migrate:status": "dotenv -e .env.dev -- npx prisma migrate status",
+    "prisma:migrate:resolve": "dotenv -e .env.dev -- npx prisma migrate resolve",
+    "prisma:generate": "dotenv -e .env.dev -- npx prisma generate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.913.0",

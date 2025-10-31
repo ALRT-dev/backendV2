@@ -2,10 +2,10 @@ import type { NextFunction, Request, Response } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import {
   HazardReviewStatus,
+  HazardSeverity,
   HazardVoteType,
   MediaType,
   type Hazard,
-  type HazardSeverity,
 } from "@prisma/client";
 import {
   getHazardsApplyingFiltersRaw,
@@ -270,7 +270,6 @@ export const createHazard = async (
       latitude,
       longitude,
       locationName,
-      severity,
       occurredAt,
     } = hazardData;
     const { userId } = res;
@@ -316,7 +315,6 @@ export const createHazard = async (
         latitude,
         longitude,
         locationName,
-        severity,
         occurredAt: occurredAt || new Date(),
       });
     } catch (error) {
@@ -356,7 +354,7 @@ export const createHazard = async (
 
       // Create hazard data for confidence calculation
       const hazardForCalculation: HazardForConfidenceCalculation = {
-        severity,
+        severity: HazardSeverity.unknown,
         aiConfidence: aiConfidence || null,
         upvoteCount: 0,
         downvoteCount: 0,
@@ -393,7 +391,6 @@ export const createHazard = async (
           latitude,
           longitude,
           locationName,
-          severity,
           confidenceScore,
           confidenceScoreCalculatedAt: new Date(),
           ...(occurredAt && { occurredAt: new Date(occurredAt) }),
@@ -557,7 +554,6 @@ export const updateHazard = async (
       latitude,
       longitude,
       locationName,
-      severity,
       occurredAt,
     } = hazardData;
 
@@ -592,7 +588,6 @@ export const updateHazard = async (
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
-        severity: severity || existingHazard.severity,
         occurredAt: occurredAt || existingHazard.occurredAt || new Date(),
       });
     } catch (error) {
@@ -636,7 +631,6 @@ export const updateHazard = async (
           ...(latitude && { latitude }),
           ...(longitude && { longitude }),
           ...(locationName && { locationName }),
-          ...(severity && { severity }),
           ...(occurredAt && { occurredAt: new Date(occurredAt) }),
           ...(reviewStatus === HazardReviewStatus.accepted && {
             expiresAt:
