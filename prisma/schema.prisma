@@ -51,11 +51,12 @@ model HazardCategory {
 }
 
 enum HazardSeverity {
-  unknown
-  info
-  advice
-  watchAndAct
-  emergency
+  unknown // Used only for user reported hazards
+  info // For AWS and Non-AWS: info
+  low // For AWS: <ignored> ------ For Non-AWS: low
+  advice // For AWS: advice ------ For Non-AWS: moderate
+  watchAndAct // For AWS: watchAndAct ------ For Non-AWS: high
+  emergency // For AWS: emergency ------ For Non-AWS: critical
 }
 
 enum AIConfidence {

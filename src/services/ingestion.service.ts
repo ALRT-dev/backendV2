@@ -19,8 +19,9 @@ import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import {
+  allowedSeveritiesAWS,
+  allowedSeveritiesNonAWS,
   buildHazardInclude,
-  getClosestAllowedSeverity,
   getHazardExpiryDateFromSeverity,
 } from "../utils/hazard.util.js";
 import {
@@ -67,86 +68,55 @@ export const syncHazardsFromDifferentSources = async () => {
       {
         name: "RFS",
         categoryId: "bushfire",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromRFS,
       },
       {
         name: "BoM",
         categoryId: "weatherAndEnvironment",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromBoM,
       },
       {
         name: "NSW Transport live traffic hazards",
         categoryId: "transportAndTravel",
         fetchFunction: getHazardsDataFromLiveTrafficHazards,
+        allowedSeverities: allowedSeveritiesNonAWS,
       },
       {
         name: "NSW air quality",
         categoryId: "weatherAndEnvironment",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromAirQuality,
       },
       {
         name: "ACT Emergency Services",
         categoryId: "healthAndEmergency",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromACT,
       },
       {
         name: "CFS",
         categoryId: "bushfire",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromCFS,
       },
       {
         name: "Vice Fire Services",
         categoryId: "bushfire",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromViceFireServices,
       },
       {
         name: "QLD Fire Department",
         categoryId: "bushfire",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsDataFromQLDFireDepartment,
       },
       {
         name: "NT Fire and Rescue",
         categoryId: "bushfire",
-        allowedSeverities: [
-          HazardSeverity.advice,
-          HazardSeverity.watchAndAct,
-          HazardSeverity.emergency,
-        ],
+        allowedSeverities: allowedSeveritiesAWS,
         fetchFunction: getHazardsFromNTFireAndRescue,
       },
     ];
@@ -247,6 +217,7 @@ const summarizeAndPostHazards = async (
             latitude: Number(hazardData.latitude),
             longitude: Number(hazardData.longitude),
             availableCategories,
+            allowedSeverities,
           })
             .then((summarized) => {
               // Calculate confidence score for ingested hazard (official source)
@@ -277,10 +248,7 @@ const summarizeAndPostHazards = async (
                 shortDescription: summarized.shortDescription,
                 aiSummary: summarized.summary,
                 aiConfidence: summarized.confidence,
-                severity: getClosestAllowedSeverity(
-                  summarized.severity,
-                  allowedSeverities || []
-                ),
+                severity: summarized.severity,
                 callToAction: summarized.callToAction,
                 reviewStatus: HazardReviewStatus.accepted,
                 reviewedAt: new Date(),

@@ -521,6 +521,95 @@ export const getFormattedHazardSeverity = (
   }
 };
 
+/// Returns detailed description for each hazard severity level.
+export const getSeverityDetail = (severity: HazardSeverity): string => {
+  switch (severity) {
+    case HazardSeverity.unknown:
+      return "The severity of the hazard is currently unknown.";
+    case HazardSeverity.info:
+      return "General information about a hazard. (Eg: Smoke visible near city outskirts, Minor road blockage, Air quality advisory etc.)";
+    case HazardSeverity.low:
+      return "Low-level information about a hazard. (Eg: Minor smoke detected, Small road blockage, Air quality slightly affected etc.)";
+    case HazardSeverity.advice:
+      return "An incident has started. There is no immediate danger. Stay up to date in case the situation changes. (Eg: Small bushfire contained, Floodwater rising, Gas leak under investigation etc.)";
+    case HazardSeverity.watchAndAct:
+      return "There is a heightened level of threat. Conditions are changing and you need to start taking action now to protect you and your family. (Eg: Bushfire approaching, Flash flood possible, Landslide warning etc.)";
+    case HazardSeverity.emergency:
+      return "An Emergency Warning is the highest level of warning. You may be in danger and need to take action immediately. Any delay now puts your life at risk. (Eg: Major fire emergency, Severe flood warning, Evacuate immediately etc.)";
+  }
+};
+
+/// Returns call to actions list for each hazard severity level.
+export const getSeverityCallToActions = (
+  severity: HazardSeverity
+): string[] => {
+  switch (severity) {
+    case HazardSeverity.info:
+    case HazardSeverity.low:
+      return ["Stay informed", "Monitor conditions", "Avoid the area"];
+    case HazardSeverity.advice:
+      return [
+        "Prepare now",
+        "Stay informed",
+        "Monitor conditions",
+        "Stay informed/threat is reduced",
+        "Avoid the area",
+        "Return with caution",
+        "Avoid smoke",
+      ];
+    case HazardSeverity.watchAndAct:
+      return [
+        "Prepare to leave/evacuate",
+        "Leave/evacuate now (if you are not prepared)",
+        "Prepare to take shelter",
+        "Move/stay indoors",
+        "Stay near shelter",
+        "Walk two or more streets back",
+        "Monitor conditions as they are changing",
+        "Be aware of ember attacks",
+        "Move to higher ground (away from creeks/rivers/coast)",
+        "Limit time outside (cyclone, heat asthma)",
+        "Avoid the area",
+        "Stay away from damaged buildings and other hazards",
+        "Prepare for isolation",
+        "Protect yourself against the impacts of extreme heat",
+        "Do not enter flood water",
+        "Not safe to return",
+        "Prepare your property (cyclone/storm)",
+      ];
+    case HazardSeverity.emergency:
+      return [
+        "Leave/evacuate (immediately, by am/pm/hazard timing)",
+        "Seek/take shelter now",
+        "Shelter indoors now",
+        "Too late/dangerous to leave",
+      ];
+    case HazardSeverity.unknown:
+    default:
+      return ["Stay informed", "Monitor conditions"];
+  }
+};
+
+/**
+ * Lists of allowed severities for Australian Warnings System (AWS) hazards.
+ */
+export const allowedSeveritiesAWS: HazardSeverity[] = [
+  HazardSeverity.advice,
+  HazardSeverity.watchAndAct,
+  HazardSeverity.emergency,
+];
+
+/**
+ * Lists of allowed severities for non-AWS hazards.
+ */
+export const allowedSeveritiesNonAWS: HazardSeverity[] = [
+  HazardSeverity.info,
+  // HazardSeverity.low,
+  HazardSeverity.advice, // equivalent to 'moderate'
+  HazardSeverity.watchAndAct, // equivalent to 'high'
+  HazardSeverity.emergency, // equivalent to 'critical'
+];
+
 /**
  * Adjusts the hazard severity to the closest allowed severity from a given list.
  *
@@ -538,9 +627,10 @@ export const getClosestAllowedSeverity = (
       const severityOrder: HazardSeverity[] = [
         HazardSeverity.unknown,
         HazardSeverity.info,
-        HazardSeverity.advice,
-        HazardSeverity.watchAndAct,
-        HazardSeverity.emergency,
+        HazardSeverity.low,
+        HazardSeverity.advice, // equivalent to 'moderate'
+        HazardSeverity.watchAndAct, // equivalent to 'high'
+        HazardSeverity.emergency, // equivalent to 'critical'
       ];
 
       const currentSeverityIndex = severityOrder.indexOf(currentSeverity);
