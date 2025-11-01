@@ -5,4 +5,5 @@ export interface AISummaryResponse {
   confidence: "high" | "medium" | "low";
   severity: "info" | "advice" | "watchAndAct" | "emergency";
   callToAction: string;
+  category?: string;
 }

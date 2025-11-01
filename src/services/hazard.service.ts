@@ -431,12 +431,14 @@ export const summarizeHazard = async ({
   latitude,
   longitude,
   locationName,
+  availableCategories,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
+  availableCategories?: string[] | undefined | null;
 }): Promise<AISummaryResponse> => {
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
@@ -489,14 +491,27 @@ export const summarizeHazard = async ({
     - Shelter indoors now
     - Too late/dangerous to leave
 
+    ${
+      availableCategories && availableCategories.length > 0
+        ? `AVAILABLE HAZARD CATEGORIES:\nChoose the most appropriate category based on the hazard characteristics.\n- ${availableCategories.join(
+            ", "
+          )}`
+        : ""
+    }
+
     Always respond with valid JSON containing these exact fields:
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
       "summary": "string (a 2-3 sentence summary of the hazard)",
-      "severity": "info|advice|watchAndAct|emergency (based on SEVERITY LEVELS described above)"
+      "severity": "info|advice|watchAndAct|emergency (based on SEVERITY LEVELS described above)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
-      "callToAction": "string (select the most appropriate action from the guidelines above based on severity and hazard type)"
+      "callToAction": "string (select the most appropriate action from the CALL TO ACTION GUIDELINES above based on severity and hazard type)",
+      ${
+        availableCategories && availableCategories.length > 0
+          ? `"category": "string (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)",`
+          : ""
+      }
     }
     `;
 

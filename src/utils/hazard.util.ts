@@ -520,3 +520,85 @@ export const getFormattedHazardSeverity = (
       return "Info";
   }
 };
+
+/**
+ * Adjusts the hazard severity to the closest allowed severity from a given list.
+ *
+ * If the current severity is already allowed, it is returned as is.
+ * If not, the function finds the closest severity based on defined hierarchy.
+ */
+export const getClosestAllowedSeverity = (
+  currentSeverity: HazardSeverity,
+  allowedSeverities: HazardSeverity[]
+): HazardSeverity => {
+  let finalSeverity: HazardSeverity = currentSeverity;
+  if (allowedSeverities && allowedSeverities.length > 0) {
+    if (!allowedSeverities.includes(currentSeverity)) {
+      // Define severity hierarchy order
+      const severityOrder: HazardSeverity[] = [
+        HazardSeverity.unknown,
+        HazardSeverity.info,
+        HazardSeverity.advice,
+        HazardSeverity.watchAndAct,
+        HazardSeverity.emergency,
+      ];
+
+      const currentSeverityIndex = severityOrder.indexOf(currentSeverity);
+
+      // If severity is less than info, upgrade to info (minimum allowed severity)
+      if (currentSeverityIndex < severityOrder.indexOf(HazardSeverity.info)) {
+        finalSeverity = allowedSeverities.includes(HazardSeverity.info)
+          ? HazardSeverity.info
+          : allowedSeverities[0]!;
+      }
+      // If severity is greater than emergency, cap at emergency (maximum allowed severity)
+      else if (
+        currentSeverityIndex > severityOrder.indexOf(HazardSeverity.emergency)
+      ) {
+        finalSeverity = allowedSeverities.includes(HazardSeverity.emergency)
+          ? HazardSeverity.emergency
+          : allowedSeverities[allowedSeverities.length - 1]!;
+      }
+      // For severities between info and emergency, find the closest allowed severity
+      else {
+        finalSeverity = findClosestAllowedSeverity(
+          currentSeverity,
+          allowedSeverities,
+          severityOrder
+        );
+      }
+    }
+  }
+
+  return finalSeverity;
+};
+
+/**
+ * Finds the closest allowed severity to the given severity within the allowed severities array.
+ * Prefers upgrading severity over downgrading when distances are equal.
+ */
+const findClosestAllowedSeverity = (
+  currentSeverity: HazardSeverity,
+  allowedSeverities: HazardSeverity[],
+  severityOrder: HazardSeverity[]
+): HazardSeverity => {
+  const currentIndex = severityOrder.indexOf(currentSeverity);
+
+  // Map allowed severities to their indices and sort by proximity to current severity
+  const allowedWithIndices = allowedSeverities
+    .map((severity) => ({
+      severity,
+      index: severityOrder.indexOf(severity),
+      distance: Math.abs(severityOrder.indexOf(severity) - currentIndex),
+    }))
+    .sort((a, b) => {
+      // Sort by distance first
+      if (a.distance !== b.distance) {
+        return a.distance - b.distance;
+      }
+      // If distances are equal, prefer higher severity (upgrading over downgrading)
+      return b.index - a.index;
+    });
+
+  return allowedWithIndices[0]!.severity;
+};
