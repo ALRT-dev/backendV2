@@ -320,10 +320,53 @@ export const reviewHazard = async ({
   const systemPrompt = `
     You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
 
+    SEVERITY LEVELS:
+    - "info": General information about a hazard. (Eg: Smoke visible near city outskirts, Minor road blockage, Air quality advisory etc.)
+    - "advice": An incident has started. There is no immediate danger. Stay up to date in case the situation changes. (Eg: Small bushfire contained, Floodwater rising, Gas leak under investigation etc.)
+    - "watchAndAct": There is a heightened level of threat. Conditions are changing and you need to start taking action now to protect you and your family. (Eg: Bushfire approaching, Flash flood possible, Landslide warning etc.)
+    - "emergency": An Emergency Warning is the highest level of warning. You may be in danger and need to take action immediately. Any delay now puts your life at risk. (Eg: Major fire emergency, Severe flood warning, Evacuate immediately etc.)
+
     CONFIDENCE LEVELS:
     - "high": Detailed, specific, credible information with clear location and time
     - "medium": Reasonable detail but some ambiguity or missing information
     - "low": Vague, unclear, or potentially unreliable information
+
+    CALL TO ACTION GUIDELINES:
+    Based on severity level and hazard type, select the most appropriate call to action:
+
+    For severity "advice":
+    - Prepare now
+    - Stay informed
+    - Monitor conditions
+    - Stay informed/threat is reduced
+    - Avoid the area
+    - Return with caution
+    - Avoid smoke
+
+    For severity "watchAndAct":
+    - Prepare to leave/evacuate
+    - Leave/evacuate now (if you are not prepared)
+    - Prepare to take shelter
+    - Move/stay indoors
+    - Stay near shelter
+    - Walk two or more streets back
+    - Monitor conditions as they are changing
+    - Be aware of ember attacks
+    - Move to higher ground (away from creeks/rivers/coast)
+    - Limit time outside (cyclone, heat asthma)
+    - Avoid the area
+    - Stay away from damaged buildings and other hazards
+    - Prepare for isolation
+    - Protect yourself against the impacts of extreme heat
+    - Do not enter flood water
+    - Not safe to return
+    - Prepare your property (cyclone/storm)
+
+    For severity "emergency":
+    - Leave/evacuate (immediately, by am/pm/hazard timing)
+    - Seek/take shelter now
+    - Shelter indoors now
+    - Too late/dangerous to leave
 
     Always respond with valid JSON containing these exact fields:
     {
@@ -332,6 +375,8 @@ export const reviewHazard = async ({
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
       "summary": "string (a 3-4 sentence summary of the hazard)",
+      "severity": "info|advice|watchAndAct|emergency (based on detail quality and specificity)",
+      "callToAction": "string (select the most appropriate action from the guidelines above based on severity and hazard type)",
       "confidence": "high|medium|low (based on detail quality and specificity)",
     }
     `;
@@ -385,11 +430,13 @@ export const summarizeHazard = async ({
   description,
   latitude,
   longitude,
+  locationName,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
+  locationName?: string | undefined | null;
 }): Promise<AISummaryResponse> => {
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
@@ -405,6 +452,43 @@ export const summarizeHazard = async ({
     - "medium": Reasonable detail but some ambiguity or missing information
     - "low": Vague, unclear, or potentially unreliable information
 
+    CALL TO ACTION GUIDELINES:
+    Based on severity level and hazard type, select the most appropriate call to action:
+
+    For severity "advice":
+    - Prepare now
+    - Stay informed
+    - Monitor conditions
+    - Stay informed/threat is reduced
+    - Avoid the area
+    - Return with caution
+    - Avoid smoke
+
+    For severity "watchAndAct":
+    - Prepare to leave/evacuate
+    - Leave/evacuate now (if you are not prepared)
+    - Prepare to take shelter
+    - Move/stay indoors
+    - Stay near shelter
+    - Walk two or more streets back
+    - Monitor conditions as they are changing
+    - Be aware of ember attacks
+    - Move to higher ground (away from creeks/rivers/coast)
+    - Limit time outside (cyclone, heat asthma)
+    - Avoid the area
+    - Stay away from damaged buildings and other hazards
+    - Prepare for isolation
+    - Protect yourself against the impacts of extreme heat
+    - Do not enter flood water
+    - Not safe to return
+    - Prepare your property (cyclone/storm)
+
+    For severity "emergency":
+    - Leave/evacuate (immediately, by am/pm/hazard timing)
+    - Seek/take shelter now
+    - Shelter indoors now
+    - Too late/dangerous to leave
+
     Always respond with valid JSON containing these exact fields:
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
@@ -412,6 +496,7 @@ export const summarizeHazard = async ({
       "summary": "string (a 2-3 sentence summary of the hazard)",
       "severity": "info|advice|watchAndAct|emergency (based on SEVERITY LEVELS described above)"
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
+      "callToAction": "string (select the most appropriate action from the guidelines above based on severity and hazard type)"
     }
     `;
 
@@ -420,7 +505,9 @@ export const summarizeHazard = async ({
 
     TITLE: ${title}
     DESCRIPTION: ${description}
-    LOCATION: ${latitude}, ${longitude}
+    LOCATION: ${
+      locationName ? `${locationName}, ` : ""
+    }(${latitude}, ${longitude})
     `;
 
   const response = await openai.chat.completions.create({

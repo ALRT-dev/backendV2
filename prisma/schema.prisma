@@ -73,6 +73,7 @@ model Hazard {
   aiSeverity       HazardSeverity?
   aiConfidence     AIConfidence?
   severity         HazardSeverity  @default(unknown)
+  callToAction     String?
 
   latitude     Float?
   longitude    Float?

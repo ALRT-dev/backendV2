@@ -302,6 +302,7 @@ const summarizeAndPostHazards = async (
           return summarizeHazard({
             title: hazardData.title,
             description: hazardData.description,
+            locationName: hazardData.locationName,
             latitude: Number(hazardData.latitude),
             longitude: Number(hazardData.longitude),
           })
@@ -335,6 +336,7 @@ const summarizeAndPostHazards = async (
                 aiSummary: summarized.summary,
                 aiConfidence: summarized.confidence,
                 severity: summarized.severity,
+                callToAction: summarized.callToAction,
                 reviewStatus: HazardReviewStatus.accepted,
                 reviewedAt: new Date(),
                 confidenceScore,
