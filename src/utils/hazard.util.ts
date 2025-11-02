@@ -463,6 +463,9 @@ export const getHazardExpiryDateFromSeverity = (
     case HazardSeverity.info:
       now.setHours(now.getHours() + 6); // 6 hours for info
       break;
+    case HazardSeverity.low:
+      now.setHours(now.getHours() + 12); // 12 hours for low
+      break;
     case HazardSeverity.advice:
       now.setHours(now.getHours() + 12); // 12 hours for advice
       break;
