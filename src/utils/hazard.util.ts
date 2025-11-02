@@ -368,10 +368,11 @@ export const buildHazardsOrderByClauseRaw = (
             CASE h.severity
               WHEN 'unknown' THEN 1
               WHEN 'info' THEN 2
-              WHEN 'advice' THEN 3
-              WHEN 'watchAndAct' THEN 4
-              WHEN 'emergency' THEN 5
-              ELSE 6
+              WHEN 'low' THEN 3
+              WHEN 'advice' THEN 4
+              WHEN 'watchAndAct' THEN 5
+              WHEN 'emergency' THEN 6
+              ELSE 7
             END ${direction}`);
       }
 
@@ -604,7 +605,7 @@ export const allowedSeveritiesAWS: HazardSeverity[] = [
  */
 export const allowedSeveritiesNonAWS: HazardSeverity[] = [
   HazardSeverity.info,
-  // HazardSeverity.low,
+  HazardSeverity.low,
   HazardSeverity.advice, // equivalent to 'moderate'
   HazardSeverity.watchAndAct, // equivalent to 'high'
   HazardSeverity.emergency, // equivalent to 'critical'

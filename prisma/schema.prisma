@@ -85,6 +85,8 @@ model Hazard {
   sourceId     String?
   reportedById String?
 
+  isAwsCompliant Boolean @default(false) // Whether the hazard complies with Australian Warnings System (AWS) standards
+
   reviewStatus   HazardReviewStatus @default(pending)
   reviewFeedback String?
   reviewedAt     DateTime?
