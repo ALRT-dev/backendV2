@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import type { CreateHazardCategoryInput } from "../validators/hazard_category.validator.js";
+import { populateInitialCategories } from "../services/hazard_category.service.js";
 
 export const getHazardCategories = async (
   req: Request,
@@ -56,6 +57,19 @@ export const createHazardCategory = async (
     });
 
     res.status(201).json(newCategory);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const populateCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const createdCategories = await populateInitialCategories();
+    res.status(201).json(createdCategories);
   } catch (error) {
     next(error);
   }
