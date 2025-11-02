@@ -11,8 +11,11 @@ import {
   parseGeoJsonToHazards,
   parseNTFireAndRescueToHazards,
   parseRSSFeedToHazards,
+  populateHazardWithGeocoding,
+  cleanupGeocodingCache,
+  getGeocodingCacheSize,
 } from "../utils/ingestion.util.js";
-import crypto from "crypto";
+import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
 import { summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
@@ -29,10 +32,6 @@ import {
   type HazardForConfidenceCalculation,
 } from "./confidence_score.service.js";
 import { config } from "../utils/config.js";
-import {
-  convertAddressToLatLng,
-  convertLatLngToAddress,
-} from "./google_map.service.js";
 
 // Configuration for hazard sources
 interface HazardSourceConfig {
@@ -62,6 +61,9 @@ interface HazardSourceConfig {
  */
 export const syncHazardsFromDifferentSources = async () => {
   try {
+    // Clean up expired cache entries
+    cleanupGeocodingCache();
+
     const allCategories = await prisma.hazardCategory.findMany({
       select: { id: true },
     });
@@ -96,13 +98,13 @@ export const syncHazardsFromDifferentSources = async () => {
       //   isAwsCompliant: true,
       //   fetchFunction: getHazardsDataFromAirQuality,
       // },
-      {
-        name: "ACT Emergency Services",
-        categoryId: "healthAndEmergency",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromACT,
-      },
+      // {
+      //   name: "ACT Emergency Services",
+      //   categoryId: "healthAndEmergency",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromACT,
+      // },
       // {
       //   name: "CFS",
       //   categoryId: "bushfire",
@@ -117,13 +119,13 @@ export const syncHazardsFromDifferentSources = async () => {
       //   isAwsCompliant: true,
       //   fetchFunction: getHazardsDataFromViceFireServices,
       // },
-      // {
-      //   name: "QLD Fire Department",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   isAwsCompliant: true,
-      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
-      // },
+      {
+        name: "QLD Fire Department",
+        categoryId: "bushfire",
+        allowedSeverities: allowedSeveritiesAWS,
+        isAwsCompliant: true,
+        fetchFunction: getHazardsDataFromQLDFireDepartment,
+      },
       // {
       //   name: "NT Fire and Rescue",
       //   categoryId: "bushfire",
@@ -178,7 +180,11 @@ const syncHazardsFromSource = async (
     });
 
     console.log(
-      `------------------------------------> Sync complete. Created ${createdHazards.length} new hazards from ${sourceConfig.name}.`
+      `------------------------------------> Sync complete. Created ${
+        createdHazards.length
+      } new hazards from ${
+        sourceConfig.name
+      }. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
   } catch (error) {
     console.error(`Error during ${sourceConfig.name} hazard sync:`, error);
@@ -206,19 +212,12 @@ const summarizeAndPostHazards = async ({
   isAwsCompliant: boolean;
 }): Promise<Hazard[]> => {
   try {
-    // First, populate missing geocoding information if any
-    hazardDatas = await populateHazardsWithGeocoding(hazardDatas);
-
     const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
       [];
     const createdHazardPromises: Promise<Hazard | null>[] = [];
 
     for (const hazardData of hazardDatas) {
       if (!hazardData.id) continue;
-      if (!hazardData.latitude || !hazardData.longitude) {
-        console.log("Hazard missing coordinates, skipping:", hazardData.title);
-        continue;
-      }
 
       const promise = prisma.hazard
         .findUnique({
@@ -230,70 +229,87 @@ const summarizeAndPostHazards = async ({
             return null;
           }
 
-          // check if existing in the dumped json file
-          return summarizeHazard({
-            title: hazardData.title,
-            description: hazardData.description,
-            locationName: hazardData.locationName,
-            latitude: Number(hazardData.latitude),
-            longitude: Number(hazardData.longitude),
-            availableCategories,
-            allowedSeverities,
-          })
-            .then((summarized) => {
-              // Calculate confidence score for ingested hazard (official source)
-              let confidenceScore = 75; // Default high score for official sources
-              try {
-                const hazardForCalculation: HazardForConfidenceCalculation = {
-                  severity: summarized.severity,
-                  aiConfidence: summarized.confidence,
-                  upvoteCount: 0,
-                  downvoteCount: 0,
-                  createdAt: new Date(),
-                  reportedBy: null, // Official sources don't have reporters
-                };
-
-                confidenceScore =
-                  calculateConfidenceScore(hazardForCalculation);
-              } catch (error) {
-                console.error(
-                  "Error calculating confidence score for ingested hazard:",
-                  error
+          // Only geocode if we don't have existing hazard and missing geocoding info
+          return populateHazardWithGeocoding(hazardData)
+            .then((populatedHazard) => {
+              if (!populatedHazard.latitude || !populatedHazard.longitude) {
+                console.log(
+                  "Hazard missing coordinates after geocoding, skipping:",
+                  populatedHazard.title
                 );
-                confidenceScore = 75; // Fallback for official sources
+                return null;
               }
 
-              return {
-                ...hazardData,
-                title: summarized.title || hazardData.title,
-                shortDescription: summarized.shortDescription,
-                aiSummary: summarized.summary,
-                aiConfidence: summarized.confidence,
-                severity: summarized.severity,
-                callToAction: summarized.callToAction,
-                isAwsCompliant,
-                reviewStatus: HazardReviewStatus.accepted,
-                reviewedAt: new Date(),
-                confidenceScore,
-                confidenceScoreCalculatedAt: new Date(),
-                ...(summarized.category && {
-                  category: {
-                    connect: {
-                      id: summarized.category,
-                    },
-                  },
-                }),
-                expiresAt:
-                  hazardData.expiresAt ||
-                  getHazardExpiryDateFromSeverity(summarized.severity),
-              };
+              // check if existing in the dumped json file
+              return summarizeHazard({
+                title: populatedHazard.title,
+                description: populatedHazard.description,
+                locationName: populatedHazard.locationName,
+                latitude: Number(populatedHazard.latitude),
+                longitude: Number(populatedHazard.longitude),
+                availableCategories,
+                allowedSeverities,
+              })
+                .then((summarized) => {
+                  // Calculate confidence score for ingested hazard (official source)
+                  let confidenceScore = 75; // Default high score for official sources
+                  try {
+                    const hazardForCalculation: HazardForConfidenceCalculation =
+                      {
+                        severity: summarized.severity,
+                        aiConfidence: summarized.confidence,
+                        upvoteCount: 0,
+                        downvoteCount: 0,
+                        createdAt: new Date(),
+                        reportedBy: null, // Official sources don't have reporters
+                      };
+
+                    confidenceScore =
+                      calculateConfidenceScore(hazardForCalculation);
+                  } catch (error) {
+                    console.error(
+                      "Error calculating confidence score for ingested hazard:",
+                      error
+                    );
+                    confidenceScore = 75; // Fallback for official sources
+                  }
+
+                  return {
+                    ...hazardData,
+                    title: summarized.title || hazardData.title,
+                    shortDescription: summarized.shortDescription,
+                    aiSummary: summarized.summary,
+                    aiConfidence: summarized.confidence,
+                    severity: summarized.severity,
+                    callToAction: summarized.callToAction,
+                    isAwsCompliant,
+                    reviewStatus: HazardReviewStatus.accepted,
+                    reviewedAt: new Date(),
+                    confidenceScore,
+                    confidenceScoreCalculatedAt: new Date(),
+                    ...(summarized.category && {
+                      category: {
+                        connect: {
+                          id: summarized.category,
+                        },
+                      },
+                    }),
+                    expiresAt:
+                      hazardData.expiresAt ||
+                      getHazardExpiryDateFromSeverity(summarized.severity),
+                  };
+                })
+                .catch((error: any) => {
+                  console.log("Error during summarization:", error);
+                  return null;
+                });
             })
-            .catch((error) => {
-              console.log("Error during summarization:", error);
+            .catch((error: any) => {
+              console.log("Error during geocoding:", error);
               return null;
             });
         })
-        .catch((error) => {
+        .catch((error: any) => {
           console.log("Error checking existing hazard:", error);
           return null;
         });
@@ -800,76 +816,3 @@ export function generateHazardId(obj: Prisma.HazardCreateInput): string {
   const str = JSON.stringify(data);
   return crypto.createHash("sha256").update(str).digest("hex").slice(0, 16);
 }
-
-/**
- * Populates hazards with missing geocoding information.
- * If latitude/longitude is missing, it uses the locationName to fetch coordinates.
- * If locationName is missing, it uses latitude/longitude to fetch the address.
- */
-const populateHazardsWithGeocoding = async (
-  hazards: Prisma.HazardCreateInput[]
-): Promise<Prisma.HazardCreateInput[]> => {
-  const populatedHazardsPromise: Promise<Prisma.HazardCreateInput>[] = [];
-
-  for (const hazard of hazards) {
-    if (!hazard.latitude || !hazard.longitude) {
-      if (hazard.locationName) {
-        const promise = convertAddressToLatLng(hazard.locationName)
-          .then((result) => {
-            if (result && result.geometry && result.geometry.location) {
-              hazard.latitude = result.geometry.location.lat;
-              hazard.longitude = result.geometry.location.lng;
-            } else {
-              console.warn(
-                `Geocoding failed for hazard location: ${hazard.locationName}`
-              );
-            }
-            return hazard;
-          })
-          .catch((error) => {
-            console.error(
-              `Error during geocoding for hazard location: ${hazard.locationName}`,
-              error
-            );
-            return hazard;
-          });
-
-        populatedHazardsPromise.push(promise);
-        continue;
-      }
-    }
-
-    if (hazard.latitude && hazard.longitude) {
-      if (!hazard.locationName) {
-        const promise = convertLatLngToAddress(
-          hazard.latitude,
-          hazard.longitude
-        )
-          .then((address) => {
-            if (address) {
-              hazard.locationName = address;
-            } else {
-              console.warn(
-                `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
-              );
-            }
-            return hazard;
-          })
-          .catch((error) => {
-            console.error(
-              `Error during reverse geocoding for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`,
-              error
-            );
-            return hazard;
-          });
-
-        populatedHazardsPromise.push(promise);
-        continue;
-      }
-    }
-
-    populatedHazardsPromise.push(Promise.resolve(hazard));
-  }
-
-  return Promise.all(populatedHazardsPromise);
-};
