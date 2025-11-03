@@ -44,7 +44,11 @@ model HazardCategory {
   name        String  @unique
   description String?
 
-  hazards Hazard[]
+  parentId String? // For subcategories, this points to the parent category
+
+  hazards       Hazard[]
+  parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subCategories HazardCategory[] @relation("CategoryHierarchy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

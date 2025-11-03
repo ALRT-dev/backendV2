@@ -43,7 +43,7 @@ export const createHazardCategory = async (
   next: NextFunction
 ) => {
   try {
-    const { name, description }: CreateHazardCategoryInput = req.body;
+    const { name, description, parentId }: CreateHazardCategoryInput = req.body;
 
     const existingCategory = await prisma.hazardCategory.findUnique({
       where: { name },
@@ -53,7 +53,11 @@ export const createHazardCategory = async (
     }
 
     const newCategory = await prisma.hazardCategory.create({
-      data: { name, description: description || null },
+      data: {
+        name,
+        description: description || null,
+        parentId: parentId || null,
+      },
     });
 
     res.status(201).json(newCategory);

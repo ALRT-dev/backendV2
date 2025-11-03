@@ -32,24 +32,25 @@ import {
   type HazardForConfidenceCalculation,
 } from "./confidence_score.service.js";
 import { config } from "../utils/config.js";
+import { getAllSubCategories } from "./hazard_category.service.js";
 
 // Configuration for hazard sources
 interface HazardSourceConfig {
-  /// The name of the hazard source
+  // The name of the hazard source
   name: string;
 
-  /// The category ID to assign to hazards from this source
+  // The category ID to assign to hazards from this source
   categoryId: string;
 
-  /// The allowed severities for hazards from this source
-  ///
-  /// If not provided, all severities are allowed
+  // The allowed severities for hazards from this source
+  //
+  // If not provided, all severities are allowed
   allowedSeverities?: HazardSeverity[];
 
-  /// Whether the source is compliant with Australian Warnings System (AWS) standards
-  isAwsCompliant: boolean;
+  // Optional list of AWS compliant categories
+  awsCompliantCategories?: string[];
 
-  /// Function to fetch hazard data from the source
+  // Function to fetch hazard data from the source
   fetchFunction: (categoryId: string) => Promise<Prisma.HazardCreateInput[]>;
 }
 
@@ -64,75 +65,83 @@ export const syncHazardsFromDifferentSources = async () => {
     // Clean up expired cache entries
     cleanupGeocodingCache();
 
-    const allCategories = await prisma.hazardCategory.findMany({
-      select: { id: true },
-    });
+    const allCategories = await getAllSubCategories();
     const availableCategories = allCategories.map((cat) => cat.id);
+
+    // Define AWS compliant categories
+    // If a hazard's category is in this list, it will be marked as AWS compliant
+    const awsCompliantCategories = [
+      "bushfire",
+      "cyclone",
+      "storm",
+      "flood",
+      "extremeHeat",
+    ];
 
     const sources: HazardSourceConfig[] = [
       {
         name: "RFS",
         categoryId: "bushfire",
         allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
+        awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromRFS,
       },
-      {
-        name: "BoM",
-        categoryId: "weatherAndEnvironment",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromBoM,
-      },
-      {
-        name: "NSW Transport live traffic hazards",
-        categoryId: "transportAndTravel",
-        allowedSeverities: allowedSeveritiesNonAWS,
-        isAwsCompliant: false,
-        fetchFunction: getHazardsDataFromLiveTrafficHazards,
-      },
-      {
-        name: "NSW air quality",
-        categoryId: "weatherAndEnvironment",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromAirQuality,
-      },
-      {
-        name: "ACT Emergency Services",
-        categoryId: "healthAndEmergency",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromACT,
-      },
-      {
-        name: "CFS",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromCFS,
-      },
-      {
-        name: "Vice Fire Services",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromViceFireServices,
-      },
-      {
-        name: "QLD Fire Department",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsDataFromQLDFireDepartment,
-      },
-      {
-        name: "NT Fire and Rescue",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        isAwsCompliant: true,
-        fetchFunction: getHazardsFromNTFireAndRescue,
-      },
+      // {
+      //   name: "BoM",
+      //   categoryId: "weatherAndEnvironment",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromBoM,
+      // },
+      // {
+      //   name: "NSW Transport live traffic hazards",
+      //   categoryId: "transportAndTravel",
+      //   allowedSeverities: allowedSeveritiesNonAWS,
+      //   isAwsCompliant: false,
+      //   fetchFunction: getHazardsDataFromLiveTrafficHazards,
+      // },
+      // {
+      //   name: "NSW air quality",
+      //   categoryId: "weatherAndEnvironment",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromAirQuality,
+      // },
+      // {
+      //   name: "ACT Emergency Services",
+      //   categoryId: "healthAndEmergency",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromACT,
+      // },
+      // {
+      //   name: "CFS",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromCFS,
+      // },
+      // {
+      //   name: "Vice Fire Services",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromViceFireServices,
+      // },
+      // {
+      //   name: "QLD Fire Department",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
+      // },
+      // {
+      //   name: "NT Fire and Rescue",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   isAwsCompliant: true,
+      //   fetchFunction: getHazardsFromNTFireAndRescue,
+      // },
     ];
 
     await Promise.all(
@@ -173,10 +182,12 @@ const syncHazardsFromSource = async (
     const createdHazards = await summarizeAndPostHazards({
       hazardDatas: hazards,
       availableCategories,
+      ...(sourceConfig.awsCompliantCategories && {
+        awsCompliantCategories: sourceConfig.awsCompliantCategories,
+      }),
       ...(sourceConfig.allowedSeverities && {
         allowedSeverities: sourceConfig.allowedSeverities,
       }),
-      isAwsCompliant: sourceConfig.isAwsCompliant,
     });
 
     console.log(
@@ -197,19 +208,20 @@ const syncHazardsFromSource = async (
  *
  * @param hazardDatas Array of hazard data to be summarized and posted.
  * @param availableCategories Optional array of available category IDs to validate against.
+ * @param awsCompliantCategories Optional array of AWS compliant category IDs. This will mark hazards as AWS compliant if their category is in this list.
  * @param allowedSeverities Optional array of allowed severities for the hazards.
  * @returns Array of created Hazard objects.
  */
 const summarizeAndPostHazards = async ({
   hazardDatas,
   availableCategories,
+  awsCompliantCategories,
   allowedSeverities,
-  isAwsCompliant = false,
 }: {
   hazardDatas: Prisma.HazardCreateInput[];
   availableCategories?: string[];
+  awsCompliantCategories?: string[];
   allowedSeverities?: HazardSeverity[];
-  isAwsCompliant: boolean;
 }): Promise<Hazard[]> => {
   try {
     const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
@@ -282,7 +294,12 @@ const summarizeAndPostHazards = async ({
                     aiConfidence: summarized.confidence,
                     severity: summarized.severity,
                     callToAction: summarized.callToAction,
-                    isAwsCompliant,
+                    ...(awsCompliantCategories &&
+                      summarized.category && {
+                        awsCompliantCategories: awsCompliantCategories.includes(
+                          summarized.category
+                        ),
+                      }),
                     reviewStatus: HazardReviewStatus.accepted,
                     reviewedAt: new Date(),
                     confidenceScore,
