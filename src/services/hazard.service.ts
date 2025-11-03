@@ -297,6 +297,7 @@ export const getHazardsApplyingFiltersRaw = async (
             name: categoryName,
             description: categoryDescription,
             color: categoryColor,
+            parentId: categoryParentId,
             parent: categoryParentId
               ? {
                   id: categoryParentId,

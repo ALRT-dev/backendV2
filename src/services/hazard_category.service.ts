@@ -391,6 +391,7 @@ export const populateInitialCategories = async () => {
         id: "other",
         name: "Other",
         description: "Miscellaneous Hazards Not Classified Elsewhere",
+        color: "#BAA27D",
       },
     ];
 
@@ -455,7 +456,7 @@ export const populateInitialCategories = async () => {
 /**
  * Get all sub-categories from the database.
  */
-export const getAllSubCategories = async () => {
+export const getAllSubHazardCategories = async () => {
   const subCategories = await prisma.hazardCategory.findMany({
     where: {
       parentId: { not: null },
