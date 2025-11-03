@@ -18,6 +18,7 @@ import type {
 export const buildHazardsWhereClause = (
   params: HazardSearchParams & {
     subscriptions?: LocationSubscription[] | undefined;
+    matchCategoryIdsWithSubCategoriesAlso?: boolean | undefined;
   }
 ): Prisma.HazardWhereInput => {
   const {
@@ -32,6 +33,7 @@ export const buildHazardsWhereClause = (
     southwestLng,
     subscriptions,
     showExpired,
+    matchCategoryIdsWithSubCategoriesAlso = true, // Default to true to maintain existing behavior
   } = params;
 
   // Build the where clause for filtering hazards
@@ -72,11 +74,34 @@ export const buildHazardsWhereClause = (
       ? categoryIds
       : categoryIds.split(",");
 
-    andConditions.push({
-      categoryId: {
-        in: categoryIdArray,
-      },
-    });
+    if (matchCategoryIdsWithSubCategoriesAlso) {
+      // Include hierarchical category filtering with joins
+      andConditions.push({
+        OR: [
+          // Match hazards with categories that are directly in the list
+          {
+            categoryId: {
+              in: categoryIdArray,
+            },
+          },
+          // Match hazards with categories whose parent is in the list
+          {
+            category: {
+              parentId: {
+                in: categoryIdArray,
+              },
+            },
+          },
+        ],
+      });
+    } else {
+      // Simple category filtering without hierarchical search (for groupBy operations)
+      andConditions.push({
+        categoryId: {
+          in: categoryIdArray,
+        },
+      });
+    }
   }
 
   // Apply severities filter if provided
@@ -165,7 +190,11 @@ export const buildHazardInclude = (
   params?: Prisma.HazardInclude
 ): Prisma.HazardInclude => {
   return {
-    category: true,
+    category: {
+      include: {
+        parent: true, // Include parent category for hierarchical queries
+      },
+    },
     source: true,
     reportedBy: true,
     medias: {
@@ -225,9 +254,29 @@ export const buildHazardsWhereClauseRaw = (
     const categoryArray = Array.isArray(categoryIds)
       ? categoryIds
       : [categoryIds];
-    const placeholders = categoryArray.map(() => `$${paramIndex++}`).join(",");
-    whereConditions.push(`h."categoryId" IN (${placeholders})`);
-    queryParams.push(...categoryArray);
+
+    // Create placeholders for direct category match
+    const directPlaceholders = categoryArray
+      .map(() => `$${paramIndex++}`)
+      .join(",");
+
+    // Create placeholders for parent category match
+    const parentPlaceholders = categoryArray
+      .map(() => `$${paramIndex++}`)
+      .join(",");
+
+    // Match hazards where either the category itself is in the list
+    // OR the category's parent is in the list (for subcategories)
+    whereConditions.push(`(
+      h."categoryId" IN (${directPlaceholders}) 
+      OR h."categoryId" IN (
+        SELECT hc_sub."id" FROM "HazardCategory" hc_sub 
+        WHERE hc_sub."parentId" IN (${parentPlaceholders})
+      )
+    )`);
+
+    // Add parameters twice - once for direct match, once for parent match
+    queryParams.push(...categoryArray, ...categoryArray);
   }
 
   // Apply severities filter if provided

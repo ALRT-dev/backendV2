@@ -11,27 +11,12 @@ export const getHazardCategories = async (
 ) => {
   try {
     const categories = await prisma.hazardCategory.findMany({
-      include: {
-        _count: {
-          select: {
-            hazards: true,
-          },
-        },
-      },
-      orderBy: {
-        hazards: {
-          _count: "desc",
-        },
+      where: {
+        parentId: null,
       },
     });
 
-    const transformedCategories = categories.map((category) => ({
-      ...category,
-      hazardsCount: category._count.hazards,
-      _count: undefined,
-    }));
-
-    res.status(200).json(transformedCategories);
+    res.status(200).json(categories);
   } catch (error) {
     next(error);
   }

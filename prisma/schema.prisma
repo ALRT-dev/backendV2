@@ -43,6 +43,7 @@ model HazardCategory {
   id          String  @id @default(uuid())
   name        String  @unique
   description String?
+  color       String? // Hex color code for UI representation
 
   parentId String? // For subcategories, this points to the parent category
 

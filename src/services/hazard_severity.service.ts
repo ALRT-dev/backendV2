@@ -48,6 +48,9 @@ export const getSeveritiesApplyingFilters = async ({
     southwestLng: hazardSouthwestLng,
     showExpired: showExpiredHazards,
     subscriptions,
+
+    // Use matchCategoryIdsWithSubCategoriesAlso: false to avoid joins that cause ambiguous column references in groupBy
+    matchCategoryIdsWithSubCategoriesAlso: false,
   });
 
   const severities = await prisma.hazard.groupBy({

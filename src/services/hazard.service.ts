@@ -160,7 +160,12 @@ export const getHazardsApplyingFiltersRaw = async (
     SELECT 
       h.*,
       hc.name as "categoryName",
-      hc.description as "categoryDescription", 
+      hc.description as "categoryDescription",
+      hc.color as "categoryColor",
+      hc."parentId" as "categoryParentId",
+      hcp.name as "categoryParentName",
+      hcp.description as "categoryParentDescription",
+      hcp.color as "categoryParentColor",
       hs.name as "sourceName",
       hs.url as "sourceUrl",
       u.id as "reportedByUserId",
@@ -199,6 +204,7 @@ export const getHazardsApplyingFiltersRaw = async (
   query += `
     FROM "Hazard" h
     LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
+    LEFT JOIN "HazardCategory" hcp ON hc."parentId" = hcp.id
     LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id  
     LEFT JOIN "User" u ON h."reportedById" = u.id
     LEFT JOIN "HazardMedia" hm ON h.id = hm."hazardId"`;
@@ -209,7 +215,7 @@ export const getHazardsApplyingFiltersRaw = async (
 
   query += `
     WHERE ${whereClause}
-    GROUP BY h.id, hc.name, hc.description, hs.name, hs.url, u.id, u.name, u.email`;
+    GROUP BY h.id, hc.name, hc.description, hc.color, hc."parentId", hcp.name, hcp.description, hcp.color, hs.name, hs.url, u.id, u.name, u.email`;
 
   if (userId) {
     query += `, v."voteType"`;
@@ -269,6 +275,11 @@ export const getHazardsApplyingFiltersRaw = async (
       reportedByEmail,
       categoryName,
       categoryDescription,
+      categoryColor,
+      categoryParentId,
+      categoryParentName,
+      categoryParentDescription,
+      categoryParentColor,
       sourceName,
       sourceUrl,
       userVoteType,
@@ -285,6 +296,15 @@ export const getHazardsApplyingFiltersRaw = async (
             id: hazard.categoryId,
             name: categoryName,
             description: categoryDescription,
+            color: categoryColor,
+            parent: categoryParentId
+              ? {
+                  id: categoryParentId,
+                  name: categoryParentName,
+                  description: categoryParentDescription,
+                  color: categoryParentColor,
+                }
+              : null,
           }
         : null,
       source: hazard.sourceId
