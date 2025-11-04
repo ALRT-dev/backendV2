@@ -21,6 +21,7 @@ export const populateInitialCategories = async () => {
         description: "Crime, Civil Unrest, Terror Threat",
         color: "#FC9493",
         severityKeywords: {
+          unknown: [],
           info: ["suspicious activity", "increased security", "security alert"],
           low: ["minor incident", "resolved", "all clear"],
           advice: ["ongoing investigation", "avoid area", "caution advised"],
@@ -44,6 +45,7 @@ export const populateInitialCategories = async () => {
                 name: "Crime",
                 description: "Criminal activities including theft and assault",
                 severityKeywords: {
+                  unknown: [],
                   info: ["reported", "investigation", "patrol increased"],
                   low: ["minor theft", "resolved", "suspect apprehended"],
                   advice: [
@@ -67,6 +69,7 @@ export const populateInitialCategories = async () => {
                 name: "Fight",
                 description: "Physical altercations and brawls",
                 severityKeywords: {
+                  unknown: [],
                   info: ["verbal argument", "tension", "dispute"],
                   low: ["minor scuffle", "broken up", "no injuries"],
                   advice: [
@@ -94,6 +97,7 @@ export const populateInitialCategories = async () => {
                 name: "Shooting",
                 description: "Gun violence incidents",
                 severityKeywords: {
+                  unknown: [],
                   info: ["gunshots heard", "investigating", "unconfirmed"],
                   low: ["false alarm", "fireworks", "construction noise"],
                   advice: ["shots fired", "police responding", "avoid area"],
@@ -117,6 +121,7 @@ export const populateInitialCategories = async () => {
                 name: "Terrorism",
                 description: "Terrorist activities and threats",
                 severityKeywords: {
+                  unknown: [],
                   info: [
                     "threat assessment",
                     "increased vigilance",
@@ -144,6 +149,7 @@ export const populateInitialCategories = async () => {
                 name: "Bomb Threat",
                 description: "Explosive device threats and incidents",
                 severityKeywords: {
+                  unknown: [],
                   info: ["threat received", "investigating", "precautionary"],
                   low: ["hoax", "false alarm", "all clear"],
                   advice: [
@@ -167,6 +173,7 @@ export const populateInitialCategories = async () => {
                 name: "Riot",
                 description: "Civil disorder and violent public disturbances",
                 severityKeywords: {
+                  unknown: [],
                   info: ["protest", "gathering", "peaceful demonstration"],
                   low: ["dispersed", "peaceful", "no incidents"],
                   advice: ["unrest", "property damage", "avoid area"],
@@ -186,6 +193,7 @@ export const populateInitialCategories = async () => {
                 name: "Police Lockdown",
                 description: "Law enforcement security measures",
                 severityKeywords: {
+                  unknown: [],
                   info: [
                     "increased patrols",
                     "routine security",
@@ -215,6 +223,7 @@ export const populateInitialCategories = async () => {
         description: "Health emergencies and medical incidents",
         color: "#FCC27B",
         severityKeywords: {
+          unknown: [],
           info: ["health advisory", "monitoring", "precautionary"],
           low: ["minor incident", "treated", "no serious injuries"],
           advice: [
@@ -238,6 +247,7 @@ export const populateInitialCategories = async () => {
                 name: "Disease Outbreak",
                 description: "Infectious disease outbreaks and epidemics",
                 severityKeywords: {
+                  unknown: [],
                   info: ["monitoring", "isolated cases", "investigation"],
                   low: ["contained", "no new cases", "under control"],
                   advice: [
@@ -265,6 +275,7 @@ export const populateInitialCategories = async () => {
                 name: "Medical Emergency",
                 description: "Serious medical situations requiring urgent care",
                 severityKeywords: {
+                  unknown: [],
                   info: ["medical assistance", "non-urgent", "routine"],
                   low: ["minor injury", "treated", "discharged"],
                   advice: [
@@ -292,6 +303,7 @@ export const populateInitialCategories = async () => {
                 name: "Ambulance Response",
                 description: "Emergency medical services dispatched",
                 severityKeywords: {
+                  unknown: [],
                   info: ["ambulance dispatched", "routine call", "assessment"],
                   low: ["non-emergency", "transport only", "stable condition"],
                   advice: [
@@ -319,6 +331,7 @@ export const populateInitialCategories = async () => {
                 name: "Chemical Exposure",
                 description: "Exposure to hazardous chemicals",
                 severityKeywords: {
+                  unknown: [],
                   info: ["chemical detected", "low levels", "monitoring"],
                   low: ["minor exposure", "decontaminated", "no symptoms"],
                   advice: [
@@ -346,6 +359,7 @@ export const populateInitialCategories = async () => {
                 name: "Food Poisoning",
                 description: "Foodborne illness incidents",
                 severityKeywords: {
+                  unknown: [],
                   info: ["investigation", "isolated case", "testing"],
                   low: ["single case", "mild symptoms", "recovered"],
                   advice: [
@@ -373,6 +387,7 @@ export const populateInitialCategories = async () => {
                 name: "Heatwave Sickness",
                 description: "Heat-related health emergencies",
                 severityKeywords: {
+                  unknown: [],
                   info: [
                     "heat advisory",
                     "stay hydrated",
@@ -404,6 +419,7 @@ export const populateInitialCategories = async () => {
                 name: "Mass Casualty Event",
                 description: "Large-scale emergency with multiple victims",
                 severityKeywords: {
+                  unknown: [],
                   info: ["incident reported", "assessing", "initial response"],
                   low: [
                     "minor injuries",
@@ -433,6 +449,7 @@ export const populateInitialCategories = async () => {
         description: "Weather and environmental hazards",
         color: "#97D7FA",
         severityKeywords: {
+          unknown: [],
           info: ["weather watch", "monitoring", "developing conditions"],
           low: ["cleared", "weakening", "minimal impact"],
           advice: ["weather warning", "prepare", "potential impact"],
@@ -452,7 +469,7 @@ export const populateInitialCategories = async () => {
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
                 severityKeywords: {
-                  unknown: ["not applicable", "no fire", "all clear"],
+                  unknown: ["not applicable"],
                   info: ["info", "information"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
@@ -471,7 +488,7 @@ export const populateInitialCategories = async () => {
                 name: "Cyclone",
                 description: "Severe weather hazards including cyclones",
                 severityKeywords: {
-                  unknown: ["not applicable", "all clear"],
+                  unknown: ["not applicable"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
@@ -489,7 +506,7 @@ export const populateInitialCategories = async () => {
                 name: "Storm",
                 description: "Active storm events including thunderstorms",
                 severityKeywords: {
-                  unknown: ["not applicable", "all clear"],
+                  unknown: ["not applicable"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
@@ -507,7 +524,7 @@ export const populateInitialCategories = async () => {
                 name: "Flood",
                 description: "Flooding and water-related emergencies",
                 severityKeywords: {
-                  unknown: ["not applicable", "all clear"],
+                  unknown: ["not applicable"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
@@ -525,7 +542,7 @@ export const populateInitialCategories = async () => {
                 name: "Extreme Heat",
                 description: "Extreme heat events and heatwaves",
                 severityKeywords: {
-                  unknown: ["not applicable", "all clear"],
+                  unknown: ["not applicable"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
@@ -543,7 +560,7 @@ export const populateInitialCategories = async () => {
                 name: "Damaging Winds",
                 description: "High wind events causing damage",
                 severityKeywords: {
-                  unknown: ["not applicable", "all clear"],
+                  unknown: ["not applicable"],
                   advice: ["advice"],
                   watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
@@ -561,6 +578,7 @@ export const populateInitialCategories = async () => {
                 name: "Heavy Rain",
                 description: "Intense rainfall and precipitation",
                 severityKeywords: {
+                  unknown: [],
                   info: ["rain developing", "showers", "light rain"],
                   low: ["moderate rain", "clearing", "drizzle"],
                   advice: [
@@ -588,6 +606,7 @@ export const populateInitialCategories = async () => {
                 name: "Smoke",
                 description: "Smoke from fires affecting air quality",
                 severityKeywords: {
+                  unknown: [],
                   info: ["light smoke", "hazy", "distant fire"],
                   low: ["clearing smoke", "improving", "minimal"],
                   advice: ["thick smoke", "poor visibility", "stay indoors"],
@@ -607,6 +626,7 @@ export const populateInitialCategories = async () => {
                 name: "Earthquake",
                 description: "Seismic events and tremors",
                 severityKeywords: {
+                  unknown: [],
                   info: ["minor tremor", "felt slightly", "no damage"],
                   low: ["light shaking", "minimal damage", "aftershock"],
                   advice: [
@@ -634,6 +654,7 @@ export const populateInitialCategories = async () => {
                 name: "Landslide",
                 description: "Movement of rock, earth, or debris down a slope",
                 severityKeywords: {
+                  unknown: [],
                   info: ["unstable ground", "monitoring", "minor movement"],
                   low: ["small slide", "contained", "road affected"],
                   advice: [
@@ -661,6 +682,7 @@ export const populateInitialCategories = async () => {
                 name: "Poor Air Quality",
                 description: "Air pollution and quality concerns",
                 severityKeywords: {
+                  unknown: [],
                   info: ["air quality alert", "monitoring", "slight pollution"],
                   low: ["improving", "acceptable levels", "clearing"],
                   advice: [
@@ -690,6 +712,7 @@ export const populateInitialCategories = async () => {
         description: "Transportation and travel disruptions",
         color: "#86DF9D",
         severityKeywords: {
+          unknown: [],
           info: ["traffic alert", "minor delay", "roadworks"],
           low: ["cleared", "normal traffic", "minimal delay"],
           advice: ["significant delay", "seek alternate route", "avoid area"],
@@ -713,6 +736,7 @@ export const populateInitialCategories = async () => {
                 name: "Car Crash",
                 description: "Vehicle accidents and collisions",
                 severityKeywords: {
+                  unknown: [],
                   info: ["minor accident", "fender bender", "no injuries"],
                   low: ["cleared", "towed away", "traffic flowing"],
                   advice: ["serious accident", "injuries", "lane closures"],
@@ -730,12 +754,71 @@ export const populateInitialCategories = async () => {
               },
             },
             {
+              where: { id: "vehicleFire" },
+              create: {
+                id: "vehicleFire",
+                name: "Vehicle Fire",
+                description: "Fires involving vehicles",
+                severityKeywords: {
+                  unknown: ["not applicable"],
+                  info: ["small fire", "under control", "no injuries"],
+                  low: ["fire out", "cleared", "minimal damage"],
+                  advice: [
+                    "significant fire",
+                    "road closed",
+                    "emergency services",
+                  ],
+                  watchAndAct: [
+                    "major fire",
+                    "explosion risk",
+                    "multiple vehicles",
+                  ],
+                  emergency: [
+                    "catastrophic fire",
+                    "mass casualty",
+                    "highway closure",
+                  ],
+                },
+              },
+            },
+            {
+              where: {
+                id: "waterOverRoad",
+              },
+              create: {
+                id: "waterOverRoad",
+                name: "Water Over Road",
+                description: "Flooded roads and water hazards",
+                severityKeywords: {
+                  unknown: [],
+                  info: ["water on road", "minor flooding", "caution advised"],
+                  low: ["cleared", "water receded", "normal conditions"],
+                  advice: [
+                    "significant flooding",
+                    "seek alternate route",
+                    "avoid flooded areas",
+                  ],
+                  watchAndAct: [
+                    "major flooding",
+                    "road closed",
+                    "emergency services",
+                  ],
+                  emergency: [
+                    "catastrophic flooding",
+                    "mass evacuation",
+                    "life-threatening",
+                  ],
+                },
+              },
+            },
+            {
               where: { id: "trainDerailment" },
               create: {
                 id: "trainDerailment",
                 name: "Train Derailment",
                 description: "Railway accidents and derailments",
                 severityKeywords: {
+                  unknown: [],
                   info: ["train stopped", "minor issue", "investigating"],
                   low: ["service resumed", "minor delay", "no damage"],
                   advice: [
@@ -763,6 +846,7 @@ export const populateInitialCategories = async () => {
                 name: "Road Closure",
                 description: "Road blocks and closures",
                 severityKeywords: {
+                  unknown: [],
                   info: ["planned closure", "roadworks", "short term"],
                   low: ["reopened", "one lane", "minimal impact"],
                   advice: [
@@ -790,6 +874,7 @@ export const populateInitialCategories = async () => {
                 name: "Airport Emergency",
                 description: "Aviation emergencies and incidents",
                 severityKeywords: {
+                  unknown: [],
                   info: ["minor delay", "weather delay", "maintenance"],
                   low: ["normal operations", "minor disruption", "catching up"],
                   advice: ["significant delays", "diversions", "avoid airport"],
@@ -813,6 +898,7 @@ export const populateInitialCategories = async () => {
                 name: "Ferry Accident",
                 description: "Marine transport accidents",
                 severityKeywords: {
+                  unknown: [],
                   info: ["minor incident", "service delay", "mechanical issue"],
                   low: ["service resumed", "backup ferry", "minor delay"],
                   advice: [
@@ -836,6 +922,7 @@ export const populateInitialCategories = async () => {
                 name: "Major Traffic Delay",
                 description: "Significant traffic congestion and delays",
                 severityKeywords: {
+                  unknown: [],
                   info: ["heavy traffic", "slow moving", "peak hour"],
                   low: ["traffic easing", "normal flow", "clearing"],
                   advice: ["severe congestion", "long delays", "avoid area"],
@@ -857,6 +944,7 @@ export const populateInitialCategories = async () => {
         description: "Infrastructure failures and service disruptions",
         color: "#FFE47A",
         severityKeywords: {
+          unknown: [],
           info: ["service alert", "maintenance", "minor disruption"],
           low: ["service restored", "minimal impact", "backup systems"],
           advice: [
@@ -884,6 +972,7 @@ export const populateInitialCategories = async () => {
                 name: "Structural Fire",
                 description: "Fires in buildings and structures",
                 severityKeywords: {
+                  unknown: ["not applicable"],
                   info: ["smoke detected", "alarm activated", "investigating"],
                   low: ["small fire", "contained", "no spread"],
                   advice: ["building fire", "evacuating", "avoid area"],
@@ -903,6 +992,7 @@ export const populateInitialCategories = async () => {
                 name: "Power Outage",
                 description: "Electrical power failures and blackouts",
                 severityKeywords: {
+                  unknown: [],
                   info: ["power fluctuation", "brief outage", "investigating"],
                   low: ["power restored", "localized", "minimal impact"],
                   advice: [
@@ -930,6 +1020,7 @@ export const populateInitialCategories = async () => {
                 name: "Gas Leak",
                 description: "Natural gas leaks and related hazards",
                 severityKeywords: {
+                  unknown: [],
                   info: ["gas odor", "investigating", "minor leak"],
                   low: ["leak repaired", "ventilated", "no danger"],
                   advice: [
@@ -957,6 +1048,7 @@ export const populateInitialCategories = async () => {
                 name: "Internet Down",
                 description: "Internet and telecommunications outages",
                 severityKeywords: {
+                  unknown: [],
                   info: ["slow connection", "intermittent", "minor issues"],
                   low: [
                     "service restored",
@@ -988,6 +1080,7 @@ export const populateInitialCategories = async () => {
                 name: "Water Contamination",
                 description: "Water supply contamination issues",
                 severityKeywords: {
+                  unknown: [],
                   info: ["water testing", "precautionary", "monitoring"],
                   low: ["safe levels", "cleared", "normal supply"],
                   advice: [
@@ -1015,6 +1108,7 @@ export const populateInitialCategories = async () => {
                 name: "Industrial Fire",
                 description: "Fires at industrial facilities",
                 severityKeywords: {
+                  unknown: [],
                   info: ["alarm activated", "small fire", "investigating"],
                   low: ["contained", "no spread", "normal operations"],
                   advice: [
@@ -1042,6 +1136,7 @@ export const populateInitialCategories = async () => {
                 name: "Hazmat Spill",
                 description: "Hazardous material spills and leaks",
                 severityKeywords: {
+                  unknown: [],
                   info: ["minor spill", "contained", "cleaning up"],
                   low: ["spill cleaned", "no danger", "area safe"],
                   advice: ["hazmat spill", "avoid area", "decontamination"],
@@ -1067,6 +1162,7 @@ export const populateInitialCategories = async () => {
         description: "Large gatherings and crowd-related incidents",
         color: "#AB87F1",
         severityKeywords: {
+          unknown: [],
           info: ["event planned", "crowd gathering", "normal event"],
           low: ["orderly crowd", "event concluded", "dispersing"],
           advice: ["crowd control", "avoid area", "potential disruption"],
@@ -1082,6 +1178,7 @@ export const populateInitialCategories = async () => {
                 name: "Concert/Festival Incident",
                 description: "Incidents at concerts and festivals",
                 severityKeywords: {
+                  unknown: [],
                   info: [
                     "event ongoing",
                     "normal operations",
@@ -1113,6 +1210,7 @@ export const populateInitialCategories = async () => {
                 name: "Protest",
                 description: "Public demonstrations and protests",
                 severityKeywords: {
+                  unknown: [],
                   info: ["peaceful protest", "demonstration", "permitted"],
                   low: ["dispersing", "peaceful", "no incidents"],
                   advice: ["tensions rising", "avoid area", "road closures"],
@@ -1132,6 +1230,7 @@ export const populateInitialCategories = async () => {
                 name: "Large Sporting Event",
                 description: "Incidents at sporting venues and events",
                 severityKeywords: {
+                  unknown: [],
                   info: ["event day", "crowds expected", "security measures"],
                   low: ["normal crowd", "orderly", "no issues"],
                   advice: ["crowd issues", "delays", "avoid area"],
@@ -1151,6 +1250,7 @@ export const populateInitialCategories = async () => {
                 name: "Crowd Crush/Stampede",
                 description: "Dangerous crowd movements and stampedes",
                 severityKeywords: {
+                  unknown: [],
                   info: ["crowd density", "monitoring", "crowd control"],
                   low: ["managed", "dispersing", "safety measures"],
                   advice: ["dangerous density", "avoid area", "crowd pressure"],
@@ -1176,6 +1276,7 @@ export const populateInitialCategories = async () => {
         description: "Miscellaneous Hazards Not Classified Elsewhere",
         color: "#BAA27D",
         severityKeywords: {
+          unknown: [],
           info: ["miscellaneous incident", "unclassified", "investigating"],
           low: ["minor incident", "resolved", "no significant impact"],
           advice: [

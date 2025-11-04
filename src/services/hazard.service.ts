@@ -571,11 +571,15 @@ export const getAISeverity = async ({
   try {
     const defaultSeverityKeywords: SeverityKeywords = {
       unknown: [],
-      info: [],
-      low: [],
-      advice: [],
-      watchAndAct: [],
-      emergency: [],
+      info: ["miscellaneous incident", "unclassified", "investigating"],
+      low: ["minor incident", "resolved", "no significant impact"],
+      advice: ["notable incident", "monitor situation", "potential concern"],
+      watchAndAct: [
+        "significant incident",
+        "action required",
+        "serious concern",
+      ],
+      emergency: ["critical incident", "immediate action", "life threatening"],
     };
 
     let category = await prisma.hazardCategory.findUnique({
@@ -617,7 +621,7 @@ export const getAISeverity = async ({
     // Create keyword context for each severity level
     const keywordContext = Object.entries(severityKeywords)
       .map(([severity, keywords]) => {
-        if (keywords.length === 0) return null;
+        if (keywords.length === 0) return `${severity}: ${severity}`;
         return `${severity}: ${keywords.join(", ")}`;
       })
       .filter(Boolean)
