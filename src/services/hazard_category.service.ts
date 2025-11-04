@@ -195,11 +195,11 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "tornado" },
+              where: { id: "damagingWinds" },
               create: {
-                id: "tornado",
-                name: "Tornado",
-                description: "Tornado and severe wind events",
+                id: "damagingWinds",
+                name: "Damaging Winds",
+                description: "High wind events causing damage",
               },
             },
             {
@@ -216,6 +216,22 @@ export const populateInitialCategories = async () => {
                 id: "smoke",
                 name: "Smoke",
                 description: "Smoke from fires affecting air quality",
+              },
+            },
+            {
+              where: { id: "earthquake" },
+              create: {
+                id: "earthquake",
+                name: "Earthquake",
+                description: "Seismic events and tremors",
+              },
+            },
+            {
+              where: { id: "landslide" },
+              create: {
+                id: "landslide",
+                name: "Landslide",
+                description: "Movement of rock, earth, or debris down a slope",
               },
             },
             {
@@ -294,6 +310,14 @@ export const populateInitialCategories = async () => {
         color: "#FFE47A",
         subCategories: {
           connectOrCreate: [
+            {
+              where: { id: "structuralFire" },
+              create: {
+                id: "structuralFire",
+                name: "Structural Fire",
+                description: "Fires in buildings and structures",
+              },
+            },
             {
               where: { id: "powerOutage" },
               create: {

@@ -454,7 +454,14 @@ export async function parseRSSFeedToHazards(
 ): Promise<Prisma.HazardCreateInput[]> {
   const parser = new Parser({
     customFields: {
-      item: ["identifier", "description", "georss:point", "id", "published"],
+      item: [
+        "identifier",
+        "description",
+        "georss:point",
+        "id",
+        "published",
+        "category",
+      ],
     },
   });
   const feed = await parser.parseURL(url);
@@ -463,11 +470,12 @@ export async function parseRSSFeedToHazards(
 
   return feed.items.map((item) => {
     const title = cleanRSSTitle(item.title || "Untitled Incident");
-    const description = cleanDescription(
-      item.content || item.description || ""
-    );
+    let description = cleanDescription(item.content || item.description || "");
 
-    const severity = determineRSSSeverity(description, title);
+    const alertLevel = item.category?.$?.term;
+    if (alertLevel && alertLevel.trim() !== "") {
+      description = `Alert Level: ${alertLevel}\n${description}`;
+    }
 
     const { latitude, longitude } = extractRSSCoordinates(item);
 
@@ -486,7 +494,6 @@ export async function parseRSSFeedToHazards(
       latitude,
       longitude,
       occurredAt: parseValidDate(item.pubDate),
-      severity,
     };
 
     return hazard;
@@ -824,49 +831,6 @@ function cleanRSSTitle(title: string): string {
   }
 
   return title.trim();
-}
-
-/**
- * Determines hazard severity based on RSS content
- */
-function determineRSSSeverity(
-  description: string,
-  title: string
-): HazardSeverity {
-  const content = `${description} ${title}`.toLowerCase();
-
-  // Emergency indicators
-  if (
-    content.includes("emergency") ||
-    content.includes("evacuation") ||
-    content.includes("immediate threat") ||
-    content.includes("life threatening")
-  ) {
-    return HazardSeverity.emergency;
-  }
-
-  // Watch and Act indicators
-  if (
-    content.includes("watch and act") ||
-    content.includes("prepare to evacuate") ||
-    content.includes("going") ||
-    content.includes("out of control")
-  ) {
-    return HazardSeverity.watchAndAct;
-  }
-
-  // Advice level indicators
-  if (
-    content.includes("advice") ||
-    content.includes("monitor") ||
-    content.includes("tree down") ||
-    content.includes("road closure")
-  ) {
-    return HazardSeverity.advice;
-  }
-
-  // Default to info for general incidents
-  return HazardSeverity.info;
 }
 
 /**

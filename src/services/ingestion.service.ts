@@ -79,13 +79,13 @@ export const syncHazardsFromDifferentSources = async () => {
     ];
 
     const sources: HazardSourceConfig[] = [
-      {
-        name: "RFS",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromRFS,
-      },
+      // {
+      //   name: "RFS",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromRFS,
+      // },
       {
         name: "BoM",
         categoryId: "weatherAndEnvironment",
@@ -93,55 +93,55 @@ export const syncHazardsFromDifferentSources = async () => {
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromBoM,
       },
-      {
-        name: "NSW Transport live traffic hazards",
-        categoryId: "transportAndTravel",
-        allowedSeverities: allowedSeveritiesNonAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromLiveTrafficHazards,
-      },
-      {
-        name: "NSW air quality",
-        categoryId: "weatherAndEnvironment",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromAirQuality,
-      },
-      {
-        name: "ACT Emergency Services",
-        categoryId: "healthAndEmergency",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromACT,
-      },
-      {
-        name: "CFS",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromCFS,
-      },
-      {
-        name: "Vice Fire Services",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromViceFireServices,
-      },
-      {
-        name: "QLD Fire Department",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromQLDFireDepartment,
-      },
-      {
-        name: "NT Fire and Rescue",
-        categoryId: "bushfire",
-        allowedSeverities: allowedSeveritiesAWS,
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsFromNTFireAndRescue,
-      },
+      // {
+      //   name: "NSW Transport live traffic hazards",
+      //   categoryId: "transportAndTravel",
+      //   allowedSeverities: allowedSeveritiesNonAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromLiveTrafficHazards,
+      // },
+      // {
+      //   name: "NSW air quality",
+      //   categoryId: "weatherAndEnvironment",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromAirQuality,
+      // },
+      // {
+      //   name: "ACT Emergency Services",
+      //   categoryId: "healthAndEmergency",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromACT,
+      // },
+      // {
+      //   name: "CFS",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromCFS,
+      // },
+      // {
+      //   name: "Vice Fire Services",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromViceFireServices,
+      // },
+      // {
+      //   name: "QLD Fire Department",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
+      // },
+      // {
+      //   name: "NT Fire and Rescue",
+      //   categoryId: "bushfire",
+      //   allowedSeverities: allowedSeveritiesAWS,
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsFromNTFireAndRescue,
+      // },
     ];
 
     await Promise.all(

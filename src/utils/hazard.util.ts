@@ -574,21 +574,21 @@ export const getFormattedHazardSeverity = (
   }
 };
 
-/// Returns detailed description for each hazard severity level.
-export const getSeverityDetail = (severity: HazardSeverity): string => {
+/// Returns the keywords string for each hazard severity level.
+export const getSeverityKeywords = (severity: HazardSeverity): string => {
   switch (severity) {
     case HazardSeverity.unknown:
-      return "The severity of the hazard is currently unknown.";
+      return `"unknown", "not applicable"`;
     case HazardSeverity.info:
-      return "General information about a hazard. (Eg: Smoke visible near city outskirts, Minor road blockage, Air quality advisory etc.)";
+      return `"info", "information"`;
     case HazardSeverity.low:
-      return "Low-level information about a hazard. (Eg: Minor smoke detected, Small road blockage, Air quality slightly affected etc.)";
+      return `"low"`;
     case HazardSeverity.advice:
-      return "An incident has started. There is no immediate danger. Stay up to date in case the situation changes. (Eg: Small bushfire contained, Floodwater rising, Gas leak under investigation etc.)";
+      return `"advice"`;
     case HazardSeverity.watchAndAct:
-      return "There is a heightened level of threat. Conditions are changing and you need to start taking action now to protect you and your family. (Eg: Bushfire approaching, Flash flood possible, Landslide warning etc.)";
+      return `"watchAndAct", "watch and act", "watch & act"`;
     case HazardSeverity.emergency:
-      return "An Emergency Warning is the highest level of warning. You may be in danger and need to take action immediately. Any delay now puts your life at risk. (Eg: Major fire emergency, Severe flood warning, Evacuate immediately etc.)";
+      return `"emergency", "emergency warning"`;
   }
 };
 
@@ -647,6 +647,7 @@ export const getSeverityCallToActions = (
  * Lists of allowed severities for Australian Warnings System (AWS) hazards.
  */
 export const allowedSeveritiesAWS: HazardSeverity[] = [
+  HazardSeverity.unknown,
   HazardSeverity.advice,
   HazardSeverity.watchAndAct,
   HazardSeverity.emergency,
@@ -662,6 +663,36 @@ export const allowedSeveritiesNonAWS: HazardSeverity[] = [
   HazardSeverity.watchAndAct, // equivalent to 'high'
   HazardSeverity.emergency, // equivalent to 'critical'
 ];
+
+/**
+ * Finds and returns the lowest severity from a list of severities.
+ * The severity hierarchy is defined as:
+ * unknown < info < low < advice < watchAndAct < emergency
+ */
+export const getLowestSeverity = (
+  severities: HazardSeverity[]
+): HazardSeverity => {
+  const severityOrder: HazardSeverity[] = [
+    HazardSeverity.unknown,
+    HazardSeverity.info,
+    HazardSeverity.low,
+    HazardSeverity.advice,
+    HazardSeverity.watchAndAct,
+    HazardSeverity.emergency,
+  ];
+
+  let lowestSeverity: HazardSeverity = severities[0]!;
+
+  for (const severity of severities) {
+    if (
+      severityOrder.indexOf(severity) < severityOrder.indexOf(lowestSeverity)
+    ) {
+      lowestSeverity = severity;
+    }
+  }
+
+  return lowestSeverity;
+};
 
 /**
  * Adjusts the hazard severity to the closest allowed severity from a given list.

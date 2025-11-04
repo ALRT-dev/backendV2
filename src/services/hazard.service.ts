@@ -19,8 +19,9 @@ import {
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
+  getLowestSeverity,
   getSeverityCallToActions,
-  getSeverityDetail,
+  getSeverityKeywords,
 } from "../utils/hazard.util.js";
 
 /**
@@ -345,7 +346,7 @@ export const reviewHazard = async ({
 
   // Build severity levels text based on allowed severities
   const severityLevelsText = allowedSeverities
-    .map((severity) => `- "${severity}": ${getSeverityDetail(severity)}`)
+    .map((severity) => `- "${severity}": ${getSeverityKeywords(severity)}`)
     .join("\n");
 
   // Build call to action text based on allowed severities
@@ -456,7 +457,7 @@ export const summarizeHazard = async ({
 
   // Build severity levels text based on allowed severities
   const severityLevelsText = allowedSeverities
-    .map((severity) => `- "${severity}": ${getSeverityDetail(severity)}`)
+    .map((severity) => `- "${severity}": ${getSeverityKeywords(severity)}`)
     .join("\n");
 
   // Build call to action text based on allowed severities
@@ -473,6 +474,14 @@ export const summarizeHazard = async ({
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
 
     SEVERITY LEVELS:
+    Choose the most appropriate severity based on the hazard characteristics by using keyword matching.
+    Treat keyword matching as **case-insensitive**. 
+    IMPORTANT: Please **don't** assume any severity if keywords are not matched. If no keywords match, default to "${
+      allowedSeverities.length > 0
+        ? getLowestSeverity(allowedSeverities)
+        : "unknown"
+    }". 
+    If multiple keywords appear, choose the **highest severity**.
     ${severityLevelsText}
 
     CONFIDENCE LEVELS:
@@ -486,7 +495,7 @@ export const summarizeHazard = async ({
 
     ${
       availableCategories && availableCategories.length > 0
-        ? `AVAILABLE HAZARD CATEGORIES:\nChoose the most appropriate category based on the hazard characteristics.\n- ${availableCategories.join(
+        ? `AVAILABLE HAZARD CATEGORIES:\nChoose the most appropriate category based on the hazard characteristics. If no category is suitable, use "other".\n- ${availableCategories.join(
             ", "
           )}`
         : ""
