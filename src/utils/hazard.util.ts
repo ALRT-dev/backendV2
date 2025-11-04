@@ -7,6 +7,7 @@ import type {
   HazardSearchParams,
   SortSetting,
 } from "../models/hazard_search_params_interface.js";
+import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -663,6 +664,40 @@ export const allowedSeveritiesNonAWS: HazardSeverity[] = [
   HazardSeverity.watchAndAct, // equivalent to 'high'
   HazardSeverity.emergency, // equivalent to 'critical'
 ];
+
+/**
+ * Performs keyword matching to determine severity level based on title and description.
+ */
+export const performKeywordMatchingForSeverity = (
+  title: string,
+  description: string,
+  severityKeywords: SeverityKeywords
+): HazardSeverity => {
+  const content = `${title} ${description}`.toLowerCase();
+
+  // Check from highest to lowest severity
+  const severityOrder: (keyof SeverityKeywords)[] = [
+    HazardSeverity.emergency,
+    HazardSeverity.watchAndAct,
+    HazardSeverity.advice,
+    HazardSeverity.low,
+    HazardSeverity.info,
+    HazardSeverity.unknown,
+  ];
+
+  for (const severity of severityOrder) {
+    const keywords = severityKeywords[severity];
+    if (keywords && keywords.length > 0) {
+      for (const keyword of keywords) {
+        if (content.includes(keyword.toLowerCase())) {
+          return severity;
+        }
+      }
+    }
+  }
+
+  return HazardSeverity.unknown;
+};
 
 /**
  * Finds and returns the lowest severity from a list of severities.

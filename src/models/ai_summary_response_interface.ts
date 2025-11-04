@@ -1,9 +1,11 @@
+import type { HazardSeverity } from "@prisma/client";
+
 export interface AISummaryResponse {
   title: string;
   shortDescription: string;
   summary: string;
   confidence: "high" | "medium" | "low";
-  severity: "info" | "advice" | "watchAndAct" | "emergency";
+  severity: HazardSeverity;
   callToAction: string;
-  category?: string;
+  category: string;
 }

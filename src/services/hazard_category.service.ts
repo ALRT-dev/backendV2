@@ -20,6 +20,21 @@ export const populateInitialCategories = async () => {
         name: "Safety & Security",
         description: "Crime, Civil Unrest, Terror Threat",
         color: "#FC9493",
+        severityKeywords: {
+          info: ["suspicious activity", "increased security", "security alert"],
+          low: ["minor incident", "resolved", "all clear"],
+          advice: ["ongoing investigation", "avoid area", "caution advised"],
+          watchAndAct: [
+            "active threat",
+            "shelter in place",
+            "immediate danger",
+          ],
+          emergency: [
+            "armed incident",
+            "immediate evacuation",
+            "life threatening",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -28,6 +43,21 @@ export const populateInitialCategories = async () => {
                 id: "crime",
                 name: "Crime",
                 description: "Criminal activities including theft and assault",
+                severityKeywords: {
+                  info: ["reported", "investigation", "patrol increased"],
+                  low: ["minor theft", "resolved", "suspect apprehended"],
+                  advice: [
+                    "theft reported",
+                    "be vigilant",
+                    "secure belongings",
+                  ],
+                  watchAndAct: ["assault", "robbery", "armed crime"],
+                  emergency: [
+                    "violent crime",
+                    "active shooter",
+                    "hostage situation",
+                  ],
+                },
               },
             },
             {
@@ -36,6 +66,25 @@ export const populateInitialCategories = async () => {
                 id: "fight",
                 name: "Fight",
                 description: "Physical altercations and brawls",
+                severityKeywords: {
+                  info: ["verbal argument", "tension", "dispute"],
+                  low: ["minor scuffle", "broken up", "no injuries"],
+                  advice: [
+                    "physical altercation",
+                    "avoid area",
+                    "police responding",
+                  ],
+                  watchAndAct: [
+                    "large brawl",
+                    "weapons involved",
+                    "injuries reported",
+                  ],
+                  emergency: [
+                    "mass brawl",
+                    "serious injuries",
+                    "life threatening",
+                  ],
+                },
               },
             },
             {
@@ -44,6 +93,21 @@ export const populateInitialCategories = async () => {
                 id: "shooting",
                 name: "Shooting",
                 description: "Gun violence incidents",
+                severityKeywords: {
+                  info: ["gunshots heard", "investigating", "unconfirmed"],
+                  low: ["false alarm", "fireworks", "construction noise"],
+                  advice: ["shots fired", "police responding", "avoid area"],
+                  watchAndAct: [
+                    "active shooting",
+                    "injuries",
+                    "shelter in place",
+                  ],
+                  emergency: [
+                    "mass shooting",
+                    "multiple casualties",
+                    "immediate evacuation",
+                  ],
+                },
               },
             },
             {
@@ -52,6 +116,25 @@ export const populateInitialCategories = async () => {
                 id: "terrorism",
                 name: "Terrorism",
                 description: "Terrorist activities and threats",
+                severityKeywords: {
+                  info: [
+                    "threat assessment",
+                    "increased vigilance",
+                    "unconfirmed threat",
+                  ],
+                  low: ["false alarm", "hoax", "cleared"],
+                  advice: [
+                    "credible threat",
+                    "heightened security",
+                    "avoid large gatherings",
+                  ],
+                  watchAndAct: [
+                    "imminent threat",
+                    "evacuation ordered",
+                    "attack likely",
+                  ],
+                  emergency: ["active attack", "explosion", "immediate danger"],
+                },
               },
             },
             {
@@ -60,6 +143,21 @@ export const populateInitialCategories = async () => {
                 id: "bombThreat",
                 name: "Bomb Threat",
                 description: "Explosive device threats and incidents",
+                severityKeywords: {
+                  info: ["threat received", "investigating", "precautionary"],
+                  low: ["hoax", "false alarm", "all clear"],
+                  advice: [
+                    "credible threat",
+                    "building evacuation",
+                    "bomb squad",
+                  ],
+                  watchAndAct: [
+                    "device found",
+                    "area cordoned",
+                    "immediate evacuation",
+                  ],
+                  emergency: ["explosion", "casualties", "multiple devices"],
+                },
               },
             },
             {
@@ -68,6 +166,17 @@ export const populateInitialCategories = async () => {
                 id: "riot",
                 name: "Riot",
                 description: "Civil disorder and violent public disturbances",
+                severityKeywords: {
+                  info: ["protest", "gathering", "peaceful demonstration"],
+                  low: ["dispersed", "peaceful", "no incidents"],
+                  advice: ["unrest", "property damage", "avoid area"],
+                  watchAndAct: ["violent clashes", "looting", "fires"],
+                  emergency: [
+                    "widespread violence",
+                    "major destruction",
+                    "lives at risk",
+                  ],
+                },
               },
             },
             {
@@ -76,6 +185,25 @@ export const populateInitialCategories = async () => {
                 id: "policeLockdown",
                 name: "Police Lockdown",
                 description: "Law enforcement security measures",
+                severityKeywords: {
+                  info: [
+                    "increased patrols",
+                    "routine security",
+                    "precautionary",
+                  ],
+                  low: ["minor incident", "traffic stop", "resolved"],
+                  advice: [
+                    "area secured",
+                    "investigation ongoing",
+                    "movement restricted",
+                  ],
+                  watchAndAct: ["manhunt", "dangerous suspect", "stay indoors"],
+                  emergency: [
+                    "armed suspect",
+                    "hostage situation",
+                    "immediate threat",
+                  ],
+                },
               },
             },
           ],
@@ -86,6 +214,21 @@ export const populateInitialCategories = async () => {
         name: "Health & Medical",
         description: "Health emergencies and medical incidents",
         color: "#FCC27B",
+        severityKeywords: {
+          info: ["health advisory", "monitoring", "precautionary"],
+          low: ["minor incident", "treated", "no serious injuries"],
+          advice: [
+            "seek medical attention",
+            "symptoms reported",
+            "contamination possible",
+          ],
+          watchAndAct: ["outbreak", "multiple cases", "quarantine"],
+          emergency: [
+            "critical outbreak",
+            "mass casualties",
+            "immediate medical attention",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -94,6 +237,25 @@ export const populateInitialCategories = async () => {
                 id: "diseaseOutbreak",
                 name: "Disease Outbreak",
                 description: "Infectious disease outbreaks and epidemics",
+                severityKeywords: {
+                  info: ["monitoring", "isolated cases", "investigation"],
+                  low: ["contained", "no new cases", "under control"],
+                  advice: [
+                    "increasing cases",
+                    "vaccination recommended",
+                    "take precautions",
+                  ],
+                  watchAndAct: [
+                    "rapid spread",
+                    "community transmission",
+                    "quarantine measures",
+                  ],
+                  emergency: [
+                    "pandemic",
+                    "hospital overwhelmed",
+                    "widespread transmission",
+                  ],
+                },
               },
             },
             {
@@ -102,6 +264,25 @@ export const populateInitialCategories = async () => {
                 id: "medicalEmergency",
                 name: "Medical Emergency",
                 description: "Serious medical situations requiring urgent care",
+                severityKeywords: {
+                  info: ["medical assistance", "non-urgent", "routine"],
+                  low: ["minor injury", "treated", "discharged"],
+                  advice: [
+                    "serious condition",
+                    "hospital required",
+                    "multiple patients",
+                  ],
+                  watchAndAct: [
+                    "critical condition",
+                    "life support",
+                    "emergency surgery",
+                  ],
+                  emergency: [
+                    "cardiac arrest",
+                    "multiple casualties",
+                    "mass medical event",
+                  ],
+                },
               },
             },
             {
@@ -110,6 +291,25 @@ export const populateInitialCategories = async () => {
                 id: "ambulanceResponse",
                 name: "Ambulance Response",
                 description: "Emergency medical services dispatched",
+                severityKeywords: {
+                  info: ["ambulance dispatched", "routine call", "assessment"],
+                  low: ["non-emergency", "transport only", "stable condition"],
+                  advice: [
+                    "urgent response",
+                    "serious condition",
+                    "multiple units",
+                  ],
+                  watchAndAct: [
+                    "critical patient",
+                    "trauma team",
+                    "air ambulance",
+                  ],
+                  emergency: [
+                    "mass casualty",
+                    "disaster response",
+                    "overwhelming demand",
+                  ],
+                },
               },
             },
             {
@@ -118,6 +318,25 @@ export const populateInitialCategories = async () => {
                 id: "chemicalExposure",
                 name: "Chemical Exposure",
                 description: "Exposure to hazardous chemicals",
+                severityKeywords: {
+                  info: ["chemical detected", "low levels", "monitoring"],
+                  low: ["minor exposure", "decontaminated", "no symptoms"],
+                  advice: [
+                    "hazardous levels",
+                    "evacuation zone",
+                    "seek shelter",
+                  ],
+                  watchAndAct: [
+                    "toxic cloud",
+                    "widespread exposure",
+                    "immediate evacuation",
+                  ],
+                  emergency: [
+                    "lethal concentration",
+                    "mass poisoning",
+                    "environmental disaster",
+                  ],
+                },
               },
             },
             {
@@ -126,6 +345,25 @@ export const populateInitialCategories = async () => {
                 id: "foodPoisoning",
                 name: "Food Poisoning",
                 description: "Foodborne illness incidents",
+                severityKeywords: {
+                  info: ["investigation", "isolated case", "testing"],
+                  low: ["single case", "mild symptoms", "recovered"],
+                  advice: [
+                    "multiple cases",
+                    "restaurant closure",
+                    "avoid consumption",
+                  ],
+                  watchAndAct: [
+                    "widespread illness",
+                    "hospitalization",
+                    "source identified",
+                  ],
+                  emergency: [
+                    "mass outbreak",
+                    "deaths reported",
+                    "contaminated supply",
+                  ],
+                },
               },
             },
             {
@@ -134,6 +372,29 @@ export const populateInitialCategories = async () => {
                 id: "heatwaveSickness",
                 name: "Heatwave Sickness",
                 description: "Heat-related health emergencies",
+                severityKeywords: {
+                  info: [
+                    "heat advisory",
+                    "stay hydrated",
+                    "monitor vulnerable",
+                  ],
+                  low: ["mild symptoms", "treated", "cooling centers open"],
+                  advice: [
+                    "heat exhaustion",
+                    "multiple cases",
+                    "seek air conditioning",
+                  ],
+                  watchAndAct: [
+                    "heat stroke",
+                    "hospital admissions",
+                    "extreme temperatures",
+                  ],
+                  emergency: [
+                    "mass heat casualties",
+                    "overwhelming hospitals",
+                    "deadly temperatures",
+                  ],
+                },
               },
             },
             {
@@ -142,6 +403,25 @@ export const populateInitialCategories = async () => {
                 id: "massCasualtyEvent",
                 name: "Mass Casualty Event",
                 description: "Large-scale emergency with multiple victims",
+                severityKeywords: {
+                  info: ["incident reported", "assessing", "initial response"],
+                  low: [
+                    "minor injuries",
+                    "walking wounded",
+                    "controlled scene",
+                  ],
+                  advice: ["multiple injuries", "triage", "hospital alert"],
+                  watchAndAct: [
+                    "serious casualties",
+                    "overwhelmed services",
+                    "disaster declared",
+                  ],
+                  emergency: [
+                    "mass fatalities",
+                    "catastrophic event",
+                    "total system failure",
+                  ],
+                },
               },
             },
           ],
@@ -152,6 +432,17 @@ export const populateInitialCategories = async () => {
         name: "Weather & Environment",
         description: "Weather and environmental hazards",
         color: "#97D7FA",
+        severityKeywords: {
+          info: ["weather watch", "monitoring", "developing conditions"],
+          low: ["cleared", "weakening", "minimal impact"],
+          advice: ["weather warning", "prepare", "potential impact"],
+          watchAndAct: [
+            "dangerous conditions",
+            "take action",
+            "immediate threat",
+          ],
+          emergency: ["catastrophic", "life threatening", "extreme danger"],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -160,6 +451,21 @@ export const populateInitialCategories = async () => {
                 id: "bushfire",
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
+                severityKeywords: {
+                  info: ["fire detected", "contained", "monitoring"],
+                  low: ["small fire", "controlled", "crews responding"],
+                  advice: ["fire burning", "prepare to leave", "smoke hazard"],
+                  watchAndAct: [
+                    "evacuate now",
+                    "ember attack",
+                    "lives at risk",
+                  ],
+                  emergency: [
+                    "catastrophic fire",
+                    "emergency warning",
+                    "too late to leave",
+                  ],
+                },
               },
             },
             {
@@ -168,6 +474,21 @@ export const populateInitialCategories = async () => {
                 id: "cyclone",
                 name: "Cyclone",
                 description: "Severe weather hazards including cyclones",
+                severityKeywords: {
+                  info: ["tropical low", "developing system", "watch"],
+                  low: ["category 1", "weakening", "minimal damage"],
+                  advice: ["category 2", "destructive winds", "prepare"],
+                  watchAndAct: [
+                    "category 3",
+                    "very destructive",
+                    "shelter now",
+                  ],
+                  emergency: [
+                    "category 4-5",
+                    "extremely dangerous",
+                    "catastrophic",
+                  ],
+                },
               },
             },
             {
@@ -176,6 +497,21 @@ export const populateInitialCategories = async () => {
                 id: "storm",
                 name: "Storm",
                 description: "Active storm events including thunderstorms",
+                severityKeywords: {
+                  info: ["storm developing", "possible", "watch"],
+                  low: ["light storm", "passing", "minor"],
+                  advice: [
+                    "severe thunderstorm",
+                    "damaging winds",
+                    "heavy rain",
+                  ],
+                  watchAndAct: [
+                    "destructive storm",
+                    "dangerous winds",
+                    "seek shelter",
+                  ],
+                  emergency: ["extreme storm", "tornado", "life threatening"],
+                },
               },
             },
             {
@@ -184,6 +520,21 @@ export const populateInitialCategories = async () => {
                 id: "flood",
                 name: "Flood",
                 description: "Flooding and water-related emergencies",
+                severityKeywords: {
+                  info: ["flood watch", "rising levels", "monitoring"],
+                  low: ["minor flooding", "receding", "passable"],
+                  advice: ["flood warning", "road closures", "avoid low areas"],
+                  watchAndAct: [
+                    "major flooding",
+                    "evacuate",
+                    "dangerous currents",
+                  ],
+                  emergency: [
+                    "catastrophic flooding",
+                    "flash flood",
+                    "life threatening",
+                  ],
+                },
               },
             },
             {
@@ -192,6 +543,21 @@ export const populateInitialCategories = async () => {
                 id: "extremeHeat",
                 name: "Extreme Heat",
                 description: "Extreme heat events and heatwaves",
+                severityKeywords: {
+                  info: ["heat advisory", "warm weather", "monitoring"],
+                  low: ["moderate heat", "manageable", "cooling"],
+                  advice: ["extreme heat", "stay cool", "avoid outdoors"],
+                  watchAndAct: [
+                    "dangerous heat",
+                    "heat emergency",
+                    "seek air conditioning",
+                  ],
+                  emergency: [
+                    "catastrophic heat",
+                    "deadly temperatures",
+                    "health emergency",
+                  ],
+                },
               },
             },
             {
@@ -200,6 +566,21 @@ export const populateInitialCategories = async () => {
                 id: "damagingWinds",
                 name: "Damaging Winds",
                 description: "High wind events causing damage",
+                severityKeywords: {
+                  info: ["windy conditions", "gusty", "breezy"],
+                  low: ["light winds", "calming", "minor gusts"],
+                  advice: ["strong winds", "secure objects", "avoid trees"],
+                  watchAndAct: [
+                    "destructive winds",
+                    "dangerous",
+                    "stay indoors",
+                  ],
+                  emergency: [
+                    "extreme winds",
+                    "widespread damage",
+                    "life threatening",
+                  ],
+                },
               },
             },
             {
@@ -208,6 +589,25 @@ export const populateInitialCategories = async () => {
                 id: "heavyRain",
                 name: "Heavy Rain",
                 description: "Intense rainfall and precipitation",
+                severityKeywords: {
+                  info: ["rain developing", "showers", "light rain"],
+                  low: ["moderate rain", "clearing", "drizzle"],
+                  advice: [
+                    "heavy rain",
+                    "flooding possible",
+                    "drive carefully",
+                  ],
+                  watchAndAct: [
+                    "intense rainfall",
+                    "flash flooding",
+                    "dangerous driving",
+                  ],
+                  emergency: [
+                    "extreme rainfall",
+                    "catastrophic flooding",
+                    "life threatening",
+                  ],
+                },
               },
             },
             {
@@ -216,6 +616,17 @@ export const populateInitialCategories = async () => {
                 id: "smoke",
                 name: "Smoke",
                 description: "Smoke from fires affecting air quality",
+                severityKeywords: {
+                  info: ["light smoke", "hazy", "distant fire"],
+                  low: ["clearing smoke", "improving", "minimal"],
+                  advice: ["thick smoke", "poor visibility", "stay indoors"],
+                  watchAndAct: ["heavy smoke", "dangerous air", "health risk"],
+                  emergency: [
+                    "extreme smoke",
+                    "zero visibility",
+                    "immediate health threat",
+                  ],
+                },
               },
             },
             {
@@ -224,6 +635,25 @@ export const populateInitialCategories = async () => {
                 id: "earthquake",
                 name: "Earthquake",
                 description: "Seismic events and tremors",
+                severityKeywords: {
+                  info: ["minor tremor", "felt slightly", "no damage"],
+                  low: ["light shaking", "minimal damage", "aftershock"],
+                  advice: [
+                    "moderate earthquake",
+                    "some damage",
+                    "check for injuries",
+                  ],
+                  watchAndAct: [
+                    "strong earthquake",
+                    "significant damage",
+                    "tsunami possible",
+                  ],
+                  emergency: [
+                    "major earthquake",
+                    "widespread destruction",
+                    "catastrophic",
+                  ],
+                },
               },
             },
             {
@@ -232,6 +662,25 @@ export const populateInitialCategories = async () => {
                 id: "landslide",
                 name: "Landslide",
                 description: "Movement of rock, earth, or debris down a slope",
+                severityKeywords: {
+                  info: ["unstable ground", "monitoring", "minor movement"],
+                  low: ["small slide", "contained", "road affected"],
+                  advice: [
+                    "landslide risk",
+                    "avoid area",
+                    "evacuate if advised",
+                  ],
+                  watchAndAct: [
+                    "active landslide",
+                    "major slide",
+                    "immediate danger",
+                  ],
+                  emergency: [
+                    "catastrophic landslide",
+                    "buried structures",
+                    "multiple casualties",
+                  ],
+                },
               },
             },
             {
@@ -240,6 +689,25 @@ export const populateInitialCategories = async () => {
                 id: "poorAirQuality",
                 name: "Poor Air Quality",
                 description: "Air pollution and quality concerns",
+                severityKeywords: {
+                  info: ["air quality alert", "monitoring", "slight pollution"],
+                  low: ["improving", "acceptable levels", "clearing"],
+                  advice: [
+                    "unhealthy air",
+                    "sensitive groups",
+                    "limit outdoor activity",
+                  ],
+                  watchAndAct: [
+                    "very unhealthy",
+                    "health warning",
+                    "stay indoors",
+                  ],
+                  emergency: [
+                    "hazardous air",
+                    "emergency conditions",
+                    "immediate health risk",
+                  ],
+                },
               },
             },
           ],
@@ -250,6 +718,21 @@ export const populateInitialCategories = async () => {
         name: "Transport & Travel",
         description: "Transportation and travel disruptions",
         color: "#86DF9D",
+        severityKeywords: {
+          info: ["traffic alert", "minor delay", "roadworks"],
+          low: ["cleared", "normal traffic", "minimal delay"],
+          advice: ["significant delay", "seek alternate route", "avoid area"],
+          watchAndAct: [
+            "major disruption",
+            "road closed",
+            "emergency services",
+          ],
+          emergency: [
+            "catastrophic failure",
+            "multiple casualties",
+            "total closure",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -258,6 +741,21 @@ export const populateInitialCategories = async () => {
                 id: "carCrash",
                 name: "Car Crash",
                 description: "Vehicle accidents and collisions",
+                severityKeywords: {
+                  info: ["minor accident", "fender bender", "no injuries"],
+                  low: ["cleared", "towed away", "traffic flowing"],
+                  advice: ["serious accident", "injuries", "lane closures"],
+                  watchAndAct: [
+                    "major crash",
+                    "multiple vehicles",
+                    "helicopter",
+                  ],
+                  emergency: [
+                    "fatal accident",
+                    "mass casualty",
+                    "highway closure",
+                  ],
+                },
               },
             },
             {
@@ -266,6 +764,25 @@ export const populateInitialCategories = async () => {
                 id: "trainDerailment",
                 name: "Train Derailment",
                 description: "Railway accidents and derailments",
+                severityKeywords: {
+                  info: ["train stopped", "minor issue", "investigating"],
+                  low: ["service resumed", "minor delay", "no damage"],
+                  advice: [
+                    "derailment",
+                    "service suspended",
+                    "buses replacing",
+                  ],
+                  watchAndAct: [
+                    "major derailment",
+                    "injuries",
+                    "hazmat involved",
+                  ],
+                  emergency: [
+                    "catastrophic derailment",
+                    "multiple casualties",
+                    "toxic spill",
+                  ],
+                },
               },
             },
             {
@@ -274,6 +791,25 @@ export const populateInitialCategories = async () => {
                 id: "roadClosure",
                 name: "Road Closure",
                 description: "Road blocks and closures",
+                severityKeywords: {
+                  info: ["planned closure", "roadworks", "short term"],
+                  low: ["reopened", "one lane", "minimal impact"],
+                  advice: [
+                    "road closed",
+                    "detour required",
+                    "significant delay",
+                  ],
+                  watchAndAct: [
+                    "major closure",
+                    "no alternate route",
+                    "emergency",
+                  ],
+                  emergency: [
+                    "indefinite closure",
+                    "bridge collapse",
+                    "catastrophic failure",
+                  ],
+                },
               },
             },
             {
@@ -282,6 +818,21 @@ export const populateInitialCategories = async () => {
                 id: "airportEmergency",
                 name: "Airport Emergency",
                 description: "Aviation emergencies and incidents",
+                severityKeywords: {
+                  info: ["minor delay", "weather delay", "maintenance"],
+                  low: ["normal operations", "minor disruption", "catching up"],
+                  advice: ["significant delays", "diversions", "avoid airport"],
+                  watchAndAct: [
+                    "emergency landing",
+                    "runway closed",
+                    "major incident",
+                  ],
+                  emergency: [
+                    "aircraft crash",
+                    "airport closed",
+                    "mass casualties",
+                  ],
+                },
               },
             },
             {
@@ -290,6 +841,21 @@ export const populateInitialCategories = async () => {
                 id: "ferryAccident",
                 name: "Ferry Accident",
                 description: "Marine transport accidents",
+                severityKeywords: {
+                  info: ["minor incident", "service delay", "mechanical issue"],
+                  low: ["service resumed", "backup ferry", "minor delay"],
+                  advice: [
+                    "ferry grounded",
+                    "passengers evacuated",
+                    "service suspended",
+                  ],
+                  watchAndAct: ["collision", "taking on water", "mayday call"],
+                  emergency: [
+                    "sinking",
+                    "multiple casualties",
+                    "search and rescue",
+                  ],
+                },
               },
             },
             {
@@ -298,6 +864,17 @@ export const populateInitialCategories = async () => {
                 id: "majorTrafficDelay",
                 name: "Major Traffic Delay",
                 description: "Significant traffic congestion and delays",
+                severityKeywords: {
+                  info: ["heavy traffic", "slow moving", "peak hour"],
+                  low: ["traffic easing", "normal flow", "clearing"],
+                  advice: ["severe congestion", "long delays", "avoid area"],
+                  watchAndAct: ["gridlock", "hours delay", "major incident"],
+                  emergency: [
+                    "total gridlock",
+                    "emergency vehicles blocked",
+                    "evacuation hampered",
+                  ],
+                },
               },
             },
           ],
@@ -308,6 +885,25 @@ export const populateInitialCategories = async () => {
         name: "Infrastructure & Services",
         description: "Infrastructure failures and service disruptions",
         color: "#FFE47A",
+        severityKeywords: {
+          info: ["service alert", "maintenance", "minor disruption"],
+          low: ["service restored", "minimal impact", "backup systems"],
+          advice: [
+            "service outage",
+            "significant disruption",
+            "seek alternatives",
+          ],
+          watchAndAct: [
+            "major failure",
+            "widespread outage",
+            "emergency response",
+          ],
+          emergency: [
+            "catastrophic failure",
+            "life threatening",
+            "total system failure",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -316,6 +912,17 @@ export const populateInitialCategories = async () => {
                 id: "structuralFire",
                 name: "Structural Fire",
                 description: "Fires in buildings and structures",
+                severityKeywords: {
+                  info: ["smoke detected", "alarm activated", "investigating"],
+                  low: ["small fire", "contained", "no spread"],
+                  advice: ["building fire", "evacuating", "avoid area"],
+                  watchAndAct: ["major fire", "spreading", "collapse risk"],
+                  emergency: [
+                    "catastrophic fire",
+                    "building collapse",
+                    "multiple casualties",
+                  ],
+                },
               },
             },
             {
@@ -324,6 +931,25 @@ export const populateInitialCategories = async () => {
                 id: "powerOutage",
                 name: "Power Outage",
                 description: "Electrical power failures and blackouts",
+                severityKeywords: {
+                  info: ["power fluctuation", "brief outage", "investigating"],
+                  low: ["power restored", "localized", "minimal impact"],
+                  advice: [
+                    "widespread outage",
+                    "extended duration",
+                    "seek shelter",
+                  ],
+                  watchAndAct: [
+                    "major blackout",
+                    "critical services affected",
+                    "emergency shelters",
+                  ],
+                  emergency: [
+                    "total grid failure",
+                    "life support affected",
+                    "catastrophic outage",
+                  ],
+                },
               },
             },
             {
@@ -332,6 +958,25 @@ export const populateInitialCategories = async () => {
                 id: "gasLeak",
                 name: "Gas Leak",
                 description: "Natural gas leaks and related hazards",
+                severityKeywords: {
+                  info: ["gas odor", "investigating", "minor leak"],
+                  low: ["leak repaired", "ventilated", "no danger"],
+                  advice: [
+                    "gas leak confirmed",
+                    "evacuate area",
+                    "no ignition sources",
+                  ],
+                  watchAndAct: [
+                    "major gas leak",
+                    "explosion risk",
+                    "immediate evacuation",
+                  ],
+                  emergency: [
+                    "gas explosion",
+                    "multiple casualties",
+                    "widespread danger",
+                  ],
+                },
               },
             },
             {
@@ -340,6 +985,29 @@ export const populateInitialCategories = async () => {
                 id: "internetDown",
                 name: "Internet Down",
                 description: "Internet and telecommunications outages",
+                severityKeywords: {
+                  info: ["slow connection", "intermittent", "minor issues"],
+                  low: [
+                    "service restored",
+                    "local issue",
+                    "alternative available",
+                  ],
+                  advice: [
+                    "widespread outage",
+                    "services affected",
+                    "seek alternatives",
+                  ],
+                  watchAndAct: [
+                    "major outage",
+                    "emergency services impacted",
+                    "critical systems down",
+                  ],
+                  emergency: [
+                    "total communications failure",
+                    "emergency systems affected",
+                    "national outage",
+                  ],
+                },
               },
             },
             {
@@ -348,6 +1016,25 @@ export const populateInitialCategories = async () => {
                 id: "waterContamination",
                 name: "Water Contamination",
                 description: "Water supply contamination issues",
+                severityKeywords: {
+                  info: ["water testing", "precautionary", "monitoring"],
+                  low: ["safe levels", "cleared", "normal supply"],
+                  advice: [
+                    "boil water",
+                    "contamination detected",
+                    "avoid consumption",
+                  ],
+                  watchAndAct: [
+                    "dangerous levels",
+                    "do not use",
+                    "health risk",
+                  ],
+                  emergency: [
+                    "toxic contamination",
+                    "immediate health threat",
+                    "mass poisoning",
+                  ],
+                },
               },
             },
             {
@@ -356,6 +1043,25 @@ export const populateInitialCategories = async () => {
                 id: "industrialFire",
                 name: "Industrial Fire",
                 description: "Fires at industrial facilities",
+                severityKeywords: {
+                  info: ["alarm activated", "small fire", "investigating"],
+                  low: ["contained", "no spread", "normal operations"],
+                  advice: [
+                    "facility fire",
+                    "evacuating",
+                    "toxic smoke possible",
+                  ],
+                  watchAndAct: [
+                    "major industrial fire",
+                    "explosion risk",
+                    "evacuate area",
+                  ],
+                  emergency: [
+                    "catastrophic fire",
+                    "toxic release",
+                    "widespread danger",
+                  ],
+                },
               },
             },
             {
@@ -364,6 +1070,21 @@ export const populateInitialCategories = async () => {
                 id: "hazmatSpill",
                 name: "Hazmat Spill",
                 description: "Hazardous material spills and leaks",
+                severityKeywords: {
+                  info: ["minor spill", "contained", "cleaning up"],
+                  low: ["spill cleaned", "no danger", "area safe"],
+                  advice: ["hazmat spill", "avoid area", "decontamination"],
+                  watchAndAct: [
+                    "major spill",
+                    "toxic exposure",
+                    "evacuate immediately",
+                  ],
+                  emergency: [
+                    "catastrophic spill",
+                    "widespread contamination",
+                    "mass casualties",
+                  ],
+                },
               },
             },
           ],
@@ -374,6 +1095,13 @@ export const populateInitialCategories = async () => {
         name: "Crowds & Events",
         description: "Large gatherings and crowd-related incidents",
         color: "#AB87F1",
+        severityKeywords: {
+          info: ["event planned", "crowd gathering", "normal event"],
+          low: ["orderly crowd", "event concluded", "dispersing"],
+          advice: ["crowd control", "avoid area", "potential disruption"],
+          watchAndAct: ["crowd incident", "dangerous situation", "evacuate"],
+          emergency: ["crowd disaster", "stampede", "mass casualties"],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -382,6 +1110,29 @@ export const populateInitialCategories = async () => {
                 id: "concertFestivalIncident",
                 name: "Concert/Festival Incident",
                 description: "Incidents at concerts and festivals",
+                severityKeywords: {
+                  info: [
+                    "event ongoing",
+                    "normal operations",
+                    "security present",
+                  ],
+                  low: ["minor incident", "resolved", "event continues"],
+                  advice: [
+                    "incident reported",
+                    "medical attention",
+                    "area cordoned",
+                  ],
+                  watchAndAct: [
+                    "major incident",
+                    "event stopped",
+                    "evacuation",
+                  ],
+                  emergency: [
+                    "catastrophic incident",
+                    "multiple casualties",
+                    "venue collapse",
+                  ],
+                },
               },
             },
             {
@@ -390,6 +1141,17 @@ export const populateInitialCategories = async () => {
                 id: "protest",
                 name: "Protest",
                 description: "Public demonstrations and protests",
+                severityKeywords: {
+                  info: ["peaceful protest", "demonstration", "permitted"],
+                  low: ["dispersing", "peaceful", "no incidents"],
+                  advice: ["tensions rising", "avoid area", "road closures"],
+                  watchAndAct: ["violent protest", "clashes", "arrests"],
+                  emergency: [
+                    "riot",
+                    "widespread violence",
+                    "property destruction",
+                  ],
+                },
               },
             },
             {
@@ -398,6 +1160,17 @@ export const populateInitialCategories = async () => {
                 id: "largeSportingEvent",
                 name: "Large Sporting Event",
                 description: "Incidents at sporting venues and events",
+                severityKeywords: {
+                  info: ["event day", "crowds expected", "security measures"],
+                  low: ["normal crowd", "orderly", "no issues"],
+                  advice: ["crowd issues", "delays", "avoid area"],
+                  watchAndAct: ["crowd trouble", "violence", "evacuation"],
+                  emergency: [
+                    "stadium disaster",
+                    "structural failure",
+                    "mass casualties",
+                  ],
+                },
               },
             },
             {
@@ -406,6 +1179,21 @@ export const populateInitialCategories = async () => {
                 id: "crowdCrushStampede",
                 name: "Crowd Crush/Stampede",
                 description: "Dangerous crowd movements and stampedes",
+                severityKeywords: {
+                  info: ["crowd density", "monitoring", "crowd control"],
+                  low: ["managed", "dispersing", "safety measures"],
+                  advice: ["dangerous density", "avoid area", "crowd pressure"],
+                  watchAndAct: [
+                    "crowd crush",
+                    "people trapped",
+                    "emergency response",
+                  ],
+                  emergency: [
+                    "stampede",
+                    "multiple casualties",
+                    "catastrophic crowd failure",
+                  ],
+                },
               },
             },
           ],
@@ -416,6 +1204,25 @@ export const populateInitialCategories = async () => {
         name: "Other",
         description: "Miscellaneous Hazards Not Classified Elsewhere",
         color: "#BAA27D",
+        severityKeywords: {
+          info: ["miscellaneous incident", "unclassified", "investigating"],
+          low: ["minor incident", "resolved", "no significant impact"],
+          advice: [
+            "notable incident",
+            "monitor situation",
+            "potential concern",
+          ],
+          watchAndAct: [
+            "significant incident",
+            "action required",
+            "serious concern",
+          ],
+          emergency: [
+            "critical incident",
+            "immediate action",
+            "life threatening",
+          ],
+        },
       },
     ];
 
@@ -467,7 +1274,8 @@ export const populateInitialCategories = async () => {
     }
 
     console.log(
-      `------------------------------------> Populated ${createdCategories.length} hazard categories.`
+      `------------------------------------> Populated ${createdCategories.length} hazard categories.`,
+      createdCategories
     );
 
     return createdCategories;

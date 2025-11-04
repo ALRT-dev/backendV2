@@ -19,10 +19,11 @@ import {
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
-  getLowestSeverity,
   getSeverityCallToActions,
   getSeverityKeywords,
+  performKeywordMatchingForSeverity,
 } from "../utils/hazard.util.js";
+import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -455,44 +456,9 @@ export const summarizeHazard = async ({
     allowedSeverities = allowedSeveritiesNonAWS;
   }
 
-  // Build severity levels text based on allowed severities
-  const severityLevelsText = allowedSeverities
-    .map((severity) => `- "${severity}": ${getSeverityKeywords(severity)}`)
-    .join("\n");
-
-  // Build call to action text based on allowed severities
-  const callToActionText = allowedSeverities
-    .map(
-      (severity) =>
-        `For "${severity}":\n${getSeverityCallToActions(severity)
-          .map((action) => `- ${action}`)
-          .join("\n")}`
-    )
-    .join("\n\n");
-
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
-
-    SEVERITY LEVELS:
-    Choose the most appropriate severity based on the hazard characteristics by using keyword matching.
-    Treat keyword matching as **case-insensitive**. 
-    IMPORTANT: Please **don't** assume any severity if keywords are not matched. If no keywords match, default to "${
-      allowedSeverities.length > 0
-        ? getLowestSeverity(allowedSeverities)
-        : "unknown"
-    }". 
-    If multiple keywords appear, choose the **highest severity**.
-    ${severityLevelsText}
-
-    CONFIDENCE LEVELS:
-    - "high": Detailed, specific, credible information with clear location and time
-    - "medium": Reasonable detail but some ambiguity or missing information
-    - "low": Vague, unclear, or potentially unreliable information
-
-    CALL TO ACTION GUIDELINES:
-    Based on severity level and hazard type, select the most appropriate call to action:
-    ${callToActionText}
-
+    
     ${
       availableCategories && availableCategories.length > 0
         ? `AVAILABLE HAZARD CATEGORIES:\nChoose the most appropriate category based on the hazard characteristics. If no category is suitable, use "other".\n- ${availableCategories.join(
@@ -501,16 +467,17 @@ export const summarizeHazard = async ({
         : ""
     }
 
+    CONFIDENCE LEVELS:
+    - "high": Detailed, specific, credible information with clear location and time
+    - "medium": Reasonable detail but some ambiguity or missing information
+    - "low": Vague, unclear, or potentially unreliable information
+
     Always respond with valid JSON containing these exact fields:
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
       "summary": "string (a 2-3 sentence summary of the hazard)",
-      "severity": "${allowedSeverities.join(
-        "|"
-      )} (based on SEVERITY LEVELS described above)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
-      "callToAction": "string (select the most appropriate action from the CALL TO ACTION GUIDELINES above based on severity and hazard type)",
       ${
         availableCategories && availableCategories.length > 0
           ? `"category": "string (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)",`
@@ -549,13 +516,221 @@ export const summarizeHazard = async ({
   }
 
   try {
-    const aiSummary = JSON.parse(content) as AISummaryResponse;
-    return aiSummary;
+    const aiSummary = JSON.parse(content) as {
+      title: string;
+      shortDescription: string;
+      summary: string;
+      confidence: "high" | "medium" | "low";
+      category?: string;
+    };
+
+    const { severity, callToAction } = await getAISeverity({
+      title,
+      description,
+      latitude,
+      longitude,
+      locationName,
+      categoryId: aiSummary.category ?? "other",
+    });
+
+    const fullResponse = {
+      ...aiSummary,
+      category: aiSummary.category ?? "other",
+      severity,
+      callToAction,
+    };
+
+    console.log("Full AI Summary Response:", fullResponse);
+
+    return fullResponse;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);
     throw new HttpError(
       500,
       "AI summarization failed: Invalid response format"
     );
+  }
+};
+
+/**
+ * Determines the severity of a hazard report using AI based on its title, description, and location.
+ *
+ * The AI analyzes the content and provides a severity level from predefined categories.
+ */
+export const getAISeverity = async ({
+  title,
+  description,
+  latitude,
+  longitude,
+  locationName,
+  categoryId,
+}: {
+  title: string;
+  description: string;
+  latitude: number;
+  longitude: number;
+  categoryId: string;
+  locationName?: string | undefined | null;
+}): Promise<{
+  severity: HazardSeverity;
+  callToAction: string;
+}> => {
+  try {
+    const defaultSeverityKeywords: SeverityKeywords = {
+      unknown: [],
+      info: [],
+      low: [],
+      advice: [],
+      watchAndAct: [],
+      emergency: [],
+    };
+
+    let category = await prisma.hazardCategory.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) {
+      category = await prisma.hazardCategory.findFirst({
+        where: { id: "other" },
+      });
+      if (!category) {
+        category = await prisma.hazardCategory.create({
+          data: {
+            id: "other",
+            name: "Other",
+            description: "Miscellaneous hazards not fitting other categories",
+            severityKeywords: defaultSeverityKeywords,
+          },
+        });
+      }
+    }
+    let severityKeywords = category.severityKeywords as SeverityKeywords | null;
+    if (!severityKeywords) {
+      severityKeywords = defaultSeverityKeywords;
+    }
+
+    // Prepare the prompt for OpenAI
+    const hazardContent = `
+      Title: ${title}
+      Description: ${description}
+      Location: ${locationName || `${latitude}, ${longitude}`}
+      Category: ${category.name}
+    `;
+
+    // Available severity levels
+    const severityLevels = Object.keys(
+      severityKeywords
+    ) as (keyof SeverityKeywords)[];
+
+    // Create keyword context for each severity level
+    const keywordContext = Object.entries(severityKeywords)
+      .map(([severity, keywords]) => {
+        if (keywords.length === 0) return null;
+        return `${severity}: ${keywords.join(", ")}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+    // Build call to action text based on allowed severities
+    const callToActionText = severityLevels
+      .map(
+        (severity) =>
+          `For "${severity}":\n${getSeverityCallToActions(severity)
+            .map((action) => `- ${action}`)
+            .join("\n")}`
+      )
+      .join("\n\n");
+
+    const systemPrompt = `
+      You are a hazard severity classification expert. Your task is to analyze hazard reports and classify them into one of these severity levels based on keyword matching and content analysis:
+
+      SEVERITY KEYWORDS:
+      ${keywordContext}
+
+      CALL TO ACTION GUIDELINES:
+      After determining the severity level and hazard type, select the most appropriate call to action (only one):
+      ${callToActionText}
+
+      ANALYSIS INSTRUCTIONS:
+      1. First, look for direct keyword matches in the title and description
+      2. Consider the context, urgency, and potential impact described
+      3. Factor in location relevance if applicable
+      4. Choose the most appropriate severity level
+      5. If multiple levels could apply, choose the higher severity for safety
+      6. If no clear match or insufficient information, return "unknown"
+
+      Respond with valid JSON containing this exact field:
+      {
+        "severity": "${severityLevels.join(
+          "|"
+        )} (based on the KEYWORD CONTEXT and ANALYSIS INSTRUCTIONS above)",
+        "callToAction": "string (select the most appropriate action from the CALL TO ACTION GUIDELINES above based on severity and hazard type)"
+      }
+    `;
+
+    const userPrompt = `Analyze this hazard report and determine its severity level: ${hazardContent}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      max_completion_tokens: 150,
+    });
+
+    if (
+      response.choices.length === 0 ||
+      !response.choices[0]?.message?.content
+    ) {
+      throw new HttpError(
+        500,
+        "Severity determination failed: No response from AI"
+      );
+    }
+
+    const content = response.choices[0].message.content;
+    if (!content) {
+      throw new HttpError(
+        500,
+        "Severity determination failed: Empty response from AI"
+      );
+    }
+
+    const aiResponse = JSON.parse(content) as {
+      severity: HazardSeverity;
+      callToAction: string;
+    };
+    return aiResponse;
+  } catch (error) {
+    console.error("Error in getAISeverity:", error);
+
+    // Fallback to keyword matching if OpenAI fails
+    try {
+      const category = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+      });
+
+      if (category?.severityKeywords) {
+        const severityKeywords = category.severityKeywords as SeverityKeywords;
+        const severity = performKeywordMatchingForSeverity(
+          title,
+          description,
+          severityKeywords
+        );
+
+        return {
+          severity,
+          callToAction: getSeverityCallToActions(severity)[0] || "",
+        };
+      }
+    } catch (fallbackError) {
+      console.error("Error in fallback keyword matching:", fallbackError);
+    }
+
+    return {
+      severity: HazardSeverity.unknown,
+      callToAction: getSeverityCallToActions(HazardSeverity.unknown)[0] || "",
+    };
   }
 };

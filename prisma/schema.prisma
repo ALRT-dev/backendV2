@@ -40,10 +40,11 @@ model User {
 }
 
 model HazardCategory {
-  id          String  @id @default(uuid())
-  name        String  @unique
-  description String?
-  color       String? // Hex color code for UI representation
+  id               String  @id @default(uuid())
+  name             String  @unique
+  description      String?
+  color            String? // Hex color code for UI representation
+  severityKeywords Json? // JSON object mapping severity levels to arrays of keywords
 
   parentId String? // For subcategories, this points to the parent category
 
