@@ -452,18 +452,14 @@ export const populateInitialCategories = async () => {
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
                 severityKeywords: {
-                  info: ["fire detected", "contained", "monitoring"],
-                  low: ["small fire", "controlled", "crews responding"],
-                  advice: ["fire burning", "prepare to leave", "smoke hazard"],
-                  watchAndAct: [
-                    "evacuate now",
-                    "ember attack",
-                    "lives at risk",
-                  ],
+                  unknown: ["not applicable", "no fire", "all clear"],
+                  info: ["info", "information"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
-                    "catastrophic fire",
+                    "emergency",
                     "emergency warning",
-                    "too late to leave",
+                    "emergencyWarning",
                   ],
                 },
               },
@@ -475,18 +471,13 @@ export const populateInitialCategories = async () => {
                 name: "Cyclone",
                 description: "Severe weather hazards including cyclones",
                 severityKeywords: {
-                  info: ["tropical low", "developing system", "watch"],
-                  low: ["category 1", "weakening", "minimal damage"],
-                  advice: ["category 2", "destructive winds", "prepare"],
-                  watchAndAct: [
-                    "category 3",
-                    "very destructive",
-                    "shelter now",
-                  ],
+                  unknown: ["not applicable", "all clear"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
-                    "category 4-5",
-                    "extremely dangerous",
-                    "catastrophic",
+                    "emergency",
+                    "emergency warning",
+                    "emergencyWarning",
                   ],
                 },
               },
@@ -498,19 +489,14 @@ export const populateInitialCategories = async () => {
                 name: "Storm",
                 description: "Active storm events including thunderstorms",
                 severityKeywords: {
-                  info: ["storm developing", "possible", "watch"],
-                  low: ["light storm", "passing", "minor"],
-                  advice: [
-                    "severe thunderstorm",
-                    "damaging winds",
-                    "heavy rain",
+                  unknown: ["not applicable", "all clear"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
+                  emergency: [
+                    "emergency",
+                    "emergency warning",
+                    "emergencyWarning",
                   ],
-                  watchAndAct: [
-                    "destructive storm",
-                    "dangerous winds",
-                    "seek shelter",
-                  ],
-                  emergency: ["extreme storm", "tornado", "life threatening"],
                 },
               },
             },
@@ -521,18 +507,13 @@ export const populateInitialCategories = async () => {
                 name: "Flood",
                 description: "Flooding and water-related emergencies",
                 severityKeywords: {
-                  info: ["flood watch", "rising levels", "monitoring"],
-                  low: ["minor flooding", "receding", "passable"],
-                  advice: ["flood warning", "road closures", "avoid low areas"],
-                  watchAndAct: [
-                    "major flooding",
-                    "evacuate",
-                    "dangerous currents",
-                  ],
+                  unknown: ["not applicable", "all clear"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
-                    "catastrophic flooding",
-                    "flash flood",
-                    "life threatening",
+                    "emergency",
+                    "emergency warning",
+                    "emergencyWarning",
                   ],
                 },
               },
@@ -544,18 +525,13 @@ export const populateInitialCategories = async () => {
                 name: "Extreme Heat",
                 description: "Extreme heat events and heatwaves",
                 severityKeywords: {
-                  info: ["heat advisory", "warm weather", "monitoring"],
-                  low: ["moderate heat", "manageable", "cooling"],
-                  advice: ["extreme heat", "stay cool", "avoid outdoors"],
-                  watchAndAct: [
-                    "dangerous heat",
-                    "heat emergency",
-                    "seek air conditioning",
-                  ],
+                  unknown: ["not applicable", "all clear"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
-                    "catastrophic heat",
-                    "deadly temperatures",
-                    "health emergency",
+                    "emergency",
+                    "emergency warning",
+                    "emergencyWarning",
                   ],
                 },
               },
@@ -567,18 +543,13 @@ export const populateInitialCategories = async () => {
                 name: "Damaging Winds",
                 description: "High wind events causing damage",
                 severityKeywords: {
-                  info: ["windy conditions", "gusty", "breezy"],
-                  low: ["light winds", "calming", "minor gusts"],
-                  advice: ["strong winds", "secure objects", "avoid trees"],
-                  watchAndAct: [
-                    "destructive winds",
-                    "dangerous",
-                    "stay indoors",
-                  ],
+                  unknown: ["not applicable", "all clear"],
+                  advice: ["advice"],
+                  watchAndAct: ["watch and act", "watchAndAct"],
                   emergency: [
-                    "extreme winds",
-                    "widespread damage",
-                    "life threatening",
+                    "emergency",
+                    "emergency warning",
+                    "emergencyWarning",
                   ],
                 },
               },
@@ -1275,7 +1246,7 @@ export const populateInitialCategories = async () => {
 
     console.log(
       `------------------------------------> Populated ${createdCategories.length} hazard categories.`,
-      createdCategories
+      JSON.stringify(createdCategories, null, 2)
     );
 
     return createdCategories;

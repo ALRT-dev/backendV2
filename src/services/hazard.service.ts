@@ -441,7 +441,6 @@ export const summarizeHazard = async ({
   longitude,
   locationName,
   availableCategories,
-  allowedSeverities,
 }: {
   title: string;
   description: string;
@@ -449,13 +448,7 @@ export const summarizeHazard = async ({
   longitude: number;
   locationName?: string | undefined | null;
   availableCategories?: string[] | undefined | null;
-  allowedSeverities?: HazardSeverity[] | undefined | null;
 }): Promise<AISummaryResponse> => {
-  if (!allowedSeverities || allowedSeverities.length === 0) {
-    // If no allowed severities are provided, default to Non-AWS allowed severities
-    allowedSeverities = allowedSeveritiesNonAWS;
-  }
-
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
     

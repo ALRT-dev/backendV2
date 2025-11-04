@@ -42,11 +42,6 @@ interface HazardSourceConfig {
   // The category ID to assign to hazards from this source
   categoryId: string;
 
-  // The allowed severities for hazards from this source
-  //
-  // If not provided, all severities are allowed
-  allowedSeverities?: HazardSeverity[];
-
   // Optional list of AWS compliant categories
   awsCompliantCategories?: string[];
 
@@ -76,72 +71,64 @@ export const syncHazardsFromDifferentSources = async () => {
       "storm",
       "flood",
       "extremeHeat",
+      "damagingWinds",
     ];
 
     const sources: HazardSourceConfig[] = [
-      // {
-      //   name: "RFS",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromRFS,
-      // },
+      {
+        name: "RFS",
+        categoryId: "bushfire",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromRFS,
+      },
       {
         name: "BoM",
         categoryId: "weatherAndEnvironment",
-        allowedSeverities: allowedSeveritiesAWS,
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromBoM,
       },
-      // {
-      //   name: "NSW Transport live traffic hazards",
-      //   categoryId: "transportAndTravel",
-      //   allowedSeverities: allowedSeveritiesNonAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromLiveTrafficHazards,
-      // },
-      // {
-      //   name: "NSW air quality",
-      //   categoryId: "weatherAndEnvironment",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromAirQuality,
-      // },
-      // {
-      //   name: "ACT Emergency Services",
-      //   categoryId: "healthAndEmergency",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromACT,
-      // },
-      // {
-      //   name: "CFS",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromCFS,
-      // },
-      // {
-      //   name: "Vice Fire Services",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromViceFireServices,
-      // },
-      // {
-      //   name: "QLD Fire Department",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
-      // },
-      // {
-      //   name: "NT Fire and Rescue",
-      //   categoryId: "bushfire",
-      //   allowedSeverities: allowedSeveritiesAWS,
-      //   awsCompliantCategories: awsCompliantCategories,
-      //   fetchFunction: getHazardsFromNTFireAndRescue,
-      // },
+      {
+        name: "NSW Transport live traffic hazards",
+        categoryId: "transportAndTravel",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromLiveTrafficHazards,
+      },
+      {
+        name: "NSW air quality",
+        categoryId: "weatherAndEnvironment",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromAirQuality,
+      },
+      {
+        name: "ACT Emergency Services",
+        categoryId: "healthAndEmergency",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromACT,
+      },
+      {
+        name: "CFS",
+        categoryId: "bushfire",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromCFS,
+      },
+      {
+        name: "Vice Fire Services",
+        categoryId: "bushfire",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromViceFireServices,
+      },
+      {
+        name: "QLD Fire Department",
+        categoryId: "bushfire",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsDataFromQLDFireDepartment,
+      },
+      {
+        name: "NT Fire and Rescue",
+        categoryId: "bushfire",
+        awsCompliantCategories: awsCompliantCategories,
+        fetchFunction: getHazardsFromNTFireAndRescue,
+      },
     ];
 
     await Promise.all(
@@ -185,9 +172,6 @@ const syncHazardsFromSource = async (
       ...(sourceConfig.awsCompliantCategories && {
         awsCompliantCategories: sourceConfig.awsCompliantCategories,
       }),
-      ...(sourceConfig.allowedSeverities && {
-        allowedSeverities: sourceConfig.allowedSeverities,
-      }),
     });
 
     console.log(
@@ -216,12 +200,10 @@ const summarizeAndPostHazards = async ({
   hazardDatas,
   availableCategories,
   awsCompliantCategories,
-  allowedSeverities,
 }: {
   hazardDatas: Prisma.HazardCreateInput[];
   availableCategories?: string[];
   awsCompliantCategories?: string[];
-  allowedSeverities?: HazardSeverity[];
 }): Promise<Hazard[]> => {
   try {
     const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
@@ -260,7 +242,6 @@ const summarizeAndPostHazards = async ({
                 latitude: Number(populatedHazard.latitude),
                 longitude: Number(populatedHazard.longitude),
                 availableCategories,
-                allowedSeverities,
               })
                 .then((summarized) => {
                   // Calculate confidence score for ingested hazard (official source)
