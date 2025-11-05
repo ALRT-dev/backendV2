@@ -4,11 +4,12 @@ import {
   getHazardById,
   getHazards,
   deleteHazard,
-  getHazardsWithFilters,
+  getHazardsWithSubscriptionId,
   voteHazard,
   populateHazards,
   viewHazard,
   updateHazard,
+  getHazardFilters,
 } from "../controllers/hazard.controller.js";
 import {
   deleteHazardMedia,
@@ -21,6 +22,7 @@ import {
   voteHazardSchema,
   getHazardsQuerySchema,
   updateHazardSchema,
+  getHazardFiltersQuerySchema,
 } from "../validators/hazard.validator.js";
 import {
   uploadMultiple,
@@ -31,10 +33,16 @@ const hazardRouter = Router();
 
 hazardRouter.get("/", requireAuth, validate(getHazardsQuerySchema), getHazards);
 hazardRouter.get(
-  "/hazards-with-filters",
+  "/hazards-with-subscription-id",
   requireAuth,
   validate(getHazardsQuerySchema),
-  getHazardsWithFilters
+  getHazardsWithSubscriptionId
+);
+hazardRouter.get(
+  "/filters",
+  validate(getHazardFiltersQuerySchema),
+  requireAuth,
+  getHazardFilters
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 

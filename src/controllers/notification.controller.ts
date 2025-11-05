@@ -34,14 +34,7 @@ export const getNotificationsFeed = async (
     });
 
     if (subscriptions.length === 0) {
-      return res.status(200).json({
-        hazards: [],
-        availableFilters: {
-          categoryFilters: [],
-          severityFiltersAws: [],
-          severityFiltersNonAws: [],
-        },
-      });
+      return res.status(200).json([]);
     }
 
     const user = await prisma.user.findUnique({
@@ -51,33 +44,7 @@ export const getNotificationsFeed = async (
     const userLat = user?.latitude || undefined;
     const userLng = user?.longitude || undefined;
 
-    const categoriesPromise = getCategoriesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardSeverities: severities,
-      hazardReviewStatus: reviewStatus,
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions,
-    });
-
-    const severitiesAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardCategoryIds: categoryIds,
-      hazardReviewStatus: reviewStatus,
-      showExpiredHazards: parseBoolean(showExpired),
-      isHazardAwsCompliant: true,
-      subscriptions,
-    });
-
-    const severitiesNonAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardCategoryIds: categoryIds,
-      hazardReviewStatus: reviewStatus,
-      showExpiredHazards: parseBoolean(showExpired),
-      isHazardAwsCompliant: false,
-      subscriptions,
-    });
-
-    const hazardsPromise = getHazardsApplyingFiltersRaw({
+    const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
       severities,
@@ -92,43 +59,12 @@ export const getNotificationsFeed = async (
       showExpired: parseBoolean(showExpired),
     });
 
-    const [
-      categoryFilters,
-      severityFiltersAws,
-      severityFiltersNonAws,
-      hazards,
-    ] = await Promise.all([
-      categoriesPromise,
-      severitiesAwsPromise,
-      severitiesNonAwsPromise,
-      hazardsPromise,
-    ]);
-
-    // If no hazards found, return empty response with filters
-    if (hazards.length === 0) {
-      return res.status(200).json({
-        hazards: [],
-        availableFilters: {
-          categoryFilters: [],
-          severityFiltersAws: [],
-          severityFiltersNonAws: [],
-        },
-      });
-    }
-
     // Enrich hazards with presigned URLs for media access
     const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
       hazards
     );
 
-    res.status(200).json({
-      hazards: hazardsWithPresignedUrls,
-      availableFilters: {
-        categoryFilters,
-        severityFiltersAws,
-        severityFiltersNonAws,
-      },
-    });
+    res.status(200).json(hazardsWithPresignedUrls);
   } catch (error) {
     next(error);
   }

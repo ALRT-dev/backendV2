@@ -126,7 +126,7 @@ export type VoteHazardInput = z.infer<typeof voteHazardSchema>;
 export const getHazardsQuerySchema = z.object({
   searchString: z.string().optional(),
 
-  categoryIds: z.string().optional(), // Comma-separated list of UUIDs
+  categoryIds: z.string().optional(),
 
   severities: z
     .record(
@@ -181,3 +181,43 @@ export const getHazardsQuerySchema = z.object({
 });
 
 export type GetHazardsQuery = z.infer<typeof getHazardsQuerySchema>;
+
+export const getHazardFiltersQuerySchema = z.object({
+  searchString: z.string().optional(),
+
+  reportedById: z.string().uuid().optional(),
+
+  reviewStatus: z.enum(["accepted", "rejected"]).optional(),
+
+  northeastLat: z
+    .string()
+    .regex(/^-?\d+\.?\d*$/, "Latitude must be a number")
+    .optional(),
+
+  northeastLng: z
+    .string()
+    .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
+    .optional(),
+
+  southwestLat: z
+    .string()
+    .regex(/^-?\d+\.?\d*$/, "Latitude must be a number")
+    .optional(),
+
+  southwestLng: z
+    .string()
+    .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
+    .optional(),
+
+  showExpired: z
+    .string()
+    .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
+    .optional(),
+
+  includeSubscribed: z
+    .string()
+    .regex(/^(true|false)$/, "includeSubscribed must be 'true' or 'false'")
+    .optional(),
+});
+
+export type GetHazardFiltersQuery = z.infer<typeof getHazardFiltersQuerySchema>;
