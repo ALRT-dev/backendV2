@@ -510,6 +510,9 @@ export const getHazardExpiryDateFromSeverity = (
   const now = new Date();
 
   switch (severity) {
+    case HazardSeverity.unknown:
+      now.setHours(now.getHours() + 6); // 6 hours for unknown
+      break;
     case HazardSeverity.info:
       now.setHours(now.getHours() + 6); // 6 hours for info
       break;
