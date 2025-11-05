@@ -19,6 +19,7 @@ export const getSeveritiesApplyingFilters = async ({
   hazardSouthwestLat,
   hazardSouthwestLng,
   showExpiredHazards,
+  isHazardAwsCompliant,
   subscriptions,
 }: {
   hazardSearchString?: string | undefined;
@@ -30,6 +31,7 @@ export const getSeveritiesApplyingFilters = async ({
   hazardSouthwestLat?: number | undefined;
   hazardSouthwestLng?: number | undefined;
   showExpiredHazards?: boolean | undefined;
+  isHazardAwsCompliant?: boolean | undefined;
   subscriptions?: LocationSubscription[] | undefined;
 }): Promise<
   {
@@ -47,6 +49,7 @@ export const getSeveritiesApplyingFilters = async ({
     southwestLat: hazardSouthwestLat,
     southwestLng: hazardSouthwestLng,
     showExpired: showExpiredHazards,
+    isAwsCompliant: isHazardAwsCompliant,
     subscriptions,
 
     // Use matchCategoryIdsWithSubCategoriesAlso: false to avoid joins that cause ambiguous column references in groupBy
@@ -59,13 +62,22 @@ export const getSeveritiesApplyingFilters = async ({
     _count: {
       id: true,
     },
-    orderBy: {
-      severity: "desc",
-    },
   });
 
-  return severities.map((item) => ({
-    severity: item.severity,
-    hazardsCount: item._count.id,
-  }));
+  // Define custom severity order: unknown, info, low, advice, watchAndAct, emergency
+  const severityOrder: Record<HazardSeverity, number> = {
+    unknown: 0,
+    info: 1,
+    low: 2,
+    advice: 3,
+    watchAndAct: 4,
+    emergency: 5,
+  };
+
+  return severities
+    .map((item) => ({
+      severity: item.severity,
+      hazardsCount: item._count.id,
+    }))
+    .sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
 };

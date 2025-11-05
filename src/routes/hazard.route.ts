@@ -4,7 +4,7 @@ import {
   getHazardById,
   getHazards,
   deleteHazard,
-  getHazardsWithCategories,
+  getHazardsWithFilters,
   voteHazard,
   populateHazards,
   viewHazard,
@@ -31,10 +31,10 @@ const hazardRouter = Router();
 
 hazardRouter.get("/", requireAuth, validate(getHazardsQuerySchema), getHazards);
 hazardRouter.get(
-  "/hazards-with-categories",
+  "/hazards-with-filters",
   requireAuth,
   validate(getHazardsQuerySchema),
-  getHazardsWithCategories
+  getHazardsWithFilters
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 

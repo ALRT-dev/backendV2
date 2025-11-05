@@ -1,12 +1,13 @@
 import { buildHazardsWhereClause } from "../utils/hazard.util.js";
 import prisma from "../utils/prisma_client.util.js";
-import {
+import type {
+  HazardCategory,
+  HazardReviewStatus,
+  HazardSeverity,
+  LocationSubscription,
   Prisma,
-  type HazardCategory,
-  type HazardReviewStatus,
-  type HazardSeverity,
-  type LocationSubscription,
 } from "@prisma/client";
+import type { HazardSeverityWithAwsCompliant } from "../models/hazard_search_params_interface.js";
 
 /**
  * Populate the database with a predefined set of hazard categories.
@@ -1385,7 +1386,7 @@ export const getCategoriesApplyingFilters = async ({
   subscriptions,
 }: {
   hazardSearchString?: string | undefined;
-  hazardSeverities?: HazardSeverity[] | undefined;
+  hazardSeverities?: HazardSeverityWithAwsCompliant | undefined;
   hazardReviewStatus?: HazardReviewStatus | undefined;
   hazardReportedById?: string | undefined;
   hazardNortheastLat?: number | undefined;

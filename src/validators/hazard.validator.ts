@@ -129,7 +129,10 @@ export const getHazardsQuerySchema = z.object({
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
   severities: z
-    .array(z.enum(["info", "advice", "watchAndAct", "emergency"]))
+    .record(
+      z.enum(["unknown", "info", "low", "advice", "watchAndAct", "emergency"]),
+      z.enum(["true", "false"])
+    )
     .optional(),
 
   reportedById: z.string().uuid().optional(),

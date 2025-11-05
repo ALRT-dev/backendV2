@@ -7,10 +7,14 @@ export interface SortSetting {
   confidenceScore?: "asc" | "desc" | undefined;
 }
 
+export type HazardSeverityWithAwsCompliant = {
+  [severity in HazardSeverity]: boolean | string;
+};
+
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
-  severities?: string | HazardSeverity[] | undefined;
+  severities?: HazardSeverityWithAwsCompliant | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 
@@ -23,6 +27,8 @@ export interface HazardSearchParams {
   userLng?: number | undefined;
 
   showExpired?: boolean | undefined;
+
+  isAwsCompliant?: boolean | undefined;
 
   sortSettings?: SortSetting[] | undefined;
 

@@ -34,7 +34,14 @@ export const getNotificationsFeed = async (
     });
 
     if (subscriptions.length === 0) {
-      return res.status(200).json({ categories: [], hazards: [] });
+      return res.status(200).json({
+        hazards: [],
+        availableFilters: {
+          categoryFilters: [],
+          severityFiltersAws: [],
+          severityFiltersNonAws: [],
+        },
+      });
     }
 
     const user = await prisma.user.findUnique({
@@ -52,11 +59,21 @@ export const getNotificationsFeed = async (
       subscriptions,
     });
 
-    const severitiesPromise = getSeveritiesApplyingFilters({
+    const severitiesAwsPromise = getSeveritiesApplyingFilters({
       hazardSearchString: searchString,
       hazardCategoryIds: categoryIds,
       hazardReviewStatus: reviewStatus,
       showExpiredHazards: parseBoolean(showExpired),
+      isHazardAwsCompliant: true,
+      subscriptions,
+    });
+
+    const severitiesNonAwsPromise = getSeveritiesApplyingFilters({
+      hazardSearchString: searchString,
+      hazardCategoryIds: categoryIds,
+      hazardReviewStatus: reviewStatus,
+      showExpiredHazards: parseBoolean(showExpired),
+      isHazardAwsCompliant: false,
       subscriptions,
     });
 
@@ -75,17 +92,28 @@ export const getNotificationsFeed = async (
       showExpired: parseBoolean(showExpired),
     });
 
-    const [categoryFilters, severityFilters, hazards] = await Promise.all([
+    const [
+      categoryFilters,
+      severityFiltersAws,
+      severityFiltersNonAws,
+      hazards,
+    ] = await Promise.all([
       categoriesPromise,
-      severitiesPromise,
+      severitiesAwsPromise,
+      severitiesNonAwsPromise,
       hazardsPromise,
     ]);
 
-    // If no hazards found, return empty categories and hazards
+    // If no hazards found, return empty response with filters
     if (hazards.length === 0) {
-      return res
-        .status(200)
-        .json({ categoryFilters: [], severityFilters: [], hazards: [] });
+      return res.status(200).json({
+        hazards: [],
+        availableFilters: {
+          categoryFilters: [],
+          severityFiltersAws: [],
+          severityFiltersNonAws: [],
+        },
+      });
     }
 
     // Enrich hazards with presigned URLs for media access
@@ -94,9 +122,12 @@ export const getNotificationsFeed = async (
     );
 
     res.status(200).json({
-      categoryFilters,
-      severityFilters,
       hazards: hazardsWithPresignedUrls,
+      availableFilters: {
+        categoryFilters,
+        severityFiltersAws,
+        severityFiltersNonAws,
+      },
     });
   } catch (error) {
     next(error);

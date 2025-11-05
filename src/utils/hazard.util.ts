@@ -34,20 +34,12 @@ export const buildHazardsWhereClause = (
     southwestLng,
     subscriptions,
     showExpired,
+    isAwsCompliant,
     matchCategoryIdsWithSubCategoriesAlso = true, // Default to true to maintain existing behavior
   } = params;
 
   // Build the where clause for filtering hazards
   const andConditions: Prisma.HazardWhereInput[] = [];
-
-  // Only include hazards that haven't expired yet
-  if (!showExpired) {
-    andConditions.push({
-      expiresAt: {
-        gt: new Date(),
-      },
-    });
-  }
 
   // Apply search string filter if provided
   if (searchString) {
@@ -106,13 +98,76 @@ export const buildHazardsWhereClause = (
   }
 
   // Apply severities filter if provided
-  if (severities && severities.length > 0) {
-    const severityArray = Array.isArray(severities) ? severities : [severities];
-    andConditions.push({
-      severity: {
-        in: severityArray as HazardSeverity[],
-      },
+  if (severities && typeof severities === "object") {
+    const severityConditions: Prisma.HazardWhereInput[] = [];
+
+    // Group severities by their boolean values
+    const severitiesForAwsCompliant: HazardSeverity[] = [];
+    const severitiesForNonAwsCompliant: HazardSeverity[] = [];
+    const severitiesForBoth: HazardSeverity[] = [];
+
+    // First pass: identify which severities have which values
+    const severityKeys = Object.keys(severities) as HazardSeverity[];
+    const processedSeverities = new Set<HazardSeverity>();
+
+    severityKeys.forEach((severity) => {
+      if (processedSeverities.has(severity)) return;
+
+      const value = severities[severity];
+      const hasTrue = value === true || value === "true";
+      const hasFalse = value === false || value === "false";
+
+      // Check if this severity appears with both true and false values
+      // (This would happen if frontend sends {advice: true, advice: false})
+      const allEntriesForThisSeverity = severityKeys.filter(
+        (s) => s === severity
+      );
+      const hasMultipleEntries = allEntriesForThisSeverity.length > 1;
+
+      if (hasMultipleEntries) {
+        // If same severity has multiple entries, show all hazards for this severity
+        severitiesForBoth.push(severity);
+      } else if (hasTrue) {
+        severitiesForAwsCompliant.push(severity);
+      } else if (hasFalse) {
+        severitiesForNonAwsCompliant.push(severity);
+      }
+
+      processedSeverities.add(severity);
     });
+
+    // Add conditions for AWS compliant hazards
+    if (severitiesForAwsCompliant.length > 0) {
+      severityConditions.push({
+        AND: [
+          { severity: { in: severitiesForAwsCompliant } },
+          { isAwsCompliant: true },
+        ],
+      });
+    }
+
+    // Add conditions for non-AWS compliant hazards
+    if (severitiesForNonAwsCompliant.length > 0) {
+      severityConditions.push({
+        AND: [
+          { severity: { in: severitiesForNonAwsCompliant } },
+          { isAwsCompliant: false },
+        ],
+      });
+    }
+
+    // Add conditions for severities that should show both AWS and non-AWS
+    if (severitiesForBoth.length > 0) {
+      severityConditions.push({
+        severity: { in: severitiesForBoth },
+      });
+    }
+
+    if (severityConditions.length > 0) {
+      andConditions.push({
+        OR: severityConditions,
+      });
+    }
   }
 
   // Apply reportedById filter if provided
@@ -177,6 +232,43 @@ export const buildHazardsWhereClause = (
     });
   }
 
+  // Only include hazards that haven't expired yet
+  if (!showExpired) {
+    andConditions.push({
+      expiresAt: {
+        gt: new Date(),
+      },
+    });
+  }
+
+  // Apply isAwsCompliant filter if provided
+  if (typeof isAwsCompliant === "boolean") {
+    // Filter by severity based on AWS compliance
+    if (isAwsCompliant) {
+      // For AWS compliant: only include advice, watchAndAct, and emergency
+      andConditions.push({
+        severity: {
+          in: [
+            HazardSeverity.advice,
+            HazardSeverity.watchAndAct,
+            HazardSeverity.emergency,
+          ],
+        },
+      });
+    } else {
+      // For non-AWS compliant: exclude advice, watchAndAct, and emergency
+      andConditions.push({
+        severity: {
+          notIn: [
+            HazardSeverity.advice,
+            HazardSeverity.watchAndAct,
+            HazardSeverity.emergency,
+          ],
+        },
+      });
+    }
+  }
+
   return andConditions.length > 0 ? { AND: andConditions } : {};
 };
 
@@ -230,16 +322,12 @@ export const buildHazardsWhereClauseRaw = (
     southwestLng,
     subscriptions,
     showExpired,
+    isAwsCompliant,
   } = params;
 
   const whereConditions: string[] = [];
   const queryParams: any[] = [];
   let paramIndex = 1;
-
-  // Only include hazards that haven't expired yet
-  if (!showExpired) {
-    whereConditions.push(`(h."expiresAt" > NOW() AT TIME ZONE 'UTC')`);
-  }
 
   // Apply search string filter if provided
   if (searchString) {
@@ -281,13 +369,77 @@ export const buildHazardsWhereClauseRaw = (
   }
 
   // Apply severities filter if provided
-  if (severities && severities.length > 0) {
-    const severityArray = Array.isArray(severities) ? severities : [severities];
-    const severityPlaceholders = severityArray
-      .map(() => `$${paramIndex++}::"HazardSeverity"`)
-      .join(",");
-    whereConditions.push(`h.severity IN (${severityPlaceholders})`);
-    queryParams.push(...severityArray);
+  if (severities && typeof severities === "object") {
+    const severityConditions: string[] = [];
+
+    // Group severities by their boolean values
+    const severitiesForAwsCompliant: HazardSeverity[] = [];
+    const severitiesForNonAwsCompliant: HazardSeverity[] = [];
+    const severitiesForBoth: HazardSeverity[] = [];
+
+    // First pass: identify which severities have which values
+    const severityKeys = Object.keys(severities) as HazardSeverity[];
+    const processedSeverities = new Set<HazardSeverity>();
+
+    severityKeys.forEach((severity) => {
+      if (processedSeverities.has(severity)) return;
+
+      const value = severities[severity];
+      const hasTrue = value === true || value === "true";
+      const hasFalse = value === false || value === "false";
+
+      // Check if this severity appears with both true and false values
+      const allEntriesForThisSeverity = severityKeys.filter(
+        (s) => s === severity
+      );
+      const hasMultipleEntries = allEntriesForThisSeverity.length > 1;
+
+      if (hasMultipleEntries) {
+        // If same severity has multiple entries, show all hazards for this severity
+        severitiesForBoth.push(severity);
+      } else if (hasTrue) {
+        severitiesForAwsCompliant.push(severity);
+      } else if (hasFalse) {
+        severitiesForNonAwsCompliant.push(severity);
+      }
+
+      processedSeverities.add(severity);
+    });
+
+    // Add conditions for AWS compliant hazards
+    if (severitiesForAwsCompliant.length > 0) {
+      const awsCompliantPlaceholders = severitiesForAwsCompliant
+        .map(() => `$${paramIndex++}::"HazardSeverity"`)
+        .join(",");
+      severityConditions.push(
+        `(h.severity IN (${awsCompliantPlaceholders}) AND h."isAwsCompliant" = true)`
+      );
+      queryParams.push(...severitiesForAwsCompliant);
+    }
+
+    // Add conditions for non-AWS compliant hazards
+    if (severitiesForNonAwsCompliant.length > 0) {
+      const nonAwsCompliantPlaceholders = severitiesForNonAwsCompliant
+        .map(() => `$${paramIndex++}::"HazardSeverity"`)
+        .join(",");
+      severityConditions.push(
+        `(h.severity IN (${nonAwsCompliantPlaceholders}) AND h."isAwsCompliant" = false)`
+      );
+      queryParams.push(...severitiesForNonAwsCompliant);
+    }
+
+    // Add conditions for severities that should show both AWS and non-AWS
+    if (severitiesForBoth.length > 0) {
+      const bothPlaceholders = severitiesForBoth
+        .map(() => `$${paramIndex++}::"HazardSeverity"`)
+        .join(",");
+      severityConditions.push(`h.severity IN (${bothPlaceholders})`);
+      queryParams.push(...severitiesForBoth);
+    }
+
+    if (severityConditions.length > 0) {
+      whereConditions.push(`(${severityConditions.join(" OR ")})`);
+    }
   }
 
   // Apply reporter filter if provided
@@ -372,6 +524,35 @@ export const buildHazardsWhereClauseRaw = (
         sub.northeastLng
       );
     });
+  }
+
+  // Only include hazards that haven't expired yet
+  if (!showExpired) {
+    whereConditions.push(`(h."expiresAt" > NOW() AT TIME ZONE 'UTC')`);
+  }
+
+  // Apply isAwsCompliant filter if provided
+  if (typeof isAwsCompliant === "boolean") {
+    // Filter by severity based on AWS compliance
+    if (isAwsCompliant) {
+      // For AWS compliant: only include advice, watchAndAct, and emergency
+      whereConditions.push(
+        `(h.severity IN ($${paramIndex}::"HazardSeverity", $${
+          paramIndex + 1
+        }::"HazardSeverity", $${paramIndex + 2}::"HazardSeverity"))`
+      );
+      queryParams.push("advice", "watchAndAct", "emergency");
+      paramIndex += 3;
+    } else {
+      // For non-AWS compliant: exclude advice, watchAndAct, and emergency
+      whereConditions.push(
+        `(h.severity NOT IN ($${paramIndex}::"HazardSeverity", $${
+          paramIndex + 1
+        }::"HazardSeverity", $${paramIndex + 2}::"HazardSeverity"))`
+      );
+      queryParams.push("advice", "watchAndAct", "emergency");
+      paramIndex += 3;
+    }
   }
 
   const whereClause =

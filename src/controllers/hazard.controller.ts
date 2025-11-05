@@ -103,8 +103,8 @@ export const getHazards = async (
   }
 };
 
-/// Controller to handle fetching hazards along with their categories, applying various filters.
-export const getHazardsWithCategories = async (
+/// Controller to handle fetching hazards along with available category and severity filters.
+export const getHazardsWithFilters = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -157,7 +157,7 @@ export const getHazardsWithCategories = async (
       showExpiredHazards: parseBoolean(showExpired),
     });
 
-    const severitiesPromise = getSeveritiesApplyingFilters({
+    const severitiesAwsPromise = getSeveritiesApplyingFilters({
       hazardSearchString: searchString,
       hazardCategoryIds: categoryIds,
       hazardReviewStatus: reviewStatus,
@@ -166,6 +166,20 @@ export const getHazardsWithCategories = async (
       hazardNortheastLng: Number(northeastLng),
       hazardSouthwestLat: Number(southwestLat),
       hazardSouthwestLng: Number(southwestLng),
+      isHazardAwsCompliant: true,
+      showExpiredHazards: parseBoolean(showExpired),
+    });
+
+    const severitiesNonAwsPromise = getSeveritiesApplyingFilters({
+      hazardSearchString: searchString,
+      hazardCategoryIds: categoryIds,
+      hazardReviewStatus: reviewStatus,
+      hazardReportedById: reportedById,
+      hazardNortheastLat: Number(northeastLat),
+      hazardNortheastLng: Number(northeastLng),
+      hazardSouthwestLat: Number(southwestLat),
+      hazardSouthwestLng: Number(southwestLng),
+      isHazardAwsCompliant: false,
       showExpiredHazards: parseBoolean(showExpired),
     });
 
@@ -187,23 +201,32 @@ export const getHazardsWithCategories = async (
       pageSize: Number(pageSize),
     });
 
-    const [subscription, categoryFilters, severityFilters, hazards] =
-      await Promise.all([
-        subscriptionPromise,
-        categoriesPromise,
-        severitiesPromise,
-        hazardsPromise,
-      ]);
+    const [
+      subscription,
+      categoryFilters,
+      severityFiltersAws,
+      severityFiltersNonAws,
+      hazards,
+    ] = await Promise.all([
+      subscriptionPromise,
+      categoriesPromise,
+      severitiesAwsPromise,
+      severitiesNonAwsPromise,
+      hazardsPromise,
+    ]);
 
     const subscriptionId = subscription?.id;
 
-    // If no hazards found, return empty categories and hazards
+    // If no hazards found, return empty response with filters
     if (hazards.length === 0) {
       return res.status(200).json({
         subscriptionId,
-        categoryFilters: [],
-        severityFilters: [],
         hazards: [],
+        availableFilters: {
+          categoryFilters: [],
+          severityFiltersAws: [],
+          severityFiltersNonAws: [],
+        },
       });
     }
 
@@ -214,9 +237,12 @@ export const getHazardsWithCategories = async (
 
     res.status(200).json({
       subscriptionId,
-      categoryFilters,
-      severityFilters,
       hazards: hazardsWithPresignedUrls,
+      availableFilters: {
+        categoryFilters,
+        severityFiltersAws,
+        severityFiltersNonAws,
+      },
     });
   } catch (error) {
     next(error);
