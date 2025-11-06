@@ -259,7 +259,20 @@ export const buildHazardsWhereClause = (
     } else {
       // For non-AWS compliant: exclude advice, watchAndAct, and emergency
       andConditions.push({
-        isAwsCompliant: false,
+        OR: [
+          {
+            isAwsCompliant: false,
+          },
+          {
+            severity: {
+              notIn: [
+                HazardSeverity.advice,
+                HazardSeverity.watchAndAct,
+                HazardSeverity.emergency,
+              ],
+            },
+          },
+        ],
       });
     }
   }
@@ -534,14 +547,16 @@ export const buildHazardsWhereClauseRaw = (
       whereConditions.push(
         `(h.severity IN ($${paramIndex}::"HazardSeverity", $${
           paramIndex + 1
-        }::"HazardSeverity", $${paramIndex + 2}::"HazardSeverity"))`
+        }::"HazardSeverity", $${
+          paramIndex + 2
+        }::"HazardSeverity") AND h."isAwsCompliant" = true)`
       );
       queryParams.push("advice", "watchAndAct", "emergency");
       paramIndex += 3;
     } else {
       // For non-AWS compliant: exclude advice, watchAndAct, and emergency
       whereConditions.push(
-        `(h.severity NOT IN ($${paramIndex}::"HazardSeverity", $${
+        `(h."isAwsCompliant" = false OR h.severity NOT IN ($${paramIndex}::"HazardSeverity", $${
           paramIndex + 1
         }::"HazardSeverity", $${paramIndex + 2}::"HazardSeverity"))`
       );
