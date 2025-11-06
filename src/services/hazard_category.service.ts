@@ -528,6 +528,28 @@ export const populateInitialCategories = async () => {
                     "emergencyWarning",
                   ],
                 },
+                callToActions: {
+                  unknown: ["No action required"],
+                  info: ["Stay informed and monitor updates"],
+                  advice: [
+                    "Pack essentials (IDs, meds, charger, pets).",
+                    "Identify two exit routes.",
+                    "Move flammable items from around home.",
+                    "Tune to ABC Radio or official app.",
+                  ],
+                  watchAndAct: [
+                    "Relocate early if directed.",
+                    "Wear long sleeves and cover skin.",
+                    "Wet down areas near buildings.",
+                    "Tell friends/family your location.",
+                  ],
+                  emergency: [
+                    "Get below window height, use wool blanket.",
+                    "Fill sinks/buckets with water.",
+                    "Avoid roads with heavy smoke.",
+                    "Contact 000 only if in immediate danger.",
+                  ],
+                },
               },
             },
             {

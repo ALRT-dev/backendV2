@@ -24,6 +24,7 @@ import {
   performKeywordMatchingForSeverity,
 } from "../utils/hazard.util.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
+import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -533,8 +534,6 @@ export const summarizeHazard = async ({
       callToAction,
     };
 
-    console.log("Full AI Summary Response:", fullResponse);
-
     return fullResponse;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);
@@ -580,6 +579,19 @@ export const getAISeverity = async ({
       ],
       emergency: ["critical incident", "immediate action", "life threatening"],
     };
+    const defaultCallToActions: SeverityCallToActions = {
+      unknown: ["No action required"],
+      info: ["Stay informed and monitor updates"],
+      advice: ["Be cautious and stay alert", "Follow official guidance"],
+      watchAndAct: [
+        "Prepare to take action",
+        "Follow evacuation orders if issued",
+      ],
+      emergency: [
+        "Evacuate immediately",
+        "Seek shelter and follow emergency services instructions",
+      ],
+    };
 
     let category = await prisma.hazardCategory.findUnique({
       where: { id: categoryId },
@@ -595,6 +607,7 @@ export const getAISeverity = async ({
             name: "Other",
             description: "Miscellaneous hazards not fitting other categories",
             severityKeywords: defaultSeverityKeywords,
+            callToActions: defaultCallToActions,
           },
         });
       }
@@ -602,6 +615,10 @@ export const getAISeverity = async ({
     let severityKeywords = category.severityKeywords as SeverityKeywords | null;
     if (!severityKeywords) {
       severityKeywords = defaultSeverityKeywords;
+    }
+    let callToActions = category.callToActions as SeverityCallToActions | null;
+    if (!callToActions) {
+      callToActions = defaultCallToActions;
     }
 
     // Prepare the prompt for OpenAI
@@ -627,10 +644,10 @@ export const getAISeverity = async ({
       .join("\n");
 
     // Build call to action text based on allowed severities
-    const callToActionText = severityLevels
+    const callToActionText = Object.entries(callToActions)
       .map(
-        (severity) =>
-          `For "${severity}":\n${getSeverityCallToActions(severity)
+        ([severity, actions]) =>
+          `For "${severity}":\n${actions
             .map((action) => `- ${action}`)
             .join("\n")}`
       )
