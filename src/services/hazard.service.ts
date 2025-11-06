@@ -660,7 +660,7 @@ export const getAISeverity = async ({
       ${keywordContext}
 
       CALL TO ACTION GUIDELINES:
-      After determining the severity level and hazard type, select the most appropriate call to action (only one):
+      After determining the severity level and hazard type, select the most appropriate call to action. (Only one sentence from the guidelines below):
       ${callToActionText}
 
       ANALYSIS INSTRUCTIONS:

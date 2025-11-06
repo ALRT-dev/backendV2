@@ -8,13 +8,14 @@ export interface SortSetting {
 }
 
 export type HazardSeverityWithAwsCompliant = {
-  [severity in HazardSeverity]: boolean | string;
+  aws?: HazardSeverity[] | HazardSeverity | undefined;
+  nonAws?: HazardSeverity[] | HazardSeverity | undefined;
 };
 
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
-  severities?: HazardSeverityWithAwsCompliant | undefined;
+  severityFilter?: HazardSeverityWithAwsCompliant | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 

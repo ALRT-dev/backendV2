@@ -21,7 +21,7 @@ export const getNotificationsFeed = async (
     const {
       searchString,
       categoryIds,
-      severities,
+      severityFilter,
       reviewStatus,
       showExpired,
       sortSettings,
@@ -47,7 +47,7 @@ export const getNotificationsFeed = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severities,
+      severityFilter,
       reviewStatus,
       userId,
       page: Number(page),

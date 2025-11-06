@@ -15,3 +15,22 @@ export const parseBoolean = (value: any): boolean => {
   }
   return false;
 };
+
+/**
+ * Parses a value into an array.
+ * If the value is already an array, returns it as-is.
+ * If the value is a single item, wraps it in an array.
+ * If the value is undefined/null, returns an empty array.
+ *
+ * @param value - The value to parse into an array.
+ * @returns An array containing the parsed values.
+ */
+export const parseArray = <T>(value: T | T[] | undefined | null): T[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value !== undefined && value !== null) {
+    return [value];
+  }
+  return [];
+};

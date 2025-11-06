@@ -8,6 +8,7 @@ import type {
   SortSetting,
 } from "../models/hazard_search_params_interface.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
+import { parseArray } from "./parse.util.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -25,7 +26,7 @@ export const buildHazardsWhereClause = (
   const {
     searchString,
     categoryIds,
-    severities,
+    severityFilter,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -98,68 +99,27 @@ export const buildHazardsWhereClause = (
   }
 
   // Apply severities filter if provided
-  if (severities && typeof severities === "object") {
+  if (severityFilter && typeof severityFilter === "object") {
     const severityConditions: Prisma.HazardWhereInput[] = [];
 
-    // Group severities by their boolean values
-    const severitiesForAwsCompliant: HazardSeverity[] = [];
-    const severitiesForNonAwsCompliant: HazardSeverity[] = [];
-    const severitiesForBoth: HazardSeverity[] = [];
-
-    // First pass: identify which severities have which values
-    const severityKeys = Object.keys(severities) as HazardSeverity[];
-    const processedSeverities = new Set<HazardSeverity>();
-
-    severityKeys.forEach((severity) => {
-      if (processedSeverities.has(severity)) return;
-
-      const value = severities[severity];
-      const hasTrue = value === true || value === "true";
-      const hasFalse = value === false || value === "false";
-
-      // Check if this severity appears with both true and false values
-      // (This would happen if frontend sends {advice: true, advice: false})
-      const allEntriesForThisSeverity = severityKeys.filter(
-        (s) => s === severity
-      );
-      const hasMultipleEntries = allEntriesForThisSeverity.length > 1;
-
-      if (hasMultipleEntries) {
-        // If same severity has multiple entries, show all hazards for this severity
-        severitiesForBoth.push(severity);
-      } else if (hasTrue) {
-        severitiesForAwsCompliant.push(severity);
-      } else if (hasFalse) {
-        severitiesForNonAwsCompliant.push(severity);
-      }
-
-      processedSeverities.add(severity);
-    });
+    // Extract AWS and non-AWS severities from the new structure
+    const awsSeverities = parseArray(severityFilter.aws);
+    const nonAwsSeverities = parseArray(severityFilter.nonAws);
 
     // Add conditions for AWS compliant hazards
-    if (severitiesForAwsCompliant.length > 0) {
+    if (awsSeverities.length > 0) {
       severityConditions.push({
-        AND: [
-          { severity: { in: severitiesForAwsCompliant } },
-          { isAwsCompliant: true },
-        ],
+        AND: [{ severity: { in: awsSeverities } }, { isAwsCompliant: true }],
       });
     }
 
     // Add conditions for non-AWS compliant hazards
-    if (severitiesForNonAwsCompliant.length > 0) {
+    if (nonAwsSeverities.length > 0) {
       severityConditions.push({
         AND: [
-          { severity: { in: severitiesForNonAwsCompliant } },
+          { severity: { in: nonAwsSeverities } },
           { isAwsCompliant: false },
         ],
-      });
-    }
-
-    // Add conditions for severities that should show both AWS and non-AWS
-    if (severitiesForBoth.length > 0) {
-      severityConditions.push({
-        severity: { in: severitiesForBoth },
       });
     }
 
@@ -321,7 +281,7 @@ export const buildHazardsWhereClauseRaw = (
   const {
     searchString,
     categoryIds,
-    severities,
+    severityFilter,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -377,72 +337,33 @@ export const buildHazardsWhereClauseRaw = (
   }
 
   // Apply severities filter if provided
-  if (severities && typeof severities === "object") {
+  if (severityFilter && typeof severityFilter === "object") {
     const severityConditions: string[] = [];
 
-    // Group severities by their boolean values
-    const severitiesForAwsCompliant: HazardSeverity[] = [];
-    const severitiesForNonAwsCompliant: HazardSeverity[] = [];
-    const severitiesForBoth: HazardSeverity[] = [];
-
-    // First pass: identify which severities have which values
-    const severityKeys = Object.keys(severities) as HazardSeverity[];
-    const processedSeverities = new Set<HazardSeverity>();
-
-    severityKeys.forEach((severity) => {
-      if (processedSeverities.has(severity)) return;
-
-      const value = severities[severity];
-      const hasTrue = value === true || value === "true";
-      const hasFalse = value === false || value === "false";
-
-      // Check if this severity appears with both true and false values
-      const allEntriesForThisSeverity = severityKeys.filter(
-        (s) => s === severity
-      );
-      const hasMultipleEntries = allEntriesForThisSeverity.length > 1;
-
-      if (hasMultipleEntries) {
-        // If same severity has multiple entries, show all hazards for this severity
-        severitiesForBoth.push(severity);
-      } else if (hasTrue) {
-        severitiesForAwsCompliant.push(severity);
-      } else if (hasFalse) {
-        severitiesForNonAwsCompliant.push(severity);
-      }
-
-      processedSeverities.add(severity);
-    });
+    // Extract AWS and non-AWS severities from the new structure
+    const awsSeverities = parseArray(severityFilter.aws);
+    const nonAwsSeverities = parseArray(severityFilter.nonAws);
 
     // Add conditions for AWS compliant hazards
-    if (severitiesForAwsCompliant.length > 0) {
-      const awsCompliantPlaceholders = severitiesForAwsCompliant
+    if (awsSeverities.length > 0) {
+      const awsCompliantPlaceholders = awsSeverities
         .map(() => `$${paramIndex++}::"HazardSeverity"`)
         .join(",");
       severityConditions.push(
         `(h.severity IN (${awsCompliantPlaceholders}) AND h."isAwsCompliant" = true)`
       );
-      queryParams.push(...severitiesForAwsCompliant);
+      queryParams.push(...awsSeverities);
     }
 
     // Add conditions for non-AWS compliant hazards
-    if (severitiesForNonAwsCompliant.length > 0) {
-      const nonAwsCompliantPlaceholders = severitiesForNonAwsCompliant
+    if (nonAwsSeverities.length > 0) {
+      const nonAwsCompliantPlaceholders = nonAwsSeverities
         .map(() => `$${paramIndex++}::"HazardSeverity"`)
         .join(",");
       severityConditions.push(
         `(h.severity IN (${nonAwsCompliantPlaceholders}) AND h."isAwsCompliant" = false)`
       );
-      queryParams.push(...severitiesForNonAwsCompliant);
-    }
-
-    // Add conditions for severities that should show both AWS and non-AWS
-    if (severitiesForBoth.length > 0) {
-      const bothPlaceholders = severitiesForBoth
-        .map(() => `$${paramIndex++}::"HazardSeverity"`)
-        .join(",");
-      severityConditions.push(`h.severity IN (${bothPlaceholders})`);
-      queryParams.push(...severitiesForBoth);
+      queryParams.push(...nonAwsSeverities);
     }
 
     if (severityConditions.length > 0) {

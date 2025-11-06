@@ -5,11 +5,19 @@ export const getNotificationsFeedSchema = z.object({
 
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
-  severities: z
-    .record(
-      z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"]),
-      z.enum(["true", "false"])
-    )
+  severityFilter: z
+    .object({
+      aws: z
+        .array(
+          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
+        )
+        .optional(),
+      nonAws: z
+        .array(
+          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
+        )
+        .optional(),
+    })
     .optional(),
 
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),

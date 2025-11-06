@@ -128,11 +128,19 @@ export const getHazardsQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
-  severities: z
-    .record(
-      z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"]),
-      z.enum(["true", "false"])
-    )
+  severityFilter: z
+    .object({
+      aws: z
+        .array(
+          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
+        )
+        .optional(),
+      nonAws: z
+        .array(
+          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
+        )
+        .optional(),
+    })
     .optional(),
 
   reportedById: z.string().uuid().optional(),

@@ -518,14 +518,19 @@ export const populateInitialCategories = async () => {
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
                 severityKeywords: {
-                  unknown: ["not applicable"],
+                  unknown: ["not applicable", "burn off"],
                   info: ["info", "information"],
-                  advice: ["advice"],
-                  watchAndAct: ["watch and act", "watchAndAct"],
+                  advice: ["advice", "level 1 but not burn off"],
+                  watchAndAct: [
+                    "watch and act",
+                    "watchAndAct",
+                    "level 2 but not burn off",
+                  ],
                   emergency: [
                     "emergency",
                     "emergency warning",
                     "emergencyWarning",
+                    "level 3 but not burn off",
                   ],
                 },
                 callToActions: {
@@ -1626,7 +1631,7 @@ export const getCategoriesApplyingFilters = async ({
 }) => {
   const hazardsWhereClause = buildHazardsWhereClause({
     searchString: hazardSearchString,
-    severities: hazardSeverities,
+    severityFilter: hazardSeverities,
     reviewStatus: hazardReviewStatus,
     reportedById: hazardReportedById,
     northeastLat: hazardNortheastLat,

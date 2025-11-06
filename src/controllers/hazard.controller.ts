@@ -62,7 +62,7 @@ export const getHazards = async (
     const {
       searchString,
       categoryIds,
-      severities,
+      severityFilter,
       reviewStatus,
       reportedById,
       northeastLat,
@@ -87,7 +87,7 @@ export const getHazards = async (
       searchString,
       categoryIds,
       reportedById,
-      severities,
+      severityFilter,
       reviewStatus,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
@@ -123,7 +123,7 @@ export const getHazardsWithSubscriptionId = async (
     const {
       searchString,
       categoryIds,
-      severities,
+      severityFilter,
       reportedById,
       reviewStatus,
       northeastLat,
@@ -158,7 +158,7 @@ export const getHazardsWithSubscriptionId = async (
     const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severities,
+      severityFilter,
       reviewStatus,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
