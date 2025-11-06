@@ -599,11 +599,10 @@ export const buildHazardsOrderByClauseRaw = (
             CASE h.severity
               WHEN 'unknown' THEN 1
               WHEN 'info' THEN 2
-              WHEN 'low' THEN 3
-              WHEN 'advice' THEN 4
-              WHEN 'watchAndAct' THEN 5
-              WHEN 'emergency' THEN 6
-              ELSE 7
+              WHEN 'advice' THEN 3
+              WHEN 'watchAndAct' THEN 4
+              WHEN 'emergency' THEN 5
+              ELSE 6
             END ${direction}`);
       }
 
@@ -697,9 +696,6 @@ export const getHazardExpiryDateFromSeverity = (
     case HazardSeverity.info:
       now.setHours(now.getHours() + 6); // 6 hours for info
       break;
-    case HazardSeverity.low:
-      now.setHours(now.getHours() + 12); // 12 hours for low
-      break;
     case HazardSeverity.advice:
       now.setHours(now.getHours() + 12); // 12 hours for advice
       break;
@@ -710,7 +706,7 @@ export const getHazardExpiryDateFromSeverity = (
       now.setHours(now.getHours() + 48); // 48 hours for emergency
       break;
     default:
-      now.setDate(now.getDate() + 30); // Default to 30 days
+      now.setHours(now.getHours() + 6); // Default to 6 hours
   }
 
   return now;
@@ -766,8 +762,6 @@ export const getSeverityKeywords = (severity: HazardSeverity): string => {
       return `"unknown", "not applicable"`;
     case HazardSeverity.info:
       return `"info", "information"`;
-    case HazardSeverity.low:
-      return `"low"`;
     case HazardSeverity.advice:
       return `"advice"`;
     case HazardSeverity.watchAndAct:
@@ -783,7 +777,6 @@ export const getSeverityCallToActions = (
 ): string[] => {
   switch (severity) {
     case HazardSeverity.info:
-    case HazardSeverity.low:
       return ["Stay informed", "Monitor conditions", "Avoid the area"];
     case HazardSeverity.advice:
       return [
@@ -843,10 +836,9 @@ export const allowedSeveritiesAWS: HazardSeverity[] = [
  */
 export const allowedSeveritiesNonAWS: HazardSeverity[] = [
   HazardSeverity.info,
-  HazardSeverity.low,
-  HazardSeverity.advice, // equivalent to 'moderate'
-  HazardSeverity.watchAndAct, // equivalent to 'high'
-  HazardSeverity.emergency, // equivalent to 'critical'
+  HazardSeverity.advice, // equivalent to 'low'
+  HazardSeverity.watchAndAct, // equivalent to 'moderate'
+  HazardSeverity.emergency, // equivalent to 'high'
 ];
 
 /**
@@ -864,7 +856,6 @@ export const performKeywordMatchingForSeverity = (
     HazardSeverity.emergency,
     HazardSeverity.watchAndAct,
     HazardSeverity.advice,
-    HazardSeverity.low,
     HazardSeverity.info,
     HazardSeverity.unknown,
   ];
@@ -886,7 +877,7 @@ export const performKeywordMatchingForSeverity = (
 /**
  * Finds and returns the lowest severity from a list of severities.
  * The severity hierarchy is defined as:
- * unknown < info < low < advice < watchAndAct < emergency
+ * unknown < info < advice < watchAndAct < emergency
  */
 export const getLowestSeverity = (
   severities: HazardSeverity[]
@@ -894,7 +885,6 @@ export const getLowestSeverity = (
   const severityOrder: HazardSeverity[] = [
     HazardSeverity.unknown,
     HazardSeverity.info,
-    HazardSeverity.low,
     HazardSeverity.advice,
     HazardSeverity.watchAndAct,
     HazardSeverity.emergency,
@@ -930,10 +920,9 @@ export const getClosestAllowedSeverity = (
       const severityOrder: HazardSeverity[] = [
         HazardSeverity.unknown,
         HazardSeverity.info,
-        HazardSeverity.low,
-        HazardSeverity.advice, // equivalent to 'moderate'
-        HazardSeverity.watchAndAct, // equivalent to 'high'
-        HazardSeverity.emergency, // equivalent to 'critical'
+        HazardSeverity.advice, // equivalent to 'low'
+        HazardSeverity.watchAndAct, // equivalent to 'moderate'
+        HazardSeverity.emergency, // equivalent to 'high'
       ];
 
       const currentSeverityIndex = severityOrder.indexOf(currentSeverity);

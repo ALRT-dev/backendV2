@@ -24,7 +24,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["suspicious activity", "increased security", "security alert"],
-          low: ["minor incident", "resolved", "all clear"],
           advice: ["ongoing investigation", "avoid area", "caution advised"],
           watchAndAct: [
             "active threat",
@@ -160,7 +159,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["verbal argument", "tension", "dispute"],
-                  low: ["minor scuffle", "broken up", "no injuries"],
                   advice: [
                     "physical altercation",
                     "avoid area",
@@ -240,7 +238,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["protest", "gathering", "peaceful demonstration"],
-                  low: ["dispersed", "peaceful", "no incidents"],
                   advice: ["unrest", "property damage", "avoid area"],
                   watchAndAct: ["violent clashes", "looting", "fires"],
                   emergency: [
@@ -264,7 +261,6 @@ export const populateInitialCategories = async () => {
                     "routine security",
                     "precautionary",
                   ],
-                  low: ["minor incident", "traffic stop", "resolved"],
                   advice: [
                     "area secured",
                     "investigation ongoing",
@@ -290,7 +286,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["health advisory", "monitoring", "precautionary"],
-          low: ["minor incident", "treated", "no serious injuries"],
           advice: [
             "seek medical attention",
             "symptoms reported",
@@ -314,7 +309,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["monitoring", "isolated cases", "investigation"],
-                  low: ["contained", "no new cases", "under control"],
                   advice: [
                     "increasing cases",
                     "vaccination recommended",
@@ -342,7 +336,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["medical assistance", "non-urgent", "routine"],
-                  low: ["minor injury", "treated", "discharged"],
                   advice: [
                     "serious condition",
                     "hospital required",
@@ -398,7 +391,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["chemical detected", "low levels", "monitoring"],
-                  low: ["minor exposure", "decontaminated", "no symptoms"],
                   advice: [
                     "hazardous levels",
                     "evacuation zone",
@@ -426,7 +418,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["investigation", "isolated case", "testing"],
-                  low: ["single case", "mild symptoms", "recovered"],
                   advice: [
                     "multiple cases",
                     "restaurant closure",
@@ -458,7 +449,6 @@ export const populateInitialCategories = async () => {
                     "stay hydrated",
                     "monitor vulnerable",
                   ],
-                  low: ["mild symptoms", "treated", "cooling centers open"],
                   advice: [
                     "heat exhaustion",
                     "multiple cases",
@@ -486,11 +476,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["incident reported", "assessing", "initial response"],
-                  low: [
-                    "minor injuries",
-                    "walking wounded",
-                    "controlled scene",
-                  ],
                   advice: ["multiple injuries", "triage", "hospital alert"],
                   watchAndAct: [
                     "serious casualties",
@@ -516,7 +501,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["weather watch", "monitoring", "developing conditions"],
-          low: ["cleared", "weakening", "minimal impact"],
           advice: ["weather warning", "prepare", "potential impact"],
           watchAndAct: [
             "dangerous conditions",
@@ -812,7 +796,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["light smoke", "hazy", "distant fire"],
-                  low: ["clearing smoke", "improving", "minimal"],
                   advice: ["thick smoke", "poor visibility", "stay indoors"],
                   watchAndAct: ["heavy smoke", "dangerous air", "health risk"],
                   emergency: [
@@ -832,7 +815,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["air quality alert", "monitoring", "slight pollution"],
-                  low: ["improving", "acceptable levels", "clearing"],
                   advice: [
                     "unhealthy air",
                     "sensitive groups",
@@ -862,7 +844,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["traffic alert", "minor delay", "roadworks"],
-          low: ["cleared", "normal traffic", "minimal delay"],
           advice: ["significant delay", "seek alternate route", "avoid area"],
           watchAndAct: [
             "major disruption",
@@ -928,7 +909,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: ["not applicable"],
                   info: ["small fire", "under control", "no injuries"],
-                  low: ["fire out", "cleared", "minimal damage"],
                   advice: [
                     "significant fire",
                     "road closed",
@@ -958,7 +938,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["water on road", "minor flooding", "caution advised"],
-                  low: ["cleared", "water receded", "normal conditions"],
                   advice: [
                     "significant flooding",
                     "seek alternate route",
@@ -986,7 +965,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["train stopped", "minor issue", "investigating"],
-                  low: ["service resumed", "minor delay", "no damage"],
                   advice: [
                     "derailment",
                     "service suspended",
@@ -1014,7 +992,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["planned closure", "roadworks", "short term"],
-                  low: ["reopened", "one lane", "minimal impact"],
                   advice: [
                     "road closed",
                     "detour required",
@@ -1042,7 +1019,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["minor delay", "weather delay", "maintenance"],
-                  low: ["normal operations", "minor disruption", "catching up"],
                   advice: ["significant delays", "diversions", "avoid airport"],
                   watchAndAct: [
                     "emergency landing",
@@ -1066,7 +1042,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["minor incident", "service delay", "mechanical issue"],
-                  low: ["service resumed", "backup ferry", "minor delay"],
                   advice: [
                     "ferry grounded",
                     "passengers evacuated",
@@ -1090,7 +1065,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["heavy traffic", "slow moving", "peak hour"],
-                  low: ["traffic easing", "normal flow", "clearing"],
                   advice: ["severe congestion", "long delays", "avoid area"],
                   watchAndAct: ["gridlock", "hours delay", "major incident"],
                   emergency: [
@@ -1112,7 +1086,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["service alert", "maintenance", "minor disruption"],
-          low: ["service restored", "minimal impact", "backup systems"],
           advice: [
             "service outage",
             "significant disruption",
@@ -1254,7 +1227,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["power fluctuation", "brief outage", "investigating"],
-                  low: ["power restored", "localized", "minimal impact"],
                   advice: [
                     "widespread outage",
                     "extended duration",
@@ -1282,7 +1254,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["gas odor", "investigating", "minor leak"],
-                  low: ["leak repaired", "ventilated", "no danger"],
                   advice: [
                     "gas leak confirmed",
                     "evacuate area",
@@ -1310,11 +1281,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["slow connection", "intermittent", "minor issues"],
-                  low: [
-                    "service restored",
-                    "local issue",
-                    "alternative available",
-                  ],
                   advice: [
                     "widespread outage",
                     "services affected",
@@ -1342,7 +1308,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["water testing", "precautionary", "monitoring"],
-                  low: ["safe levels", "cleared", "normal supply"],
                   advice: [
                     "boil water",
                     "contamination detected",
@@ -1370,7 +1335,6 @@ export const populateInitialCategories = async () => {
                 severityKeywords: {
                   unknown: [],
                   info: ["alarm activated", "small fire", "investigating"],
-                  low: ["contained", "no spread", "normal operations"],
                   advice: [
                     "facility fire",
                     "evacuating",
@@ -1522,7 +1486,6 @@ export const populateInitialCategories = async () => {
         severityKeywords: {
           unknown: [],
           info: ["miscellaneous incident", "unclassified", "investigating"],
-          low: ["minor incident", "resolved", "no significant impact"],
           advice: [
             "notable incident",
             "monitor situation",

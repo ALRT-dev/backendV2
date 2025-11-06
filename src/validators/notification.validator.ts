@@ -7,7 +7,7 @@ export const getNotificationsFeedSchema = z.object({
 
   severities: z
     .record(
-      z.enum(["unknown", "info", "low", "advice", "watchAndAct", "emergency"]),
+      z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"]),
       z.enum(["true", "false"])
     )
     .optional(),

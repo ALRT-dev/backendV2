@@ -572,7 +572,6 @@ export const getAISeverity = async ({
     const defaultSeverityKeywords: SeverityKeywords = {
       unknown: [],
       info: ["miscellaneous incident", "unclassified", "investigating"],
-      low: ["minor incident", "resolved", "no significant impact"],
       advice: ["notable incident", "monitor situation", "potential concern"],
       watchAndAct: [
         "significant incident",

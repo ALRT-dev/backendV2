@@ -64,14 +64,13 @@ export const getSeveritiesApplyingFilters = async ({
     },
   });
 
-  // Define custom severity order: unknown, info, low, advice, watchAndAct, emergency
+  // Define custom severity order: unknown, info, advice, watchAndAct, emergency
   const severityOrder: Record<HazardSeverity, number> = {
     unknown: 0,
     info: 1,
-    low: 2,
-    advice: 3,
-    watchAndAct: 4,
-    emergency: 5,
+    advice: 2,
+    watchAndAct: 3,
+    emergency: 4,
   };
 
   return severities
