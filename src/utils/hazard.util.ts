@@ -254,17 +254,12 @@ export const buildHazardsWhereClause = (
             HazardSeverity.emergency,
           ],
         },
+        isAwsCompliant: true,
       });
     } else {
       // For non-AWS compliant: exclude advice, watchAndAct, and emergency
       andConditions.push({
-        severity: {
-          notIn: [
-            HazardSeverity.advice,
-            HazardSeverity.watchAndAct,
-            HazardSeverity.emergency,
-          ],
-        },
+        isAwsCompliant: false,
       });
     }
   }
