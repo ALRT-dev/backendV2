@@ -347,7 +347,7 @@ export const populateInitialCategories = async () => {
         description: "Health emergencies and medical incidents",
         color: "#FCC27B",
         severityKeywords: {
-          unknown: [],
+          unknown: ["not applicable"],
           info: ["health advisory", "monitoring", "precautionary"],
           advice: [
             "seek medical attention",
@@ -395,6 +395,7 @@ export const populateInitialCategories = async () => {
                   unknown: [],
                   info: [
                     "on scene",
+                    "units on route",
                     "ambulance dispatched",
                     "routine call",
                     "assessment",
@@ -453,7 +454,7 @@ export const populateInitialCategories = async () => {
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
                 severityKeywords: {
-                  unknown: ["not applicable", "burn off"],
+                  unknown: ["not applicable", "burn off", "planned burn"],
                   info: ["info", "information"],
                   advice: ["advice", "level 1 but not burn off"],
                   watchAndAct: [
@@ -1173,6 +1174,7 @@ export const populateInitialCategories = async () => {
                 name: "Car Crash",
                 description: "Vehicle accidents and collisions",
                 severityKeywords: {
+                  unknown: ["not applicable"],
                   info: [
                     "minor bingle",
                     "no injuries",
@@ -1684,6 +1686,7 @@ export const populateInitialCategories = async () => {
                 name: "Structural Fire",
                 description: "Fires in buildings and structures",
                 severityKeywords: {
+                  unknown: ["not applicable"],
                   info: [
                     "smoke sighted",
                     "small contained fire",
@@ -1998,7 +2001,7 @@ export const populateInitialCategories = async () => {
                 name: "Industrial Fire",
                 description: "Fires at industrial facilities",
                 severityKeywords: {
-                  unknown: [],
+                  unknown: ["not applicable"],
                   info: ["alarm activated", "small fire", "investigating"],
                   advice: [
                     "facility fire",
@@ -2353,7 +2356,7 @@ export const populateInitialCategories = async () => {
         description: "Miscellaneous Hazards Not Classified Elsewhere",
         color: "#BAA27D",
         severityKeywords: {
-          unknown: [],
+          unknown: ["not applicable"],
           info: ["miscellaneous incident", "unclassified", "investigating"],
           advice: [
             "notable incident",

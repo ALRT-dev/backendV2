@@ -461,6 +461,12 @@ export const summarizeHazard = async ({
         : ""
     }
 
+    SUMMARY GUIDELINES:
+    - Factual, one-sentence summary of what’s happening, where, and who is responding. 
+    - Use simple, calm, plain, natural language suitable for the general public. 
+    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
+    - Keep total length ≤50 words.
+
     CONFIDENCE LEVELS:
     - "high": Detailed, specific, credible information with clear location and time
     - "medium": Reasonable detail but some ambiguity or missing information
@@ -470,7 +476,7 @@ export const summarizeHazard = async ({
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (a 2-3 sentence summary of the hazard)",
+      "summary": "string (based on SUMMARY GUIDELINES above)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
       ${
         availableCategories && availableCategories.length > 0
@@ -569,7 +575,7 @@ export const getAISeverity = async ({
 }> => {
   try {
     const defaultSeverityKeywords: SeverityKeywords = {
-      unknown: [],
+      unknown: ["not applicable"],
       info: ["miscellaneous incident", "unclassified", "investigating"],
       advice: ["notable incident", "monitor situation", "potential concern"],
       watchAndAct: [
@@ -633,6 +639,13 @@ export const getAISeverity = async ({
     const severityLevels = Object.keys(
       severityKeywords
     ) as (keyof SeverityKeywords)[];
+
+    // If callToActions is missing any severity level, fill with defaults
+    for (const level of severityLevels) {
+      if (!callToActions[level] || callToActions[level].length === 0) {
+        callToActions[level] = defaultCallToActions[level];
+      }
+    }
 
     // Create keyword context for each severity level
     const keywordContext = Object.entries(severityKeywords)

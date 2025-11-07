@@ -232,7 +232,7 @@ export function parseGeoJsonToHazards(
         properties?.title || properties?.displayName || "Untitled Hazard";
 
       const description = cleanDescription(
-        properties?.description || properties?.otherAdvice || ""
+        properties?.description || properties?.otherAdvice || title
       );
 
       const hazardId = id && `${idPrefix}-${id}`;
