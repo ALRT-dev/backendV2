@@ -18,6 +18,7 @@ import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.j
 import { initSocket } from "./utils/socket_client.util.js";
 import { requireSocketAuth } from "./middlewares/auth.middleware.js";
 import { initializeScheduledTasks } from "./services/scheduler.service.js";
+import { initializeDatabase } from "./services/database_initialization.service.js";
 
 env.config();
 
@@ -51,10 +52,17 @@ app.use("/api/xp", xpPointsRouter);
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
 
-server.listen(config.port, () => {
+server.listen(config.port, async () => {
   console.log(
     `${config.env.toUpperCase()} server is running at PORT:${config.port}`
   );
+
+  // Initialize database and required data
+  try {
+    await initializeDatabase();
+  } catch (error) {
+    console.error("Failed to initialize database:", error);
+  }
 
   // Whether to run scheduled tasks in development environment
   const runScheduledTasksInDev = false;

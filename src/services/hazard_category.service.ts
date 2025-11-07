@@ -10,6 +10,44 @@ import type {
 import type { HazardSeverityWithAwsCompliant } from "../models/hazard_search_params_interface.js";
 
 /**
+ * Check if any hazard categories exist in the database
+ */
+export const hasExistingCategories = async (): Promise<boolean> => {
+  try {
+    const count = await prisma.hazardCategory.count();
+    return count > 0;
+  } catch (error) {
+    console.error("Error checking existing categories:", error);
+    return false;
+  }
+};
+
+/**
+ * Initialize hazard categories if none exist
+ * This function should be called when the server starts
+ */
+export const initializeHazardCategories = async (): Promise<void> => {
+  try {
+    console.log("Checking if hazard categories need to be initialized...");
+
+    const categoriesExist = await hasExistingCategories();
+
+    if (!categoriesExist) {
+      console.log(
+        "No hazard categories found. Populating initial categories..."
+      );
+      await populateInitialCategories();
+      console.log("Hazard categories initialized successfully");
+    } else {
+      console.log("Hazard categories already exist, skipping initialization");
+    }
+  } catch (error) {
+    console.error("❌ Error initializing hazard categories:", error);
+    throw error;
+  }
+};
+
+/**
  * Populate the database with a predefined set of hazard categories.
  * If a category already exists, it will not be duplicated.
  */
@@ -2688,13 +2726,27 @@ export const populateInitialCategories = async () => {
     }
 
     console.log(
-      `------------------------------------> Populated ${createdCategories.length} hazard categories.`,
-      JSON.stringify(createdCategories, null, 2)
+      `------------------------------------> Populated ${createdCategories.length} hazard categories.`
     );
 
     return createdCategories;
   } catch (error) {
     console.error("Error populating hazard categories:", error);
+    throw error;
+  }
+};
+
+/**
+ * Force populate initial categories regardless of existing data
+ * This function can be called manually if you want to reset or update categories
+ */
+export const forcePopulateCategories = async (): Promise<void> => {
+  try {
+    console.log("🔄 Force populating hazard categories...");
+    await populateInitialCategories();
+    console.log("✅ Categories force-populated successfully");
+  } catch (error) {
+    console.error("❌ Error force-populating categories:", error);
     throw error;
   }
 };
