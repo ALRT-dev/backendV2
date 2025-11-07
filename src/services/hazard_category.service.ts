@@ -700,6 +700,23 @@ export const populateInitialCategories = async () => {
               },
             },
             {
+              where: { id: "strongWinds" },
+              create: {
+                id: "strongWinds",
+                name: "Strong Winds",
+                description: "High wind events causing damage",
+                severityKeywords: {
+                  unknown: ["not applicable"],
+                  info: ["info", "information"],
+                  advice: ["advice"],
+                },
+                callToActions: {
+                  info: ["Stay informed and monitor updates"],
+                  advice: ["Follow local weather updates"],
+                },
+              },
+            },
+            {
               where: { id: "snow" },
               create: {
                 id: "snow",
@@ -1185,6 +1202,7 @@ export const populateInitialCategories = async () => {
                     "debris on road",
                   ],
                   advice: [
+                    "level: 1",
                     "single-vehicle crash",
                     "minor injuries",
                     "roadside assistance",
@@ -1586,6 +1604,7 @@ export const populateInitialCategories = async () => {
                   unknown: [],
                   info: ["temporary outage", "maintenance", "flashing amber"],
                   advice: [
+                    "alternating (stop/slow) signals",
                     "single intersection out",
                     "minor traffic delays",
                     "crew notified",
@@ -1628,6 +1647,56 @@ export const populateInitialCategories = async () => {
                 },
               },
             },
+            {
+              where: { id: "roadDamage" },
+              create: {
+                id: "roadDamage",
+                name: "Road Damage",
+                description: "Damage to roads affecting travel",
+                severityKeywords: {
+                  unknown: [],
+                  info: ["potholes", "minor surface damage", "caution advised"],
+                  advice: [
+                    "significant damage",
+                    "lane closure",
+                    "seek alternate route",
+                  ],
+                  watchAndAct: [
+                    "opened with caution",
+                    "major damage",
+                    "road closed",
+                    "emergency services",
+                  ],
+                  emergency: [
+                    "catastrophic damage",
+                    "mass evacuation",
+                    "life-threatening",
+                  ],
+                },
+                callToActions: {
+                  info: [
+                    "Drive with caution.",
+                    "Avoid damaged areas if possible.",
+                    "Report new hazards.",
+                  ],
+                  advice: [
+                    "Use alternate route.",
+                    "Slow down near damage.",
+                    "Follow road signs.",
+                  ],
+                  watchAndAct: [
+                    "Avoid area completely.",
+                    "Move to higher ground if trapped.",
+                    "Follow road closure signs and official updates.",
+                  ],
+                  emergency: [
+                    "Evacuate immediately if directed.",
+                    "Stay on high ground.",
+                    "Call 000 if vehicle trapped.",
+                  ],
+                },
+              },
+            },
           ],
         },
       },
@@ -1638,7 +1707,12 @@ export const populateInitialCategories = async () => {
         color: "#FFE47A",
         severityKeywords: {
           unknown: [],
-          info: ["service alert", "maintenance", "minor disruption"],
+          info: [
+            "service alert",
+            "maintenance",
+            "minor disruption",
+            "speed restrictions",
+          ],
           advice: [
             "service outage",
             "significant disruption",
@@ -2632,6 +2706,9 @@ export const getAllSubHazardCategories = async () => {
   const subCategories = await prisma.hazardCategory.findMany({
     where: {
       parentId: { not: null },
+    },
+    include: {
+      parent: true,
     },
   });
   return subCategories;

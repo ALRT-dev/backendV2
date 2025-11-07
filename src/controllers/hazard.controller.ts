@@ -374,10 +374,10 @@ export const createHazard = async (
       review = await reviewHazard({
         title,
         description,
+        category,
         latitude,
         longitude,
         locationName,
-        occurredAt: occurredAt || new Date(),
       });
     } catch (error) {
       console.log("Error during hazard review:", error);
@@ -598,6 +598,7 @@ export const updateHazard = async (
       where: { id },
       include: {
         medias: true,
+        category: true,
       },
     });
     if (!existingHazard) {
@@ -620,6 +621,18 @@ export const updateHazard = async (
       locationName,
       occurredAt,
     } = hazardData;
+
+    let category = existingHazard.category;
+    if (categoryId) {
+      // Validate that category exists
+      const foundCategory = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+      });
+      if (!foundCategory) {
+        throw new HttpError(400, "Invalid Category ID");
+      }
+      category = foundCategory;
+    }
 
     // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
@@ -648,11 +661,11 @@ export const updateHazard = async (
     try {
       review = await reviewHazard({
         title: title || existingHazard.title,
+        category,
         description: description || existingHazard.description,
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
-        occurredAt: occurredAt || existingHazard.occurredAt || new Date(),
       });
     } catch (error) {
       console.log("Error during hazard review:", error);

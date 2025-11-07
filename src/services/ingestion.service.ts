@@ -1,7 +1,7 @@
 import {
   HazardReviewStatus,
-  HazardSeverity,
   type Hazard,
+  type HazardCategory,
   type Prisma,
 } from "@prisma/client";
 import {
@@ -22,8 +22,6 @@ import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import {
-  allowedSeveritiesAWS,
-  allowedSeveritiesNonAWS,
   buildHazardInclude,
   getHazardExpiryDateFromSeverity,
 } from "../utils/hazard.util.js";
@@ -60,8 +58,9 @@ export const syncHazardsFromDifferentSources = async () => {
     // Clean up expired cache entries
     cleanupGeocodingCache();
 
-    const allCategories = await getAllSubHazardCategories();
-    const availableCategories = allCategories.map((cat) => cat.id);
+    await prisma.hazard.deleteMany();
+
+    const availableCategories = await getAllSubHazardCategories();
 
     // Define AWS compliant categories
     // If a hazard's category is in this list, it will be marked as AWS compliant
@@ -149,7 +148,7 @@ export const syncHazardsFromDifferentSources = async () => {
  */
 const syncHazardsFromSource = async (
   sourceConfig: HazardSourceConfig,
-  availableCategories: string[]
+  availableCategories: HazardCategory[]
 ) => {
   try {
     const category = await prisma.hazardCategory.findFirst({
@@ -202,7 +201,7 @@ const summarizeAndPostHazards = async ({
   awsCompliantCategories,
 }: {
   hazardDatas: Prisma.HazardCreateInput[];
-  availableCategories?: string[];
+  availableCategories?: HazardCategory[];
   awsCompliantCategories?: string[];
 }): Promise<Hazard[]> => {
   try {
@@ -391,7 +390,12 @@ export const getHazardsDataFromRFS = async (
     });
 
     const data = await response.json();
-    const hazards = parseGeoJsonToHazards(data, categoryId, "rfs");
+    const hazards = parseGeoJsonToHazards(
+      data,
+      categoryId,
+      "rfs",
+      "DD/MM/YYYY"
+    );
 
     return hazards.map((hazard) => ({
       ...hazard,

@@ -211,7 +211,8 @@ export const populateHazardWithGeocoding = async (
 export function parseGeoJsonToHazards(
   data: FeatureCollection,
   categoryId: string,
-  idPrefix: string = "geojson"
+  idPrefix: string = "geojson",
+  dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" = "MM/DD/YYYY"
 ): Prisma.HazardCreateInput[] {
   if (!data.features?.length) return [];
 
@@ -246,8 +247,10 @@ export function parseGeoJsonToHazards(
         },
         latitude,
         longitude,
-        occurredAt: parseValidDate(properties?.pubDate),
-        expiresAt: properties?.end ? parseValidDate(properties.end) : null,
+        occurredAt: parseValidDate(properties?.pubDate, dateFormat),
+        expiresAt: properties?.end
+          ? parseValidDate(properties.end, dateFormat)
+          : null,
       };
 
       return hazard;
@@ -774,8 +777,13 @@ function extractFirstPoint(geometry: Geometry): number[] | null {
 
 /**
  * Safely parses a date string or returns current date if invalid
+ * @param dateInput - The date input to parse (string, number, or Date)
+ * @param format - Optional format hint: 'DD/MM/YYYY' or 'MM/DD/YYYY'. If not specified, uses smart detection.
  */
-function parseValidDate(dateInput?: string | number | Date): Date {
+function parseValidDate(
+  dateInput?: string | number | Date,
+  format?: "DD/MM/YYYY" | "MM/DD/YYYY"
+): Date {
   if (!dateInput) {
     return new Date();
   }
@@ -792,20 +800,44 @@ function parseValidDate(dateInput?: string | number | Date): Date {
   }
 
   // Handle string input
-  let parsedDate = new Date(dateInput);
+  // First check if it matches a date pattern that could be ambiguous (M/D/YYYY or D/M/YYYY)
+  const datePatternMatch = dateInput.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/
+  );
 
-  // If the standard Date parsing fails, try to handle DD/MM/YYYY format
-  if (isNaN(parsedDate.getTime())) {
-    // Check if it matches DD/MM/YYYY format (with optional time)
-    const ddmmyyyyMatch = dateInput.match(
-      /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/
-    );
-    if (ddmmyyyyMatch) {
-      const [, day, month, year, timepart] = ddmmyyyyMatch;
-      // Rearrange to MM/DD/YYYY format for JavaScript Date constructor
-      const reformattedDate = `${month}/${day}/${year}${timepart}`;
-      parsedDate = new Date(reformattedDate);
+  let parsedDate: Date;
+
+  if (datePatternMatch) {
+    const [, first, second, year, timepart] = datePatternMatch;
+    const firstNum = parseInt(first || "0", 10);
+    const secondNum = parseInt(second || "0", 10);
+
+    let reformattedDate: string;
+
+    if (format === "DD/MM/YYYY") {
+      // Explicitly treat as DD/MM/YYYY format
+      reformattedDate = `${second}/${first}/${year}${timepart || ""}`;
+    } else if (format === "MM/DD/YYYY") {
+      // Explicitly treat as MM/DD/YYYY format
+      reformattedDate = `${first}/${second}/${year}${timepart || ""}`;
+    } else {
+      // No format specified, use smart detection
+      if (firstNum > 12) {
+        // First number > 12, so it must be day (DD/MM/YYYY format)
+        reformattedDate = `${second}/${first}/${year}${timepart || ""}`;
+      } else if (secondNum > 12) {
+        // Second number > 12, so it must be day (MM/DD/YYYY format - already correct)
+        reformattedDate = `${first}/${second}/${year}${timepart || ""}`;
+      } else {
+        // Both numbers <= 12, ambiguous case - default to MM/DD/YYYY (JavaScript default)
+        reformattedDate = `${first}/${second}/${year}${timepart || ""}`;
+      }
     }
+
+    parsedDate = new Date(reformattedDate);
+  } else {
+    // Not a simple date pattern, try standard JavaScript Date parsing
+    parsedDate = new Date(dateInput);
   }
 
   // Check if the date is valid
@@ -955,7 +987,7 @@ function parseCFSIncidentDateTime(date?: string, time?: string): Date {
     dateTimeString += ` ${time}`;
   }
 
-  return parseValidDate(dateTimeString);
+  return parseValidDate(dateTimeString, "DD/MM/YYYY");
 }
 
 /**

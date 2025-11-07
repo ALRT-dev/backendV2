@@ -4,6 +4,7 @@ import {
   HazardVoteType,
   HazardSeverity,
   type Hazard,
+  type HazardCategory,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -14,13 +15,11 @@ import type { HazardSearchParams } from "../models/hazard_search_params_interfac
 import { UserReportsStatus } from "../enums/user_reports_status_types.js";
 import { calculateUserReportsStatus } from "./user.service.js";
 import {
-  allowedSeveritiesNonAWS,
   buildHazardInclude,
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
   getSeverityCallToActions,
-  getSeverityKeywords,
   performKeywordMatchingForSeverity,
 } from "../utils/hazard.util.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
@@ -332,49 +331,43 @@ export const getHazardsApplyingFiltersRaw = async (
 export const reviewHazard = async ({
   title,
   description,
+  category,
   latitude,
   longitude,
   locationName,
-  occurredAt,
 }: {
   title: string;
   description: string;
+  category: HazardCategory;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  occurredAt: string | Date;
 }): Promise<AIReviewResponse> => {
-  const allowedSeverities = allowedSeveritiesNonAWS;
-
-  // Build severity levels text based on allowed severities
-  const severityLevelsText = allowedSeverities
-    .map((severity) => `- "${severity}": ${getSeverityKeywords(severity)}`)
-    .join("\n");
-
-  // Build call to action text based on allowed severities
-  const callToActionText = allowedSeverities
-    .map(
-      (severity) =>
-        `For "${severity}":\n${getSeverityCallToActions(severity)
-          .map((action) => `- ${action}`)
-          .join("\n")}`
-    )
-    .join("\n\n");
-
   const systemPrompt = `
-    You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity, severity, and clarity.
+    You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity and clarity and also provide a concise summary, appropriate call to action and confidence level.
+  
+    REVIEW GUIDELINES:
+    - Check for spam, nonsense, or profanity; reject such reports.
+    - Provide constructive feedback for improvement if rejecting.
+    - Create a clear, concise title (max 80 chars) summarizing the hazard.
+    - Write a one-line short description (max 120 chars) for notifications.
 
-    SEVERITY LEVELS:
-    ${severityLevelsText}
+    SUMMARY GUIDELINES:
+    - Factual, one-sentence summary of what’s happening, where, and who is responding. 
+    - Use simple, calm, plain, natural language suitable for the general public. 
+    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
+    - Keep total length ≤50 words.
 
-    CONFIDENCE LEVELS:
+    CALL TO ACTION GUIDELINES:
+    - Based on the given category (${category.name}) and severity of the hazard, suggest an appropriate action for the public.
+    - Use simple, natural, plain English suitable for the general public.
+    - Do not include irrelevant or speculative details (follow the category context).
+    - Keep total length ≤20 words.
+
+    CONFIDENCE LEVEL GUIDELINES:
     - "high": Detailed, specific, credible information with clear location and time
     - "medium": Reasonable detail but some ambiguity or missing information
     - "low": Vague, unclear, or potentially unreliable information
-
-    CALL TO ACTION GUIDELINES:
-    Based on severity level and hazard type, select the most appropriate call to action:
-    ${callToActionText}
 
     Always respond with valid JSON containing these exact fields:
     {
@@ -382,12 +375,9 @@ export const reviewHazard = async ({
       "reviewFeedback": "string (constructive feedback for the reporter, max 200 chars)"
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (a 3-4 sentence summary of the hazard)",
-      "severity": "${allowedSeverities.join(
-        "|"
-      )} (based on SEVERITY LEVELS described above)",
-      "callToAction": "string (select the most appropriate action from the guidelines above based on severity and hazard type)",
-      "confidence": "high|medium|low (based on detail quality and specificity)",
+      "summary": "string (based on SUMMARY GUIDELINES above)",
+      "callToAction": "string (based on CALL TO ACTION GUIDELINES above)",
+      "confidence": "high|medium|low (based on CONFIDENCE LEVEL GUIDELINES described above)"
     }
     `;
 
@@ -396,10 +386,10 @@ export const reviewHazard = async ({
 
     Title: ${title}
     Description: ${description}
+    Category: ${category.name}
     Location: ${
       locationName ? `${locationName}, ` : ""
     }(${latitude}, ${longitude})
-    Occurred At: ${occurredAt}
     `;
 
   const response = await openai.chat.completions.create({
@@ -409,7 +399,6 @@ export const reviewHazard = async ({
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 500,
   });
 
   if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
@@ -448,16 +437,29 @@ export const summarizeHazard = async ({
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  availableCategories?: string[] | undefined | null;
+  availableCategories?: HazardCategory[] | undefined | null;
 }): Promise<AISummaryResponse> => {
+  const allowedCategories = availableCategories?.map((cat) => cat.id) || [];
+  const parentCategories =
+    (availableCategories
+      ?.map((cat) => cat.parentId)
+      .filter((id) => id !== null)
+      .filter((id, index, self) => self.indexOf(id) === index) as string[]) ||
+    [];
+
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
     
     ${
-      availableCategories && availableCategories.length > 0
-        ? `AVAILABLE HAZARD CATEGORIES:\nChoose the most appropriate category based on the hazard characteristics. If no category is suitable, use "other".\n- ${availableCategories.join(
-            ", "
-          )}`
+      allowedCategories && allowedCategories.length > 0
+        ? `
+          AVAILABLE HAZARD CATEGORIES:
+          Choose the most appropriate category based on the hazard characteristics.
+            \n- ${allowedCategories.join(", ")}
+          
+          If none of the categories fit well, you may select from the parent categories:
+            \n- ${parentCategories.join(", ")}
+        `
         : ""
     }
 
@@ -479,7 +481,7 @@ export const summarizeHazard = async ({
       "summary": "string (based on SUMMARY GUIDELINES above)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
       ${
-        availableCategories && availableCategories.length > 0
+        allowedCategories && allowedCategories.length > 0
           ? `"category": "string (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)",`
           : ""
       }
@@ -503,7 +505,6 @@ export const summarizeHazard = async ({
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
-    max_completion_tokens: 500,
   });
 
   if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
@@ -676,6 +677,9 @@ export const getAISeverity = async ({
       After determining the severity level and hazard type, select the most appropriate call to action. (Only one sentence from the guidelines below):
       ${callToActionText}
 
+      ALLOWED SEVERITY LEVELS:
+      - ${severityLevels.join("\n- ")}
+
       ANALYSIS INSTRUCTIONS:
       1. First, look for direct keyword matches in the title and description
       2. Consider the context, urgency, and potential impact described
@@ -702,7 +706,6 @@ export const getAISeverity = async ({
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      max_completion_tokens: 150,
     });
 
     if (
