@@ -36,6 +36,28 @@ export const populateInitialCategories = async () => {
             "life threatening",
           ],
         },
+        callToActions: {
+          info: [
+            "Stay alert to surroundings.",
+            "Report suspicious activity to police.",
+            "Follow official updates.",
+          ],
+          advice: [
+            "Avoid the affected area.",
+            "Keep doors locked.",
+            "Stay indoors if possible.",
+          ],
+          watchAndAct: [
+            "Shelter in place immediately.",
+            "Stay away from windows.",
+            "Follow police instructions.",
+          ],
+          emergency: [
+            "Evacuate immediately if safe to do so.",
+            "Call 000 if in immediate danger.",
+            "Follow emergency services directions only.",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -337,6 +359,28 @@ export const populateInitialCategories = async () => {
             "critical outbreak",
             "mass casualties",
             "immediate medical attention",
+          ],
+        },
+        callToActions: {
+          info: [
+            "Follow health advisories.",
+            "Maintain good hygiene.",
+            "Monitor symptoms.",
+          ],
+          advice: [
+            "Seek medical advice if symptoms develop.",
+            "Avoid contact with affected individuals.",
+            "Follow hygiene protocols.",
+          ],
+          watchAndAct: [
+            "Isolate if symptoms present.",
+            "Contact health authorities.",
+            "Follow quarantine procedures.",
+          ],
+          emergency: [
+            "Seek immediate medical attention.",
+            "Call 000 for medical emergency.",
+            "Follow evacuation orders if issued.",
           ],
         },
         subCategories: {
@@ -941,6 +985,28 @@ export const populateInitialCategories = async () => {
                     "immediate health threat",
                   ],
                 },
+                callToActions: {
+                  info: [
+                    "Close windows and doors.",
+                    "Avoid outdoor exercise.",
+                    "Monitor air quality updates.",
+                  ],
+                  advice: [
+                    "Stay indoors with air conditioning on recirculate.",
+                    "Wear P2/N95 mask if must go outside.",
+                    "Keep medications handy for breathing conditions.",
+                  ],
+                  watchAndAct: [
+                    "Do not go outside.",
+                    "Seal gaps in doors and windows.",
+                    "Use air purifiers if available.",
+                  ],
+                  emergency: [
+                    "Evacuate if directed.",
+                    "Seek medical attention for breathing difficulties.",
+                    "Use wet cloth over mouth if evacuation necessary.",
+                  ],
+                },
               },
             },
             {
@@ -1076,6 +1142,28 @@ export const populateInitialCategories = async () => {
             "total closure",
           ],
         },
+        callToActions: {
+          info: [
+            "Allow extra travel time.",
+            "Check traffic updates.",
+            "Use alternate routes if available.",
+          ],
+          advice: [
+            "Avoid the affected route.",
+            "Use public transport alternatives.",
+            "Plan different journey times.",
+          ],
+          watchAndAct: [
+            "Find alternate routes immediately.",
+            "Stay clear of emergency vehicles.",
+            "Follow official traffic diversions.",
+          ],
+          emergency: [
+            "Avoid area completely.",
+            "Follow evacuation routes if directed.",
+            "Allow emergency services access.",
+          ],
+        },
         subCategories: {
           connectOrCreate: [
             {
@@ -1169,6 +1257,28 @@ export const populateInitialCategories = async () => {
                     "catastrophic fire",
                     "mass casualty",
                     "highway closure",
+                  ],
+                },
+                callToActions: {
+                  info: [
+                    "Keep safe distance from scene.",
+                    "Avoid inhaling smoke.",
+                    "Don't film or block emergency access.",
+                  ],
+                  advice: [
+                    "Use alternate route.",
+                    "Stay upwind of smoke.",
+                    "Follow police diversions.",
+                  ],
+                  watchAndAct: [
+                    "Evacuate immediate area.",
+                    "Stay clear of potential explosion zone.",
+                    "Follow emergency service directions.",
+                  ],
+                  emergency: [
+                    "Leave area immediately.",
+                    "Avoid entire highway section.",
+                    "Follow emergency evacuation routes.",
                   ],
                 },
               },
@@ -1335,6 +1445,28 @@ export const populateInitialCategories = async () => {
                     "life-threatening",
                   ],
                 },
+                callToActions: {
+                  info: [
+                    "Slow down and use caution.",
+                    "Avoid puddles if possible.",
+                    "Turn on headlights.",
+                  ],
+                  advice: [
+                    "Turn around, don't drown.",
+                    "Use alternate route.",
+                    "Never drive through flood water.",
+                  ],
+                  watchAndAct: [
+                    "Avoid area completely.",
+                    "Follow road closure signs.",
+                    "Move to higher ground if trapped.",
+                  ],
+                  emergency: [
+                    "Evacuate immediately if directed.",
+                    "Stay on high ground.",
+                    "Call 000 if vehicle trapped in water.",
+                  ],
+                },
               },
             },
             {
@@ -1360,6 +1492,28 @@ export const populateInitialCategories = async () => {
                     "indefinite closure",
                     "bridge collapse",
                     "catastrophic failure",
+                  ],
+                },
+                callToActions: {
+                  info: [
+                    "Plan alternate route.",
+                    "Allow extra travel time.",
+                    "Follow detour signs.",
+                  ],
+                  advice: [
+                    "Use GPS for alternate routes.",
+                    "Avoid area if possible.",
+                    "Check traffic updates regularly.",
+                  ],
+                  watchAndAct: [
+                    "Find alternate transport.",
+                    "Delay non-essential travel.",
+                    "Follow official updates.",
+                  ],
+                  emergency: [
+                    "Avoid region entirely.",
+                    "Use emergency routes only if directed.",
+                    "Follow evacuation procedures if needed.",
                   ],
                 },
               },
@@ -1497,6 +1651,28 @@ export const populateInitialCategories = async () => {
             "catastrophic failure",
             "life threatening",
             "total system failure",
+          ],
+        },
+        callToActions: {
+          info: [
+            "Monitor service updates.",
+            "Prepare for possible disruptions.",
+            "Have backup plans ready.",
+          ],
+          advice: [
+            "Use alternative services.",
+            "Conserve resources.",
+            "Check service provider updates.",
+          ],
+          watchAndAct: [
+            "Implement backup plans.",
+            "Report outages to authorities.",
+            "Prepare for extended disruption.",
+          ],
+          emergency: [
+            "Evacuate if services critical to safety.",
+            "Call emergency services if life threatening.",
+            "Follow official emergency procedures.",
           ],
         },
         subCategories: {
@@ -1664,6 +1840,28 @@ export const populateInitialCategories = async () => {
                     "mass evacuation/shelter-in-place",
                   ],
                 },
+                callToActions: {
+                  info: [
+                    "Avoid area as precaution.",
+                    "Report unusual odors to authorities.",
+                    "Stay upwind if nearby.",
+                  ],
+                  advice: [
+                    "Leave area immediately.",
+                    "Close windows and doors.",
+                    "Avoid touching contaminated surfaces.",
+                  ],
+                  watchAndAct: [
+                    "Evacuate if in exclusion zone.",
+                    "Follow decontamination procedures if exposed.",
+                    "Shelter in place if unable to evacuate.",
+                  ],
+                  emergency: [
+                    "Follow evacuation orders immediately.",
+                    "Seek medical attention if exposed.",
+                    "Stay tuned to emergency broadcasts.",
+                  ],
+                },
               },
             },
             {
@@ -1816,6 +2014,28 @@ export const populateInitialCategories = async () => {
                     "catastrophic fire",
                     "toxic release",
                     "widespread danger",
+                  ],
+                },
+                callToActions: {
+                  info: [
+                    "Stay clear of facility.",
+                    "Avoid downwind areas.",
+                    "Monitor official updates.",
+                  ],
+                  advice: [
+                    "Evacuate immediate area.",
+                    "Close windows and doors.",
+                    "Avoid inhaling smoke.",
+                  ],
+                  watchAndAct: [
+                    "Leave area immediately.",
+                    "Stay at least 1km away.",
+                    "Prepare for potential evacuation.",
+                  ],
+                  emergency: [
+                    "Evacuate wide area immediately.",
+                    "Seek shelter indoors if unable to evacuate.",
+                    "Follow emergency service directions only.",
                   ],
                 },
               },
@@ -2149,6 +2369,28 @@ export const populateInitialCategories = async () => {
             "critical incident",
             "immediate action",
             "life threatening",
+          ],
+        },
+        callToActions: {
+          info: [
+            "Stay informed about developments.",
+            "Follow official updates.",
+            "Take basic precautions.",
+          ],
+          advice: [
+            "Monitor situation closely.",
+            "Take recommended precautions.",
+            "Avoid affected areas if advised.",
+          ],
+          watchAndAct: [
+            "Take immediate precautionary action.",
+            "Follow official guidance.",
+            "Prepare for potential escalation.",
+          ],
+          emergency: [
+            "Take immediate protective action.",
+            "Follow emergency procedures.",
+            "Call emergency services if needed.",
           ],
         },
         subCategories: {
