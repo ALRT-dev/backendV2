@@ -58,8 +58,6 @@ export const syncHazardsFromDifferentSources = async () => {
     // Clean up expired cache entries
     cleanupGeocodingCache();
 
-    await prisma.hazard.deleteMany();
-
     const availableCategories = await getAllSubHazardCategories();
 
     // Define AWS compliant categories
