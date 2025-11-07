@@ -26,6 +26,90 @@ import type { SeverityKeywords } from "../models/severity_keywords_interface.js"
 import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
 
 /**
+ * Utility function to add delay between API calls
+ */
+const delay = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+/**
+ * Utility function to retry API calls with exponential backoff
+ */
+const retryWithBackoff = async <T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelay: number = 1000
+): Promise<T> => {
+  let lastError: Error;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+
+      // If it's a rate limit error and we have retries left
+      if (error?.status === 429 && attempt < maxRetries) {
+        const retryAfterMs =
+          error?.headers?.["retry-after-ms"] ||
+          (error?.headers?.["retry-after"]
+            ? parseInt(error.headers["retry-after"]) * 1000
+            : null);
+        const delayMs = retryAfterMs || baseDelay * Math.pow(2, attempt);
+
+        console.log(
+          `Rate limit hit, retrying in ${delayMs}ms (attempt ${attempt + 1}/${
+            maxRetries + 1
+          })`
+        );
+        await delay(delayMs);
+        continue;
+      }
+
+      // If it's not a rate limit error or we're out of retries, throw
+      throw error;
+    }
+  }
+
+  throw lastError!;
+};
+
+/**
+ * Process items in batches with rate limiting to avoid hitting OpenAI rate limits
+ */
+const processBatchWithRateLimit = async <T, R>(
+  items: T[],
+  processor: (item: T) => Promise<R>,
+  batchSize: number = 5,
+  delayBetweenBatches: number = 2000
+): Promise<R[]> => {
+  const results: R[] = [];
+
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    console.log(
+      `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
+        items.length / batchSize
+      )} (${batch.length} items)`
+    );
+
+    const batchResults = await Promise.all(
+      batch.map((item) => processor(item))
+    );
+
+    results.push(...batchResults);
+
+    // Add delay between batches (except for the last batch)
+    if (i + batchSize < items.length) {
+      console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
+      await delay(delayBetweenBatches);
+    }
+  }
+
+  return results;
+};
+
+/**
  * Fetches hazards from the database applying various filters and pagination.
  *
  * This function retrieves hazards based on search strings, categories, reporting user,
@@ -392,13 +476,15 @@ export const reviewHazard = async ({
     }(${latitude}, ${longitude})
     `;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
+  const response = await retryWithBackoff(async () => {
+    return await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+    });
   });
 
   if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
@@ -498,13 +584,15 @@ export const summarizeHazard = async ({
     }(${latitude}, ${longitude})
     `;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
+  const response = await retryWithBackoff(async () => {
+    return await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+    });
   });
 
   if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
@@ -699,13 +787,15 @@ export const getAISeverity = async ({
 
     const userPrompt = `Analyze this hazard report and determine its severity level: ${hazardContent}`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
+    const response = await retryWithBackoff(async () => {
+      return await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+      });
     });
 
     if (
@@ -763,3 +853,9 @@ export const getAISeverity = async ({
     };
   }
 };
+
+/**
+ * Rate-limited batch processing for AI operations
+ * Use this function when processing multiple hazards to avoid rate limits
+ */
+export { processBatchWithRateLimit };

@@ -17,7 +17,10 @@ import {
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
-import { summarizeHazard } from "./hazard.service.js";
+import {
+  summarizeHazard,
+  processBatchWithRateLimit,
+} from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
@@ -206,156 +209,191 @@ const summarizeAndPostHazards = async ({
   awsCompliantCategories?: string[];
 }): Promise<Hazard[]> => {
   try {
-    const summarizedHazardPromises: Promise<Prisma.HazardCreateInput | null>[] =
-      [];
-    const createdHazardPromises: Promise<Hazard | null>[] = [];
+    console.log(
+      `Processing ${hazardDatas.length} hazards with rate limiting...`
+    );
+
+    // Step 1: Check for existing hazards and prepare for geocoding
+    const hazardsToProcess: Array<{
+      hazardData: Prisma.HazardCreateInput;
+      isUpdate: boolean;
+    }> = [];
 
     for (const hazardData of hazardDatas) {
       if (!hazardData.id) continue;
 
-      const promise = prisma.hazard
-        .findUnique({
+      try {
+        const existing = await prisma.hazard.findUnique({
           where: { id: hazardData.id },
-        })
-        .then((existing) => {
-          if (existing?.description === hazardData.description) {
-            console.log("Hazard already exists, skipping:", hazardData.title);
-            return null;
-          }
-
-          // Only geocode if we don't have existing hazard and missing geocoding info
-          return populateHazardWithGeocoding(hazardData)
-            .then((populatedHazard) => {
-              if (!populatedHazard.latitude || !populatedHazard.longitude) {
-                console.log(
-                  "Hazard missing coordinates after geocoding, skipping:",
-                  populatedHazard.title
-                );
-                return null;
-              }
-
-              // check if existing in the dumped json file
-              return summarizeHazard({
-                title: populatedHazard.title,
-                description: populatedHazard.description,
-                locationName: populatedHazard.locationName,
-                latitude: Number(populatedHazard.latitude),
-                longitude: Number(populatedHazard.longitude),
-                availableCategories,
-              })
-                .then((summarized) => {
-                  // Calculate confidence score for ingested hazard (official source)
-                  let confidenceScore = 75; // Default high score for official sources
-                  try {
-                    const hazardForCalculation: HazardForConfidenceCalculation =
-                      {
-                        severity: summarized.severity,
-                        aiConfidence: summarized.confidence,
-                        upvoteCount: 0,
-                        downvoteCount: 0,
-                        createdAt: new Date(),
-                        reportedBy: null, // Official sources don't have reporters
-                      };
-
-                    confidenceScore =
-                      calculateConfidenceScore(hazardForCalculation);
-                  } catch (error) {
-                    console.error(
-                      "Error calculating confidence score for ingested hazard:",
-                      error
-                    );
-                    confidenceScore = 75; // Fallback for official sources
-                  }
-
-                  return {
-                    ...hazardData,
-                    title: summarized.title || hazardData.title,
-                    shortDescription: summarized.shortDescription,
-                    aiSummary: summarized.summary,
-                    aiConfidence: summarized.confidence,
-                    severity: summarized.severity,
-                    callToAction: summarized.callToAction,
-                    ...(awsCompliantCategories &&
-                      summarized.category && {
-                        isAwsCompliant: awsCompliantCategories.includes(
-                          summarized.category
-                        ),
-                      }),
-                    reviewStatus: HazardReviewStatus.accepted,
-                    reviewedAt: new Date(),
-                    confidenceScore,
-                    confidenceScoreCalculatedAt: new Date(),
-                    ...(summarized.category && {
-                      category: {
-                        connect: {
-                          id: summarized.category,
-                        },
-                      },
-                    }),
-                    expiresAt:
-                      hazardData.expiresAt ||
-                      getHazardExpiryDateFromSeverity(summarized.severity),
-                  };
-                })
-                .catch((error: any) => {
-                  console.log("Error during summarization:", error);
-                  return null;
-                });
-            })
-            .catch((error: any) => {
-              console.log("Error during geocoding:", error);
-              return null;
-            });
-        })
-        .catch((error: any) => {
-          console.log("Error checking existing hazard:", error);
-          return null;
         });
 
-      summarizedHazardPromises.push(promise);
+        if (existing?.description === hazardData.description) {
+          console.log("Hazard already exists, skipping:", hazardData.title);
+          continue;
+        }
+
+        hazardsToProcess.push({
+          hazardData,
+          isUpdate: !!existing,
+        });
+      } catch (error) {
+        console.log("Error checking existing hazard:", error);
+      }
     }
 
-    const summarizedHazards = (
-      await Promise.all(summarizedHazardPromises)
-    ).filter((h) => h !== null);
+    if (hazardsToProcess.length === 0) {
+      console.log("No new hazards to process");
+      return [];
+    }
 
-    for (const summarizedHazard of summarizedHazards) {
-      if (!summarizedHazard) continue;
-      if (!summarizedHazard.id) continue;
+    // Step 2: Geocode hazards sequentially to avoid overloading geocoding service
+    const geocodedHazards: Array<{
+      hazardData: Prisma.HazardCreateInput;
+      isUpdate: boolean;
+    }> = [];
 
-      const promise = prisma.hazard
-        .upsert({
-          where: { id: summarizedHazard.id! },
-          create: summarizedHazard,
-          update: summarizedHazard,
-          include: buildHazardInclude(),
-        })
-        .then((createdHazard) => {
-          console.log("Created hazard:", summarizedHazard.title);
+    for (const { hazardData, isUpdate } of hazardsToProcess) {
+      try {
+        const populatedHazard = await populateHazardWithGeocoding(hazardData);
 
-          // Send push notifications to users who subscribed to this area when a new hazard is created
-          sendPushNotificationAboutNewHazard(createdHazard);
+        if (!populatedHazard.latitude || !populatedHazard.longitude) {
+          console.log(
+            "Hazard missing coordinates after geocoding, skipping:",
+            populatedHazard.title
+          );
+          continue;
+        }
 
-          // Send socket events to users who subscribed to this area when a new hazard is created
-          sendSocketEventAboutHazardToSubscribers({
-            hazard: createdHazard,
-            socketEvent: SocketEvent.newHazard,
+        geocodedHazards.push({
+          hazardData: populatedHazard,
+          isUpdate,
+        });
+      } catch (error) {
+        console.log("Error during geocoding:", error);
+      }
+    }
+
+    if (geocodedHazards.length === 0) {
+      console.log("No hazards left after geocoding");
+      return [];
+    }
+
+    // Step 3: Use batch processing for AI summarization
+    const summarizedHazards = await processBatchWithRateLimit(
+      geocodedHazards,
+      async ({ hazardData, isUpdate }) => {
+        try {
+          const summarized = await summarizeHazard({
+            title: hazardData.title,
+            description: hazardData.description,
+            locationName: hazardData.locationName,
+            latitude: Number(hazardData.latitude),
+            longitude: Number(hazardData.longitude),
+            availableCategories,
           });
 
-          return createdHazard;
-        })
-        .catch((error) => {
-          console.log("Error creating hazard:", error);
+          // Calculate confidence score for ingested hazard (official source)
+          let confidenceScore = 75; // Default high score for official sources
+          try {
+            const hazardForCalculation: HazardForConfidenceCalculation = {
+              severity: summarized.severity,
+              aiConfidence: summarized.confidence,
+              upvoteCount: 0,
+              downvoteCount: 0,
+              createdAt: new Date(),
+              reportedBy: null, // Official sources don't have reporters
+            };
+
+            confidenceScore = calculateConfidenceScore(hazardForCalculation);
+          } catch (error) {
+            console.error(
+              "Error calculating confidence score for ingested hazard:",
+              error
+            );
+            confidenceScore = 75; // Fallback for official sources
+          }
+
+          return {
+            hazardData: {
+              ...hazardData,
+              title: summarized.title || hazardData.title,
+              shortDescription: summarized.shortDescription,
+              aiSummary: summarized.summary,
+              aiConfidence: summarized.confidence,
+              severity: summarized.severity,
+              callToAction: summarized.callToAction,
+              ...(awsCompliantCategories &&
+                summarized.category && {
+                  isAwsCompliant: awsCompliantCategories.includes(
+                    summarized.category
+                  ),
+                }),
+              reviewStatus: HazardReviewStatus.accepted,
+              reviewedAt: new Date(),
+              confidenceScore,
+              confidenceScoreCalculatedAt: new Date(),
+              ...(summarized.category && {
+                category: {
+                  connect: {
+                    id: summarized.category,
+                  },
+                },
+              }),
+              expiresAt:
+                hazardData.expiresAt ||
+                getHazardExpiryDateFromSeverity(summarized.severity),
+            },
+            isUpdate,
+          };
+        } catch (error) {
+          console.log("Error during summarization:", error);
           return null;
-        });
-
-      createdHazardPromises.push(promise);
-    }
-
-    const createdHazards = (await Promise.all(createdHazardPromises)).filter(
-      (h) => h !== null
+        }
+      },
+      10, // Process 10 at a time
+      1000 // Wait 1 second between batches
     );
 
+    // Filter out null results
+    const validSummarizedHazards = summarizedHazards.filter(
+      (h): h is NonNullable<typeof h> => h !== null
+    );
+
+    // Step 4: Create/update hazards in database
+    const createdHazards: Hazard[] = [];
+
+    for (const { hazardData, isUpdate } of validSummarizedHazards) {
+      if (!hazardData.id) continue;
+
+      try {
+        const createdHazard = await prisma.hazard.upsert({
+          where: { id: hazardData.id },
+          create: hazardData,
+          update: hazardData,
+          include: buildHazardInclude(),
+        });
+
+        console.log(
+          `${isUpdate ? "Updated" : "Created"} hazard:`,
+          hazardData.title
+        );
+
+        // Send push notifications to users who subscribed to this area when a new hazard is created
+        sendPushNotificationAboutNewHazard(createdHazard);
+
+        // Send socket events to users who subscribed to this area when a new hazard is created
+        sendSocketEventAboutHazardToSubscribers({
+          hazard: createdHazard,
+          socketEvent: SocketEvent.newHazard,
+        });
+
+        createdHazards.push(createdHazard);
+      } catch (error) {
+        console.log("Error creating hazard:", error);
+      }
+    }
+
+    console.log(`Successfully processed ${createdHazards.length} hazards`);
     return createdHazards;
   } catch (error) {
     console.error("Error during hazard summarization and posting:", error);
