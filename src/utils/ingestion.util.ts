@@ -247,6 +247,7 @@ export function parseGeoJsonToHazards(
         latitude,
         longitude,
         occurredAt: parseValidDate(properties?.pubDate),
+        expiresAt: properties?.end ? parseValidDate(properties.end) : null,
       };
 
       return hazard;
