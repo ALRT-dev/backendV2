@@ -128,11 +128,11 @@ export const syncHazardsFromDifferentSources = async () => {
       },
     ];
 
-    await Promise.all(
+    return await Promise.all(
       sources.map((source) =>
         syncHazardsFromSource(source, availableCategories)
       )
-    );
+    ).then((results) => results.flat());
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
   }
@@ -178,8 +178,11 @@ const syncHazardsFromSource = async (
         sourceConfig.name
       }. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
+
+    return createdHazards;
   } catch (error) {
     console.error(`Error during ${sourceConfig.name} hazard sync:`, error);
+    return [];
   }
 };
 

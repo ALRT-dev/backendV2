@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createHazardCategory,
+  deleteAllHazardCategories,
   getAllHazardCategories,
   getAllParentHazardCategories,
   getAllSubHazardCategories,
@@ -14,6 +15,9 @@ hazardCategoryRouter.get("/", requireAuth, getAllHazardCategories);
 hazardCategoryRouter.get("/parent", requireAuth, getAllParentHazardCategories);
 hazardCategoryRouter.get("/sub", requireAuth, getAllSubHazardCategories);
 hazardCategoryRouter.post("/", requireAuth, createHazardCategory);
-hazardCategoryRouter.post("/populate", requireAuth, populateCategories);
+
+// admin
+hazardCategoryRouter.post("/delete-all", deleteAllHazardCategories);
+hazardCategoryRouter.post("/populate", populateCategories);
 
 export default hazardCategoryRouter;

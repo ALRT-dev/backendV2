@@ -102,6 +102,22 @@ export const createHazardCategory = async (
   }
 };
 
+export const deleteAllHazardCategories = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const deleted = await prisma.hazardCategory.deleteMany({});
+    res.status(200).json({
+      message: "All hazard categories deleted",
+      deletedCount: deleted.count,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const populateCategories = async (
   req: Request,
   res: Response,

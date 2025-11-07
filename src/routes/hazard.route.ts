@@ -6,10 +6,11 @@ import {
   deleteHazard,
   getHazardsWithSubscriptionId,
   voteHazard,
-  populateHazards,
   viewHazard,
   updateHazard,
   getHazardFilters,
+  syncHazardsFromDifferentSourcesController,
+  deleteAllHazards,
 } from "../controllers/hazard.controller.js";
 import {
   deleteHazardMedia,
@@ -69,8 +70,6 @@ hazardRouter.post(
   voteHazard
 );
 hazardRouter.post("/:id/view", requireAuth, viewHazard);
-hazardRouter.post("/populate", requireAuth, populateHazards);
-
 hazardRouter.delete("/:id", requireAuth, deleteHazard);
 
 hazardRouter.delete(
@@ -79,5 +78,9 @@ hazardRouter.delete(
   deleteHazardMedia
 );
 hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
+
+// admin
+hazardRouter.post("/delete-all", deleteAllHazards);
+hazardRouter.post("/sync", syncHazardsFromDifferentSourcesController);
 
 export default hazardRouter;
