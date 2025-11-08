@@ -419,23 +419,22 @@ export const reviewHazard = async ({
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
   const systemPrompt = `
-    You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity or nonsense and also provide a concise summary, appropriate call to action and confidence level.
+    You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.
   
     REVIEW GUIDELINES:
-    - Check for spam, nonsense, or profanity; reject such reports.
+    - Check for profanity, nonsense, sexual content, discriminatory language; reject such reports.
     - **Don't reject** if description is not provided.
-    - Provide constructive feedback for improvement if rejecting.
+    - Provide constructive feedback for improvement **only if rejecting** (max 200 chars).
     - Create a clear, concise title (max 80 chars) summarizing the hazard (follow the SUMMARY GUIDELINES below for summary).
     - Write a one-line short description (max 120 chars) for notifications.
 
     SUMMARY GUIDELINES:
-    - Factual, one-sentence summary of what’s happening, where, and who is responding (if known). 
+    - Factual, one-sentence summary of what’s happening and where. Eg. "User report of {hazard} near ${locationName}."
     - If no description is provided or the report cannot be verified, you must automatically use the following default summary:
       "An unverified incident has been reported near ${
         locationName || `${latitude}, ${longitude}`
       }."
-    - Use simple, calm, plain, natural language suitable for the general public. 
-    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the hazard is not about a fire”). 
+    - Use simple, calm, plain, natural language suitable for the general public in present tense. 
     - Keep total length ≤50 words.
 
     CALL TO ACTION GUIDELINES:
@@ -445,7 +444,10 @@ export const reviewHazard = async ({
     - If no description is provided or the report cannot be verified, you must automatically use the following default callToAction:
       "Stay calm, avoid the area, and wait for official updates."
     - Use simple, natural, plain English suitable for the general public.
+    - It should not be overly definitive or alarming.
+    - Must use soft tone.
     - Do not include irrelevant or speculative details (follow the category context).
+    - Do not give clinical/medical treatment advice.
     - Keep total length ≤20 words.
 
     CONFIDENCE LEVEL GUIDELINES:
@@ -455,8 +457,8 @@ export const reviewHazard = async ({
 
     Always respond with valid JSON containing these exact fields:
     {
-      "reviewStatus": "accepted|rejected (accepted if the description is a valid hazard report (not spam or nonsense or profanity), rejected otherwise)",
-      "reviewFeedback": "string (constructive feedback for the reporter, max 200 chars)"
+      "reviewStatus": "accepted|rejected (based on REVIEW GUIDELINES above)",
+      "reviewFeedback": "string (constructive feedback for the reporter if reviewStatus is rejected, max 200 chars)",
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
       "summary": "string (based on SUMMARY GUIDELINES above)",
