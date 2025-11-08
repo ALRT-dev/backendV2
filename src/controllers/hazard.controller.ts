@@ -440,8 +440,8 @@ export const createHazard = async (
       // Create the hazard first
       const hazard = await tx.hazard.create({
         data: {
-          title: suggestedTitle || title,
-          description,
+          title: suggestedTitle || title || "An unverified incident",
+          description: description || "",
           reviewStatus,
           reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
@@ -657,13 +657,15 @@ export const updateHazard = async (
       }
     }
 
+    console.log("Description:", description);
+
     // Perform AI review of the hazard report <----------------------------------------------------------------------------------
     let review: any;
     try {
       review = await reviewHazard({
-        title: title || existingHazard.title,
+        title,
+        description,
         category,
-        description: description || existingHazard.description,
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
@@ -696,8 +698,8 @@ export const updateHazard = async (
       const updatedHazard = await tx.hazard.update({
         where: { id },
         data: {
-          title: suggestedTitle || title || existingHazard.title,
-          ...(description && { description }),
+          title: suggestedTitle || title || "An unverified incident",
+          description: description || "",
           reviewStatus,
           reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
@@ -1259,12 +1261,10 @@ export const deleteAllHazards = async (
     const deletedHazards = await prisma.hazard.deleteMany({});
     console.log("Deleted hazards count:", deletedHazards.count);
 
-    res
-      .status(200)
-      .json({
-        message: "All hazards deleted",
-        deletedCount: deletedHazards.count,
-      });
+    res.status(200).json({
+      message: "All hazards deleted",
+      deletedCount: deletedHazards.count,
+    });
   } catch (error) {
     next(error);
   }

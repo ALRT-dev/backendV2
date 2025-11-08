@@ -3,13 +3,13 @@ import z from "zod";
 export const createHazardDataSchema = z.object({
   title: z
     .string()
-    .min(1, "Title is required")
-    .max(100, "Title must be less than 100 characters"),
+    .max(100, "Title must be less than 100 characters")
+    .optional(),
 
   description: z
     .string()
-    .min(1, "Description is required")
-    .max(1000, "Description must be less than 1000 characters"),
+    .max(1000, "Description must be less than 1000 characters")
+    .optional(),
 
   categoryId: z.string(),
 
@@ -25,7 +25,6 @@ export const createHazardDataSchema = z.object({
 
   locationName: z
     .string()
-    .min(1, "Location name is required")
     .max(200, "Location name must be less than 200 characters")
     .optional(),
 
@@ -53,13 +52,11 @@ export type CreateHazardInput = z.infer<typeof createHazardSchema>;
 export const updateHazardDataSchema = z.object({
   title: z
     .string()
-    .min(1, "Title is required")
     .max(100, "Title must be less than 100 characters")
     .optional(),
 
   description: z
     .string()
-    .min(1, "Description is required")
     .max(1000, "Description must be less than 1000 characters")
     .optional(),
 
@@ -79,7 +76,6 @@ export const updateHazardDataSchema = z.object({
 
   locationName: z
     .string()
-    .min(1, "Location name is required")
     .max(200, "Location name must be less than 200 characters")
     .optional(),
 

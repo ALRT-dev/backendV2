@@ -411,30 +411,39 @@ export const reviewHazard = async ({
   longitude,
   locationName,
 }: {
-  title: string;
-  description: string;
+  title: string | undefined | null;
+  description: string | undefined | null;
   category: HazardCategory;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
   const systemPrompt = `
-    You are an AI reviewer for a hazard alert system. Your task is to evaluate user-submitted hazard reports for validity and clarity and also provide a concise summary, appropriate call to action and confidence level.
+    You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity or nonsense and also provide a concise summary, appropriate call to action and confidence level.
   
     REVIEW GUIDELINES:
     - Check for spam, nonsense, or profanity; reject such reports.
+    - **Don't reject** if description is not provided.
     - Provide constructive feedback for improvement if rejecting.
-    - Create a clear, concise title (max 80 chars) summarizing the hazard.
+    - Create a clear, concise title (max 80 chars) summarizing the hazard (follow the SUMMARY GUIDELINES below for summary).
     - Write a one-line short description (max 120 chars) for notifications.
 
     SUMMARY GUIDELINES:
-    - Factual, one-sentence summary of what’s happening, where, and who is responding. 
+    - Factual, one-sentence summary of what’s happening, where, and who is responding (if known). 
+    - If no description is provided or the report cannot be verified, you must automatically use the following default summary:
+      "An unverified incident has been reported near ${
+        locationName || `${latitude}, ${longitude}`
+      }."
     - Use simple, calm, plain, natural language suitable for the general public. 
-    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
+    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the hazard is not about a fire”). 
     - Keep total length ≤50 words.
 
     CALL TO ACTION GUIDELINES:
-    - Based on the given category (${category.name}) and severity of the hazard, suggest an appropriate action for the public.
+    - Based on the given category (${
+      category.name
+    }) and severity of the hazard, suggest an appropriate action for the public.
+    - If no description is provided or the report cannot be verified, you must automatically use the following default callToAction:
+      "Stay calm, avoid the area, and wait for official updates."
     - Use simple, natural, plain English suitable for the general public.
     - Do not include irrelevant or speculative details (follow the category context).
     - Keep total length ≤20 words.
@@ -459,8 +468,12 @@ export const reviewHazard = async ({
   const userPrompt = `
     Evaluate this hazard:
 
-    Title: ${title}
-    Description: ${description}
+    Title: ${title && title.length > 0 ? title : "[No title provided]"}
+    Description: ${
+      description && description.length > 0
+        ? description
+        : "[No description provided]"
+    }
     Category: ${category.name}
     Location: ${
       locationName ? `${locationName}, ` : ""
