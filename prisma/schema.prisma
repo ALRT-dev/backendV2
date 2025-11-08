@@ -37,6 +37,10 @@ model User {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Performance indexes
+  @@index([xpPoints]) // For reputation/scoring queries
+  @@index([reliabilityScore]) // For reliability-based filtering
 }
 
 model HazardCategory {
@@ -57,6 +61,9 @@ model HazardCategory {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Performance indexes
+  @@index([parentId]) // Hierarchical category queries
 }
 
 enum HazardSeverity {
@@ -118,6 +125,23 @@ model Hazard {
   votes      HazardVote[]
   views      HazardView[]
   medias     HazardMedia[]
+
+  // Performance indexes
+  @@index([latitude, longitude]) // Geographic queries
+  @@index([categoryId]) // Category filtering
+  @@index([severity]) // Severity filtering
+  @@index([createdAt]) // Temporal sorting
+  @@index([confidenceScore]) // Confidence sorting
+  @@index([expiresAt]) // Expiry filtering
+  @@index([reviewStatus]) // Review status filtering
+  @@index([reportedById]) // Reporter filtering
+  @@index([isAwsCompliant]) // AWS compliance filtering
+  @@index([severity, isAwsCompliant]) // Combined severity + AWS filtering
+  @@index([categoryId, severity]) // Combined category + severity filtering
+  @@index([expiresAt, reviewStatus]) // Combined expiry + review filtering
+  @@index([latitude, longitude, severity]) // Geographic + severity filtering
+  @@index([createdAt, confidenceScore]) // Combined sorting index
+  @@index([severity, createdAt]) // Severity + temporal sorting
 }
 
 model HazardVote {

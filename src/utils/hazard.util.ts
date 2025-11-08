@@ -306,29 +306,28 @@ export const buildHazardsWhereClauseRaw = (
     paramIndex++;
   }
 
-  // Apply category filter if provided
+  // Apply category filter if provided - OPTIMIZED with CTE for better performance
   if (categoryIds) {
     const categoryArray = Array.isArray(categoryIds)
       ? categoryIds
       : [categoryIds];
 
-    // Create placeholders for direct category match
+    // Create separate placeholders for direct and parent category matches
     const directPlaceholders = categoryArray
       .map(() => `$${paramIndex++}`)
       .join(",");
 
-    // Create placeholders for parent category match
     const parentPlaceholders = categoryArray
       .map(() => `$${paramIndex++}`)
       .join(",");
 
-    // Match hazards where either the category itself is in the list
-    // OR the category's parent is in the list (for subcategories)
+    // Optimized: Use EXISTS with proper parameter handling
     whereConditions.push(`(
-      h."categoryId" IN (${directPlaceholders}) 
-      OR h."categoryId" IN (
-        SELECT hc_sub."id" FROM "HazardCategory" hc_sub 
-        WHERE hc_sub."parentId" IN (${parentPlaceholders})
+      h."categoryId" IN (${directPlaceholders})
+      OR EXISTS (
+        SELECT 1 FROM "HazardCategory" hc_parent
+        WHERE hc_parent.id = h."categoryId" 
+        AND hc_parent."parentId" IN (${parentPlaceholders})
       )
     )`);
 
@@ -387,26 +386,30 @@ export const buildHazardsWhereClauseRaw = (
     paramIndex++;
   }
 
-  // Apply geographic bounds filter if provided
+  // Apply geographic bounds filter if provided - OPTIMIZED for better index usage
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
     // If we also have subscriptions, combine with OR
     if (subscriptions && subscriptions.length > 0) {
       // Build subscription conditions and regular bounds condition with OR
       const allConditions = [];
 
-      // Add subscription conditions first
+      // Add subscription conditions first - optimize for spatial index usage
       subscriptions.forEach(() => {
-        const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
+        const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
           paramIndex + 1
-        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+          paramIndex + 3
+        })`;
         allConditions.push(condition);
         paramIndex += 4;
       });
 
-      // Add regular bounds condition
-      const regularBounds = `(h.latitude BETWEEN $${paramIndex} AND $${
+      // Add regular bounds condition - optimize for spatial index usage
+      const regularBounds = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
         paramIndex + 1
-      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+        paramIndex + 3
+      })`;
       allConditions.push(regularBounds);
       paramIndex += 4;
 
@@ -415,31 +418,45 @@ export const buildHazardsWhereClauseRaw = (
       // Add subscription parameters first (to match the parameter order)
       subscriptions.forEach((sub) => {
         queryParams.push(
-          sub.southwestLat,
-          sub.northeastLat,
-          sub.southwestLng,
-          sub.northeastLng
+          Math.min(sub.southwestLat, sub.northeastLat),
+          Math.max(sub.southwestLat, sub.northeastLat),
+          Math.min(sub.southwestLng, sub.northeastLng),
+          Math.max(sub.southwestLng, sub.northeastLng)
         );
       });
 
       // Add regular bounds parameters
-      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
-    } else {
-      // Only regular bounds, no subscriptions
-      whereConditions.push(
-        `(h.latitude BETWEEN $${paramIndex} AND $${
-          paramIndex + 1
-        } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`
+      queryParams.push(
+        Math.min(southwestLat, northeastLat),
+        Math.max(southwestLat, northeastLat),
+        Math.min(southwestLng, northeastLng),
+        Math.max(southwestLng, northeastLng)
       );
-      queryParams.push(southwestLat, northeastLat, southwestLng, northeastLng);
+    } else {
+      // Only regular bounds, no subscriptions - optimize for spatial index usage
+      whereConditions.push(
+        `(h.latitude >= $${paramIndex} AND h.latitude <= $${
+          paramIndex + 1
+        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+          paramIndex + 3
+        })`
+      );
+      queryParams.push(
+        Math.min(southwestLat, northeastLat),
+        Math.max(southwestLat, northeastLat),
+        Math.min(southwestLng, northeastLng),
+        Math.max(southwestLng, northeastLng)
+      );
       paramIndex += 4;
     }
   } else if (subscriptions && subscriptions.length > 0) {
-    // Only subscription bounds, no regular bounds
+    // Only subscription bounds, no regular bounds - optimize for spatial index usage
     const subscriptionConditions = subscriptions.map(() => {
-      const condition = `(h.latitude BETWEEN $${paramIndex} AND $${
+      const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
         paramIndex + 1
-      } AND h.longitude BETWEEN $${paramIndex + 2} AND $${paramIndex + 3})`;
+      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+        paramIndex + 3
+      })`;
       paramIndex += 4;
       return condition;
     });
@@ -447,10 +464,10 @@ export const buildHazardsWhereClauseRaw = (
 
     subscriptions.forEach((sub) => {
       queryParams.push(
-        sub.southwestLat,
-        sub.northeastLat,
-        sub.southwestLng,
-        sub.northeastLng
+        Math.min(sub.southwestLat, sub.northeastLat),
+        Math.max(sub.southwestLat, sub.northeastLat),
+        Math.min(sub.southwestLng, sub.northeastLng),
+        Math.max(sub.southwestLng, sub.northeastLng)
       );
     });
   }
