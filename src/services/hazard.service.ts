@@ -430,11 +430,12 @@ export const reviewHazard = async ({
 
     SUMMARY GUIDELINES:
     - Factual, one-sentence summary of what’s happening and where. Eg. "User report of {hazard} near ${locationName}."
+    - MUST be a single sentence.
     - If no description is provided or the report cannot be verified, you must automatically use the following default summary:
       "An unverified incident has been reported near ${
         locationName || `${latitude}, ${longitude}`
       }."
-    - Use simple, calm, plain, natural language suitable for the general public in present tense. 
+    - Must use simple, calm, plain, natural language suitable for the general public in present tense. 
     - Keep total length ≤50 words.
 
     CALL TO ACTION GUIDELINES:
@@ -586,8 +587,9 @@ export const summarizeHazard = async ({
 
     SUMMARY GUIDELINES:
     - Factual, one-sentence summary of what’s happening, where, and who is responding. 
-    - Use simple, calm, plain, natural language suitable for the general public. 
-    - Only use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
+    - MUST be a single sentence.
+    - Must use simple, calm, plain, natural language suitable for the general public. 
+    - Must use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
     - Keep total length ≤50 words.
 
     CONFIDENCE LEVELS:
@@ -599,7 +601,7 @@ export const summarizeHazard = async ({
     {
       "title": "string (a concise, clear title for the hazard, max 80 chars)",
       "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (based on SUMMARY GUIDELINES above)",
+      "summary": "string (based on SUMMARY GUIDELINES above. MUST be a single sentence)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
       ${
         availableCategories && availableCategories.length > 0

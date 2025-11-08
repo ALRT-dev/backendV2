@@ -1162,7 +1162,7 @@ export const populateInitialCategories = async () => {
                 description: "Air pollution and quality concerns",
                 severityKeywords: {
                   advice: [
-                    "Poor >25–50 µg/m³",
+                    "poor",
                     "smoke drift",
                     "minor smoke",
                     "smoke from prescribed/planned/hazard-reduction burn",
@@ -1170,7 +1170,7 @@ export const populateInitialCategories = async () => {
                     "no specific health action beyond awareness",
                   ],
                   watchAndAct: [
-                    "Very poor >50–150 µg/m³",
+                    "very poor",
                     "health advisory issued",
                     "poor air quality",
                     "visibility reduced",
@@ -1178,7 +1178,7 @@ export const populateInitialCategories = async () => {
                     "AQI well above guideline",
                   ],
                   emergency: [
-                    "Extremely poor >150 µg/m³",
+                    "extremely poor",
                     "very poor/hazardous AQI",
                     "thick smoke hazard",
                     "remain indoors",
