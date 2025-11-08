@@ -81,54 +81,54 @@ export const syncHazardsFromDifferentSources = async () => {
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromRFS,
       },
-      {
-        name: "BoM",
-        categoryId: "weatherAndEnvironment",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromBoM,
-      },
-      {
-        name: "NSW Transport live traffic hazards",
-        categoryId: "transportAndTravel",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromLiveTrafficHazards,
-      },
-      {
-        name: "NSW air quality",
-        categoryId: "weatherAndEnvironment",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromAirQuality,
-      },
-      {
-        name: "ACT Emergency Services",
-        categoryId: "healthAndEmergency",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromACT,
-      },
-      {
-        name: "CFS",
-        categoryId: "bushfire",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromCFS,
-      },
-      {
-        name: "Vice Fire Services",
-        categoryId: "bushfire",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromViceFireServices,
-      },
-      {
-        name: "QLD Fire Department",
-        categoryId: "bushfire",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsDataFromQLDFireDepartment,
-      },
-      {
-        name: "NT Fire and Rescue",
-        categoryId: "bushfire",
-        awsCompliantCategories: awsCompliantCategories,
-        fetchFunction: getHazardsFromNTFireAndRescue,
-      },
+      // {
+      //   name: "BoM",
+      //   categoryId: "weatherAndEnvironment",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromBoM,
+      // },
+      // {
+      //   name: "NSW Transport live traffic hazards",
+      //   categoryId: "transportAndTravel",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromLiveTrafficHazards,
+      // },
+      // {
+      //   name: "NSW air quality",
+      //   categoryId: "weatherAndEnvironment",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromAirQuality,
+      // },
+      // {
+      //   name: "ACT Emergency Services",
+      //   categoryId: "healthAndEmergency",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromACT,
+      // },
+      // {
+      //   name: "CFS",
+      //   categoryId: "bushfire",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromCFS,
+      // },
+      // {
+      //   name: "Vice Fire Services",
+      //   categoryId: "bushfire",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromViceFireServices,
+      // },
+      // {
+      //   name: "QLD Fire Department",
+      //   categoryId: "bushfire",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
+      // },
+      // {
+      //   name: "NT Fire and Rescue",
+      //   categoryId: "bushfire",
+      //   awsCompliantCategories: awsCompliantCategories,
+      //   fetchFunction: getHazardsFromNTFireAndRescue,
+      // },
     ];
 
     return await Promise.all(
@@ -149,7 +149,7 @@ export const syncHazardsFromDifferentSources = async () => {
  */
 const syncHazardsFromSource = async (
   sourceConfig: HazardSourceConfig,
-  availableCategories: HazardCategory[]
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ) => {
   try {
     const category = await prisma.hazardCategory.findFirst({
@@ -205,7 +205,7 @@ const summarizeAndPostHazards = async ({
   awsCompliantCategories,
 }: {
   hazardDatas: Prisma.HazardCreateInput[];
-  availableCategories?: HazardCategory[];
+  availableCategories?: (HazardCategory & { parent: HazardCategory | null })[];
   awsCompliantCategories?: string[];
 }): Promise<Hazard[]> => {
   try {

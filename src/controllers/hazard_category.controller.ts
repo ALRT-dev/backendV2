@@ -108,10 +108,12 @@ export const deleteAllHazardCategories = async (
   next: NextFunction
 ) => {
   try {
-    const deleted = await prisma.hazardCategory.deleteMany({});
+    const deletedHazards = await prisma.hazard.deleteMany({});
+    const deletedCategories = await prisma.hazardCategory.deleteMany({});
     res.status(200).json({
       message: "All hazard categories deleted",
-      deletedCount: deleted.count,
+      deletedCategoriesCount: deletedCategories.count,
+      deletedHazardsCount: deletedHazards.count,
     });
   } catch (error) {
     next(error);

@@ -523,28 +523,57 @@ export const summarizeHazard = async ({
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  availableCategories?: HazardCategory[] | undefined | null;
+  availableCategories?:
+    | (HazardCategory & { parent: HazardCategory | null })[]
+    | undefined
+    | null;
 }): Promise<AISummaryResponse> => {
-  const allowedCategories = availableCategories?.map((cat) => cat.id) || [];
   const parentCategories =
-    (availableCategories
-      ?.map((cat) => cat.parentId)
-      .filter((id) => id !== null)
-      .filter((id, index, self) => self.indexOf(id) === index) as string[]) ||
-    [];
+    availableCategories
+      ?.map((cat) => cat.parent)
+      ?.filter((cat) => cat !== null)
+      .reduce<HazardCategory[]>((acc, curr) => {
+        if (curr && !acc.find((c) => c.id === curr.id)) {
+          acc.push(curr);
+        }
+        return acc;
+      }, []) || [];
+
+  const categoriesInfo =
+    availableCategories
+      ?.map((cat) =>
+        cat.aiInstructions && cat.aiInstructions.length !== 0
+          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
+          : `- CATEGORY: ${cat.id}`
+      )
+      .join("\n\n") || "";
+
+  const parentCategoriesInfo =
+    parentCategories
+      ?.map((cat) =>
+        cat.aiInstructions && cat.aiInstructions.length !== 0
+          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
+          : `- CATEGORY: ${cat.id}`
+      )
+      .join("\n\n") || "";
 
   const systemPrompt = `
     You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
     
     ${
-      allowedCategories && allowedCategories.length > 0
+      availableCategories && availableCategories.length > 0
         ? `
           AVAILABLE HAZARD CATEGORIES:
           Choose the most appropriate category based on the hazard characteristics.
-            \n- ${allowedCategories.join(", ")}
+          \n${categoriesInfo}
           
-          If none of the categories fit well, you may select from the parent categories:
-            \n- ${parentCategories.join(", ")}
+          ${
+            parentCategories && parentCategories.length > 0
+              ? `
+          If none of the above categories fit well, you may select from the parent categories:
+          \n${parentCategoriesInfo}`
+              : ""
+          }
         `
         : ""
     }
@@ -567,7 +596,7 @@ export const summarizeHazard = async ({
       "summary": "string (based on SUMMARY GUIDELINES above)",
       "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
       ${
-        allowedCategories && allowedCategories.length > 0
+        availableCategories && availableCategories.length > 0
           ? `"category": "string (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)",`
           : ""
       }

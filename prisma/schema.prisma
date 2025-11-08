@@ -47,6 +47,8 @@ model HazardCategory {
   severityKeywords Json? // JSON object mapping severity levels to arrays of keywords
   callToActions    Json? // JSON object mapping severity levels to call-to-action messages
 
+  aiInstructions String? // Additional instructions for AI to classify hazards into this category
+
   parentId String? // For subcategories, this points to the parent category
 
   hazards       Hazard[]

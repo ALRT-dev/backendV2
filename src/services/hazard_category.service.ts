@@ -28,8 +28,6 @@ export const hasExistingCategories = async (): Promise<boolean> => {
  */
 export const initializeHazardCategories = async (): Promise<void> => {
   try {
-    console.log("Checking if hazard categories need to be initialized...");
-
     const categoriesExist = await hasExistingCategories();
 
     if (!categoriesExist) {
@@ -38,8 +36,6 @@ export const initializeHazardCategories = async (): Promise<void> => {
       );
       await populateInitialCategories();
       console.log("Hazard categories initialized successfully");
-    } else {
-      console.log("Hazard categories already exist, skipping initialization");
     }
   } catch (error) {
     console.error("❌ Error initializing hazard categories:", error);
@@ -491,6 +487,8 @@ export const populateInitialCategories = async () => {
                 id: "bushfire",
                 name: "Bushfire",
                 description: "Wildfire and bushfire incidents",
+                aiInstructions:
+                  "Classify hazards related to bushfire, vegetation fire, grass fire, scrub fire, forest fire, wildfire into this category. If planned, prescribed, hazard reduction, HRB, fuel reduction, burn off, mitigation is present then this does not equal to bushfire.",
                 severityKeywords: {
                   unknown: ["not applicable", "burn off", "planned burn"],
                   info: ["info", "information"],
@@ -528,6 +526,38 @@ export const populateInitialCategories = async () => {
                     "Avoid roads with heavy smoke.",
                     "Contact 000 only if in immediate danger.",
                   ],
+                },
+              },
+            },
+            {
+              where: { id: "plannedBurn" },
+              create: {
+                id: "plannedBurn",
+                name: "Planned Burn",
+                description: "Controlled burns for land management",
+                aiInstructions:
+                  "Classify planned, prescribed, hazard-reduction, HRB, fuel-reduction, burn-off, mitigation burn into this category. If planned, prescribed, hazard reduction, HRB, fuel reduction, burn off, mitigation is present then this equals to plannedBurn, even if vegetation, bushfire, grassfire etc words appear.",
+                severityKeywords: {
+                  unknown: [],
+                },
+                callToActions: {
+                  unknown: [],
+                },
+              },
+            },
+            {
+              where: { id: "otherFire" },
+              create: {
+                id: "otherFire",
+                name: "Other Fire",
+                description: "Unclassified fire incidents",
+                aiInstructions:
+                  "Classify any fire incidents that do not fit into specific categories such as structuralfire, bushfire, vehicle, etc. into this category. If the fire is planned, prescribed, hazard reduction, HRB, fuel reduction, burn off, mitigation then this does not equal to otherFire",
+                severityKeywords: {
+                  unknown: [],
+                },
+                callToActions: {
+                  unknown: [],
                 },
               },
             },
@@ -1298,6 +1328,8 @@ export const populateInitialCategories = async () => {
                 id: "vehicleFire",
                 name: "Vehicle Fire",
                 description: "Fires involving vehicles",
+                aiInstructions:
+                  "Classify vehicle fire, car fire, truck fire, bus fire, motorcycle fire, van fire, lorry fire, vehicle blaze, car blaze, truck blaze, bus blaze, motorcycle blaze, van blaze, lorry blaze into this category. If vehicle, car, truck, bus, motorcycle, van, lorry along with fire or blaze is present then this equals to vehicleFire, even if accident, crash, collision etc words appear.",
                 severityKeywords: {
                   unknown: ["not applicable"],
                   info: ["small fire", "under control", "no injuries"],
@@ -1797,6 +1829,8 @@ export const populateInitialCategories = async () => {
                 id: "structuralFire",
                 name: "Structural Fire",
                 description: "Fires in buildings and structures",
+                aiInstructions:
+                  "Classify structure, house, unit, apartment, building, warehouse, factory, industrial, shed, high-rise fire incidents into this category. If planned, prescribed, hazard reduction, HRB, fuel reduction, burn off, mitigation is present then this does not equal to structuralFire.",
                 severityKeywords: {
                   unknown: ["not applicable"],
                   info: [
@@ -2102,55 +2136,6 @@ export const populateInitialCategories = async () => {
                     "Avoid using switches or torches.",
                     "Stay behind emergency tape.",
                     "Only re-enter when authorities declare safe.",
-                  ],
-                },
-              },
-            },
-            {
-              where: { id: "industrialFire" },
-              create: {
-                id: "industrialFire",
-                name: "Industrial Fire",
-                description: "Fires at industrial facilities",
-                severityKeywords: {
-                  unknown: ["not applicable"],
-                  info: ["alarm activated", "small fire", "investigating"],
-                  advice: [
-                    "facility fire",
-                    "evacuating",
-                    "toxic smoke possible",
-                  ],
-                  watchAndAct: [
-                    "major industrial fire",
-                    "explosion risk",
-                    "evacuate area",
-                  ],
-                  emergency: [
-                    "catastrophic fire",
-                    "toxic release",
-                    "widespread danger",
-                  ],
-                },
-                callToActions: {
-                  info: [
-                    "Stay clear of facility.",
-                    "Avoid downwind areas.",
-                    "Monitor official updates.",
-                  ],
-                  advice: [
-                    "Evacuate immediate area.",
-                    "Close windows and doors.",
-                    "Avoid inhaling smoke.",
-                  ],
-                  watchAndAct: [
-                    "Leave area immediately.",
-                    "Stay at least 1km away.",
-                    "Prepare for potential evacuation.",
-                  ],
-                  emergency: [
-                    "Evacuate wide area immediately.",
-                    "Seek shelter indoors if unable to evacuate.",
-                    "Follow emergency service directions only.",
                   ],
                 },
               },
