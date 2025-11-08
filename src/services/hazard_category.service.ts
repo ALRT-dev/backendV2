@@ -1271,6 +1271,7 @@ export const populateInitialCategories = async () => {
                   ],
                   advice: [
                     "level: 1",
+                    "alert level: advice",
                     "single-vehicle crash",
                     "minor injuries",
                     "roadside assistance",

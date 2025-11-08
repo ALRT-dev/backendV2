@@ -25,6 +25,7 @@ import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import {
+  awsCompliantSeverities,
   buildHazardInclude,
   getHazardExpiryDateFromSeverity,
 } from "../utils/hazard.util.js";
@@ -324,9 +325,9 @@ const summarizeAndPostHazards = async ({
               callToAction: summarized.callToAction,
               ...(awsCompliantCategories &&
                 summarized.category && {
-                  isAwsCompliant: awsCompliantCategories.includes(
-                    summarized.category
-                  ),
+                  isAwsCompliant:
+                    awsCompliantCategories.includes(summarized.category) &&
+                    awsCompliantSeverities.includes(summarized.severity),
                 }),
               reviewStatus: HazardReviewStatus.accepted,
               reviewedAt: new Date(),

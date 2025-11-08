@@ -772,23 +772,11 @@ export const getSeverityCallToActions = (
 /**
  * Lists of allowed severities for Australian Warnings System (AWS) hazards.
  */
-export const allowedSeveritiesAWS: HazardSeverity[] = [
-  HazardSeverity.unknown,
+export const awsCompliantSeverities: HazardSeverity[] = [
   HazardSeverity.advice,
   HazardSeverity.watchAndAct,
   HazardSeverity.emergency,
 ];
-
-/**
- * Lists of allowed severities for non-AWS hazards.
- */
-export const allowedSeveritiesNonAWS: HazardSeverity[] = [
-  HazardSeverity.info,
-  HazardSeverity.advice, // equivalent to 'low'
-  HazardSeverity.watchAndAct, // equivalent to 'moderate'
-  HazardSeverity.emergency, // equivalent to 'high'
-];
-
 /**
  * Performs keyword matching to determine severity level based on title and description.
  */
