@@ -1204,6 +1204,56 @@ export const populateInitialCategories = async () => {
                 },
               },
             },
+            {
+              where: { id: "treeDown" },
+              create: {
+                id: "treeDown",
+                name: "Tree Down",
+                description: "Fallen trees causing hazards",
+                severityKeywords: {
+                  unknown: ["not applicable"],
+                  info: ["minor obstruction", "no injuries", "cleared quickly"],
+                  advice: [
+                    "level: 1",
+                    "significant obstruction",
+                    "road partially blocked",
+                    "emergency services present",
+                  ],
+                  watchAndAct: [
+                    "major obstruction",
+                    "road closed",
+                    "danger to public",
+                  ],
+                  emergency: [
+                    "catastrophic obstruction",
+                    "multiple injuries",
+                    "total road closure",
+                  ],
+                },
+                callToActions: {
+                  info: [
+                    "Slow down near scene.",
+                    "Expect minor delays.",
+                    "Follow traffic directions.",
+                  ],
+                  advice: [
+                    "Use alternate route if possible.",
+                    "Allow emergency access.",
+                    "Stay alert for debris.",
+                  ],
+                  watchAndAct: [
+                    "Avoid the area entirely.",
+                    "Follow police diversions.",
+                    "Report hazards if first on scene.",
+                  ],
+                  emergency: [
+                    "Evacuate area if directed.",
+                    "Follow emergency service directions.",
+                    "Use alternate route and monitor updates.",
+                  ],
+                },
+              },
+            },
           ],
         },
       },

@@ -657,8 +657,6 @@ export const updateHazard = async (
       }
     }
 
-    console.log("Description:", description);
-
     // Perform AI review of the hazard report <----------------------------------------------------------------------------------
     let review: any;
     try {
