@@ -509,10 +509,9 @@ export const populateInitialCategories = async () => {
                   unknown: ["No action required"],
                   info: ["Stay informed and monitor updates"],
                   advice: [
-                    "Pack essentials (IDs, meds, charger, pets).",
-                    "Identify two exit routes.",
-                    "Move flammable items from around home.",
-                    "Tune to ABC Radio or official app.",
+                    "Prepare your property and belongings if near the fire area.",
+                    "Pack your essential items in case you need to leave quickly.",
+                    "Review your emergency plan and know your evacuation routes if near the fire area.",
                   ],
                   watchAndAct: [
                     "Relocate early if directed.",

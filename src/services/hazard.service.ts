@@ -458,13 +458,13 @@ export const reviewHazard = async ({
 
     Always respond with valid JSON containing these exact fields:
     {
-      "reviewStatus": "accepted|rejected (based on REVIEW GUIDELINES above)",
-      "reviewFeedback": "string (constructive feedback for the reporter if reviewStatus is rejected, max 200 chars)",
-      "title": "string (a concise, clear title for the hazard, max 80 chars)",
-      "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (based on SUMMARY GUIDELINES above)",
-      "callToAction": "string (based on CALL TO ACTION GUIDELINES above)",
-      "confidence": "high|medium|low (based on CONFIDENCE LEVEL GUIDELINES described above)"
+      "reviewStatus": "accepted|rejected", (based on REVIEW GUIDELINES above)
+      "reviewFeedback": "string", (constructive feedback for the reporter if reviewStatus is rejected, max 200 chars)
+      "title": "string", (a concise, clear title for the hazard, max 80 chars)
+      "shortDescription": "string", (a one-line summary for notifications, max 120 chars)
+      "summary": "string", (based on SUMMARY GUIDELINES above)
+      "callToAction": "string", (based on CALL TO ACTION GUIDELINES above)
+      "confidence": "high|medium|low" (based on CONFIDENCE LEVEL GUIDELINES described above)
     }
     `;
 
@@ -485,7 +485,7 @@ export const reviewHazard = async ({
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -599,13 +599,13 @@ export const summarizeHazard = async ({
 
     Always respond with valid JSON containing these exact fields:
     {
-      "title": "string (a concise, clear title for the hazard, max 80 chars)",
-      "shortDescription": "string (a one-line summary for notifications, max 120 chars)",
-      "summary": "string (based on SUMMARY GUIDELINES above. MUST be a single sentence)",
-      "confidence": "high|medium|low (based on CONFIDENCE LEVELS described above)",
+      "title": "string", (a concise, clear title for the hazard, max 80 chars)
+      "shortDescription": "string", (a one-line summary for notifications, max 120 chars)
+      "summary": "string", (based on SUMMARY GUIDELINES above. MUST be a single sentence)
+      "confidence": "high|medium|low", (based on CONFIDENCE LEVELS described above)
       ${
         availableCategories && availableCategories.length > 0
-          ? `"category": "string (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)",`
+          ? `"category": "string", (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)`
           : ""
       }
     }
@@ -623,7 +623,7 @@ export const summarizeHazard = async ({
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -782,25 +782,11 @@ export const getAISeverity = async ({
       .filter(Boolean)
       .join("\n");
 
-    // Build call to action text based on allowed severities
-    const callToActionText = Object.entries(callToActions)
-      .map(
-        ([severity, actions]) =>
-          `For "${severity}":\n${actions
-            .map((action) => `- ${action}`)
-            .join("\n")}`
-      )
-      .join("\n\n");
-
-    const systemPrompt = `
+    const severitySystemPrompt = `
       You are a hazard severity classification expert. Your task is to analyze hazard reports and classify them into one of these severity levels based on keyword matching and content analysis:
 
       SEVERITY KEYWORDS:
       ${keywordContext}
-
-      CALL TO ACTION GUIDELINES:
-      After determining the severity level and hazard type, select the most appropriate call to action. (Only one sentence from the guidelines below):
-      ${callToActionText}
 
       ALLOWED SEVERITY LEVELS:
       - ${severityLevels.join("\n- ")}
@@ -817,18 +803,17 @@ export const getAISeverity = async ({
       {
         "severity": "${severityLevels.join(
           "|"
-        )} (based on the KEYWORD CONTEXT and ANALYSIS INSTRUCTIONS above)",
-        "callToAction": "string (select the most appropriate action from the CALL TO ACTION GUIDELINES above based on severity and hazard type)"
+        )}" (based on the KEYWORD CONTEXT and ANALYSIS INSTRUCTIONS above)
       }
     `;
 
     const userPrompt = `Analyze this hazard report and determine its severity level: ${hazardContent}`;
 
-    const response = await retryWithBackoff(async () => {
+    const severityResponse = await retryWithBackoff(async () => {
       return await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
-          { role: "system", content: systemPrompt },
+          { role: "system", content: severitySystemPrompt },
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
@@ -836,8 +821,8 @@ export const getAISeverity = async ({
     });
 
     if (
-      response.choices.length === 0 ||
-      !response.choices[0]?.message?.content
+      severityResponse.choices.length === 0 ||
+      !severityResponse.choices[0]?.message?.content
     ) {
       throw new HttpError(
         500,
@@ -845,19 +830,80 @@ export const getAISeverity = async ({
       );
     }
 
-    const content = response.choices[0].message.content;
-    if (!content) {
+    const severityContent = severityResponse.choices[0].message.content;
+    if (!severityContent) {
       throw new HttpError(
         500,
         "Severity determination failed: Empty response from AI"
       );
     }
 
-    const aiResponse = JSON.parse(content) as {
+    const { severity } = JSON.parse(severityContent) as {
       severity: HazardSeverity;
+    };
+
+    // Now get the call to action
+    const callToActionBySeverity = callToActions[severity];
+    const callToActionText = callToActionBySeverity
+      .map((action) => `- "${action}"`)
+      .join("\n");
+
+    const callToActionSystemPrompt = `
+      You are a hazard call to action expert. Your task is to analyze hazard reports and provide clear, concise guidance on what actions the public should take in response to the hazard.
+
+      CALL TO ACTION GUIDELINES:
+      1. Carefully examine the hazard description for any existing call to action or "what to do" information. Look for:
+        - Direct instructions (e.g., "close doors and windows", "evacuate immediately", "evacuate now", "call 000")
+        - Safety recommendations (e.g., "keep medication close by", "use caution", "avoid the area")
+        - Conditional actions (e.g., "if you believe your property is under threat, call...")
+        - Behavioral guidance (e.g., "residents should...", "motorists should...")
+      2. If the hazard description contains ANY of the above call to action elements, extract and consolidate them into a clear, concise callToAction statement. Combine multiple actions if present (e.g., "Close doors and windows, keep medication close by, and call 000 if property is threatened")
+      3. If and only if the hazard description contains NO actionable instructions, recommendations, or guidance whatsoever, then select exactly ONE (1) sentence from the predefined options below:
+      ${callToActionText}
+
+      Always respond with valid JSON containing this exact field:
+      {
+        "callToAction": "string" (PRIORITY: Extract and consolidate any actionable instructions from the description first. If NO instructions exist, select exactly ONE sentence from predefined options)
+      }
+    `;
+
+    const callToActionResponse = await retryWithBackoff(async () => {
+      return await openai.chat.completions.create({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: callToActionSystemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+      });
+    });
+
+    if (
+      callToActionResponse.choices.length === 0 ||
+      !callToActionResponse.choices[0]?.message?.content
+    ) {
+      throw new HttpError(
+        500,
+        "Call to action determination failed: No response from AI"
+      );
+    }
+
+    const callToActionContent = callToActionResponse.choices[0].message.content;
+    if (!callToActionContent) {
+      throw new HttpError(
+        500,
+        "Call to action determination failed: Empty response from AI"
+      );
+    }
+
+    const { callToAction } = JSON.parse(callToActionContent) as {
       callToAction: string;
     };
-    return aiResponse;
+
+    return {
+      severity,
+      callToAction,
+    };
   } catch (error) {
     console.error("Error in getAISeverity:", error);
 
