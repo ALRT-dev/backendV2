@@ -340,6 +340,7 @@ const summarizeAndPostHazards = async ({
                   },
                 },
               }),
+              fireStatus: summarized.fireStatus || null,
               expiresAt:
                 hazardData.expiresAt ||
                 getHazardExpiryDateFromSeverity(summarized.severity),

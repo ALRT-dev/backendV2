@@ -1,4 +1,4 @@
-import type { HazardSeverity } from "@prisma/client";
+import type { FireStatus, HazardSeverity } from "@prisma/client";
 
 export interface AISummaryResponse {
   title: string;
@@ -8,4 +8,5 @@ export interface AISummaryResponse {
   severity: HazardSeverity;
   callToAction: string;
   category: string;
+  fireStatus: FireStatus | null;
 }

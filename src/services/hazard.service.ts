@@ -5,6 +5,7 @@ import {
   HazardSeverity,
   type Hazard,
   type HazardCategory,
+  FireStatus,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -13,7 +14,6 @@ import type { AISummaryResponse } from "../models/ai_summary_response_interface.
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
 import type { HazardSearchParams } from "../models/hazard_search_params_interface.js";
 import { UserReportsStatus } from "../enums/user_reports_status_types.js";
-import { calculateUserReportsStatus } from "./user.service.js";
 import { calculateBulkUserReportsStatus } from "../utils/user_status.util.js";
 import {
   buildHazardInclude,
@@ -423,7 +423,7 @@ export const reviewHazard = async ({
     return await openai.responses.create({
       prompt: {
         id: config.openAI.reviewAndSummarizePromptId,
-        version: "2",
+        version: config.openAI.reviewAndSummarizePromptVersion,
         variables: {
           title: title || "[No title provided]",
           description: description || "[No description provided]",
@@ -506,7 +506,7 @@ export const summarizeHazard = async ({
     return await openai.responses.create({
       prompt: {
         id: config.openAI.summarizePromptId,
-        version: "3",
+        version: config.openAI.summarizePromptVersion,
         variables: {
           title,
           description,
@@ -532,6 +532,7 @@ export const summarizeHazard = async ({
       summary: string;
       confidence: "high" | "medium" | "low";
       category?: string;
+      fireStatus?: string | null;
     };
 
     const { severity, callToAction } = await getAISeverity({
@@ -548,6 +549,10 @@ export const summarizeHazard = async ({
       category: aiSummary.category ?? "other",
       severity,
       callToAction,
+      fireStatus:
+        aiSummary.fireStatus && aiSummary.fireStatus in FireStatus
+          ? (aiSummary.fireStatus as FireStatus)
+          : null,
     };
 
     return fullResponse;
@@ -662,7 +667,7 @@ export const getAISeverity = async ({
       return await openai.responses.create({
         prompt: {
           id: config.openAI.getSeverityAndCallToActionPromptId,
-          version: "2",
+          version: config.openAI.getSeverityAndCallToActionPromptVersion,
           variables: {
             title,
             description,

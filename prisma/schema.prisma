@@ -80,6 +80,13 @@ enum AIConfidence {
   high
 }
 
+enum FireStatus {
+  active
+  beingControlled
+  underControl
+  closed
+}
+
 model Hazard {
   id               String          @id @default(uuid())
   title            String
@@ -90,6 +97,8 @@ model Hazard {
   aiConfidence     AIConfidence?
   severity         HazardSeverity  @default(unknown)
   callToAction     String?
+
+  fireStatus FireStatus? // Only applies to fire-related hazards
 
   latitude     Float?
   longitude    Float?
