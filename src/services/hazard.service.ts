@@ -25,6 +25,7 @@ import {
 } from "../utils/hazard.util.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
 import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
+import { config } from "../utils/config.js";
 
 /**
  * Utility function to add delay between API calls
@@ -418,87 +419,24 @@ export const reviewHazard = async ({
   longitude: number;
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
-  const systemPrompt = `
-    You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.
-  
-    REVIEW GUIDELINES:
-    - Check for profanity, nonsense, sexual content, discriminatory language; reject such reports.
-    - **Don't reject** if description is not provided.
-    - Provide constructive feedback for improvement **only if rejecting** (max 200 chars).
-    - Create a clear, concise title (max 80 chars) summarizing the hazard (follow the SUMMARY GUIDELINES below for summary).
-    - Write a one-line short description (max 120 chars) for notifications.
-
-    SUMMARY GUIDELINES:
-    - Factual, one-sentence summary of what’s happening and where. Eg. "User report of {hazard} near ${locationName}."
-    - MUST be a single sentence.
-    - If no description is provided or the report cannot be verified, you must automatically use the following default summary:
-      "An unverified incident has been reported near ${
-        locationName || `${latitude}, ${longitude}`
-      }."
-    - Must use simple, calm, plain, natural language suitable for the general public in present tense. 
-    - Keep total length ≤50 words.
-
-    CALL TO ACTION GUIDELINES:
-    - Based on the given category (${
-      category.name
-    }) and severity of the hazard, suggest an appropriate action for the public.
-    - If no description is provided or the report cannot be verified, you must automatically use the following default callToAction:
-      "Stay calm, avoid the area, and wait for official updates."
-    - Use simple, natural, plain English suitable for the general public.
-    - It should not be overly definitive or alarming.
-    - Must use soft tone.
-    - Do not include irrelevant or speculative details (follow the category context).
-    - Do not give clinical/medical treatment advice.
-    - Keep total length ≤20 words.
-
-    CONFIDENCE LEVEL GUIDELINES:
-    - "high": Detailed, specific, credible information with clear location and time
-    - "medium": Reasonable detail but some ambiguity or missing information
-    - "low": Vague, unclear, or potentially unreliable information
-
-    Always respond with valid JSON containing these exact fields:
-    {
-      "reviewStatus": "accepted|rejected", (based on REVIEW GUIDELINES above)
-      "reviewFeedback": "string", (constructive feedback for the reporter if reviewStatus is rejected, max 200 chars)
-      "title": "string", (a concise, clear title for the hazard, max 80 chars)
-      "shortDescription": "string", (a one-line summary for notifications, max 120 chars)
-      "summary": "string", (based on SUMMARY GUIDELINES above)
-      "callToAction": "string", (based on CALL TO ACTION GUIDELINES above)
-      "confidence": "high|medium|low" (based on CONFIDENCE LEVEL GUIDELINES described above)
-    }
-    `;
-
-  const userPrompt = `
-    Evaluate this hazard:
-
-    Title: ${title && title.length > 0 ? title : "[No title provided]"}
-    Description: ${
-      description && description.length > 0
-        ? description
-        : "[No description provided]"
-    }
-    Category: ${category.name}
-    Location: ${
-      locationName ? `${locationName}, ` : ""
-    }(${latitude}, ${longitude})
-    `;
-
   const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
+    return await openai.responses.create({
+      prompt: {
+        id: config.openAI.reviewAndSummarizePromptId,
+        version: "2",
+        variables: {
+          title: title || "[No title provided]",
+          description: description || "[No description provided]",
+          locationname: locationName || "",
+          latitude: latitude.toString(),
+          longitude: longitude.toString(),
+          category: category.name,
+        },
+      },
     });
   });
 
-  if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
-    throw new HttpError(500, "AI review failed: No response from AI");
-  }
-
-  const content = response.choices[0].message.content;
+  const content = response.output_text;
   if (!content) {
     throw new HttpError(500, "AI review failed: Empty response from AI");
   }
@@ -564,79 +502,25 @@ export const summarizeHazard = async ({
       )
       .join("\n\n") || "";
 
-  const systemPrompt = `
-    You are a hazard analysis assistant for a public safety application. Your role is to review and standardize hazard reports to ensure they are clear, actionable, and appropriately categorized.
-    
-    ${
-      availableCategories && availableCategories.length > 0
-        ? `
-          AVAILABLE HAZARD CATEGORIES:
-          Choose the most appropriate category based on the hazard characteristics.
-          \n${categoriesInfo}
-          
-          ${
-            parentCategories && parentCategories.length > 0
-              ? `
-          If none of the above categories fit well, you may select from the parent categories:
-          \n${parentCategoriesInfo}`
-              : ""
-          }
-        `
-        : ""
-    }
-
-    SUMMARY GUIDELINES:
-    - Factual, one-sentence summary of what’s happening, where, and who is responding. 
-    - MUST be a single sentence.
-    - Must use simple, calm, plain, natural language suitable for the general public. 
-    - Must use information that applies to the hazard type, never include irrelevant fields (e.g. “no fire present, if the alert type is not about a fire”). 
-    - Keep total length ≤50 words.
-
-    CONFIDENCE LEVELS:
-    - "high": Detailed, specific, credible information with clear location and time
-    - "medium": Reasonable detail but some ambiguity or missing information
-    - "low": Vague, unclear, or potentially unreliable information
-
-    Always respond with valid JSON containing these exact fields:
-    {
-      "title": "string", (a concise, clear title for the hazard, max 80 chars)
-      "shortDescription": "string", (a one-line summary for notifications, max 120 chars)
-      "summary": "string", (based on SUMMARY GUIDELINES above. MUST be a single sentence)
-      "confidence": "high|medium|low", (based on CONFIDENCE LEVELS described above)
-      ${
-        availableCategories && availableCategories.length > 0
-          ? `"category": "string", (the most appropriate hazard category from the AVAILABLE HAZARD CATEGORIES listed above)`
-          : ""
-      }
-    }
-    `;
-
-  const userPrompt = `
-    Analyze this hazard report:
-
-    TITLE: ${title}
-    DESCRIPTION: ${description}
-    LOCATION: ${
-      locationName ? `${locationName}, ` : ""
-    }(${latitude}, ${longitude})
-    `;
-
   const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
+    return await openai.responses.create({
+      prompt: {
+        id: config.openAI.summarizePromptId,
+        version: "3",
+        variables: {
+          title,
+          description,
+          locationname: locationName || "",
+          latitude: latitude.toString(),
+          longitude: longitude.toString(),
+          categoriesinfo: categoriesInfo,
+          parentcategoriesinfo: parentCategoriesInfo,
+        },
+      },
     });
   });
 
-  if (response.choices.length === 0 || !response.choices[0]?.message?.content) {
-    throw new HttpError(500, "AI summarization failed: No response from AI");
-  }
-
-  const content = response.choices[0].message.content;
+  const content = response.output_text;
   if (!content) {
     throw new HttpError(500, "AI summarization failed: Empty response from AI");
   }
@@ -659,7 +543,7 @@ export const summarizeHazard = async ({
       categoryId: aiSummary.category ?? "other",
     });
 
-    const fullResponse = {
+    const fullResponse: AISummaryResponse = {
       ...aiSummary,
       category: aiSummary.category ?? "other",
       severity,
@@ -753,14 +637,6 @@ export const getAISeverity = async ({
       callToActions = defaultCallToActions;
     }
 
-    // Prepare the prompt for OpenAI
-    const hazardContent = `
-      Title: ${title}
-      Description: ${description}
-      Location: ${locationName || `${latitude}, ${longitude}`}
-      Category: ${category.name}
-    `;
-
     // Available severity levels
     const severityLevels = Object.keys(
       severityKeywords
@@ -777,133 +653,43 @@ export const getAISeverity = async ({
     const keywordContext = Object.entries(severityKeywords)
       .map(([severity, keywords]) => {
         if (keywords.length === 0) return `${severity}: ${severity}`;
-        return `${severity}: ${keywords.join(", ")}`;
+        return `${severity}: ${keywords.map((e) => `"${e}"`).join(", ")}`;
       })
       .filter(Boolean)
       .join("\n");
 
-    const severitySystemPrompt = `
-      You are a hazard severity classification expert. Your task is to analyze hazard reports and classify them into one of these severity levels based on keyword matching and content analysis:
-
-      SEVERITY KEYWORDS:
-      ${keywordContext}
-
-      ALLOWED SEVERITY LEVELS:
-      - ${severityLevels.join("\n- ")}
-
-      ANALYSIS INSTRUCTIONS:
-      1. First, look for direct keyword matches in the title and description
-      2. Consider the context, urgency, and potential impact described
-      3. Factor in location relevance if applicable
-      4. Choose the most appropriate severity level
-      5. If multiple levels could apply, choose the higher severity for safety
-      6. If no clear match or insufficient information, return "unknown"
-
-      Respond with valid JSON containing this exact field:
-      {
-        "severity": "${severityLevels.join(
-          "|"
-        )}" (based on the KEYWORD CONTEXT and ANALYSIS INSTRUCTIONS above)
-      }
-    `;
-
-    const userPrompt = `Analyze this hazard report and determine its severity level: ${hazardContent}`;
-
-    const severityResponse = await retryWithBackoff(async () => {
-      return await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: severitySystemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
+    const response = await retryWithBackoff(async () => {
+      return await openai.responses.create({
+        prompt: {
+          id: config.openAI.getSeverityAndCallToActionPromptId,
+          version: "2",
+          variables: {
+            title,
+            description,
+            locationname: locationName || "",
+            latitude: latitude.toString(),
+            longitude: longitude.toString(),
+            category: category.name,
+            severitykeywords: keywordContext,
+            allowedseveritylevels: `- ${severityLevels.join("\n- ")}`,
+          },
+        },
       });
     });
 
-    if (
-      severityResponse.choices.length === 0 ||
-      !severityResponse.choices[0]?.message?.content
-    ) {
-      throw new HttpError(
-        500,
-        "Severity determination failed: No response from AI"
-      );
-    }
-
-    const severityContent = severityResponse.choices[0].message.content;
-    if (!severityContent) {
+    const context = response.output_text;
+    if (!context) {
       throw new HttpError(
         500,
         "Severity determination failed: Empty response from AI"
       );
     }
 
-    const { severity } = JSON.parse(severityContent) as {
+    const aiResponse = JSON.parse(context) as {
       severity: HazardSeverity;
-    };
-
-    // Now get the call to action
-    const callToActionBySeverity = callToActions[severity];
-    const callToActionText = callToActionBySeverity
-      .map((action) => `- "${action}"`)
-      .join("\n");
-
-    const callToActionSystemPrompt = `
-      You are a hazard call to action expert. Your task is to analyze hazard reports and provide clear, concise guidance on what actions the public should take in response to the hazard.
-
-      CALL TO ACTION GUIDELINES:
-      1. Carefully examine the hazard description for any existing call to action or "what to do" information. Look for:
-        - Direct instructions (e.g., "close doors and windows", "evacuate immediately", "evacuate now", "call 000")
-        - Safety recommendations (e.g., "keep medication close by", "use caution", "avoid the area")
-        - Conditional actions (e.g., "if you believe your property is under threat, call...")
-        - Behavioral guidance (e.g., "residents should...", "motorists should...")
-      2. If the hazard description contains ANY of the above call to action elements, extract and consolidate them into a clear, concise callToAction statement. Combine multiple actions if present (e.g., "Close doors and windows, keep medication close by, and call 000 if property is threatened")
-      3. If and only if the hazard description contains NO actionable instructions, recommendations, or guidance whatsoever, then select exactly ONE (1) sentence from the predefined options below:
-      ${callToActionText}
-
-      Always respond with valid JSON containing this exact field:
-      {
-        "callToAction": "string" (PRIORITY: Extract and consolidate any actionable instructions from the description first. If NO instructions exist, select exactly ONE sentence from predefined options)
-      }
-    `;
-
-    const callToActionResponse = await retryWithBackoff(async () => {
-      return await openai.chat.completions.create({
-        model: "gpt-5-mini",
-        messages: [
-          { role: "system", content: callToActionSystemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-      });
-    });
-
-    if (
-      callToActionResponse.choices.length === 0 ||
-      !callToActionResponse.choices[0]?.message?.content
-    ) {
-      throw new HttpError(
-        500,
-        "Call to action determination failed: No response from AI"
-      );
-    }
-
-    const callToActionContent = callToActionResponse.choices[0].message.content;
-    if (!callToActionContent) {
-      throw new HttpError(
-        500,
-        "Call to action determination failed: Empty response from AI"
-      );
-    }
-
-    const { callToAction } = JSON.parse(callToActionContent) as {
       callToAction: string;
     };
-
-    return {
-      severity,
-      callToAction,
-    };
+    return aiResponse;
   } catch (error) {
     console.error("Error in getAISeverity:", error);
 
