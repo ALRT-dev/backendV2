@@ -351,8 +351,8 @@ const summarizeAndPostHazards = async ({
           return null;
         }
       },
-      25, // Process 25 at a time
-      300 // Wait 300ms between batches
+      20, // Process 20 at a time
+      1000 // Wait 1 second between batches
     );
 
     // Filter out null results
