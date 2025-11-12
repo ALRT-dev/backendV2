@@ -92,13 +92,13 @@ export const requireAdminRole = (allowedRoles: string[]) => {
 };
 
 /// Middleware shortcuts for common role checks
-export const requireSuperAdmin = requireAdminRole([AdminRole.SUPER_ADMIN]);
+export const requireSuperAdmin = requireAdminRole([AdminRole.superAdmin]);
 export const requireAdminOrAbove = requireAdminRole([
-  AdminRole.SUPER_ADMIN,
-  AdminRole.ADMIN,
+  AdminRole.superAdmin,
+  AdminRole.admin,
 ]);
 export const requireAnyAdmin = requireAdminRole([
-  AdminRole.SUPER_ADMIN,
-  AdminRole.ADMIN,
-  AdminRole.MODERATOR,
+  AdminRole.superAdmin,
+  AdminRole.admin,
+  AdminRole.moderator,
 ]);

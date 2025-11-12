@@ -27,7 +27,7 @@ const createSuperAdmin = async () => {
       email,
       password,
       name,
-      role: AdminRole.SUPER_ADMIN,
+      role: AdminRole.superAdmin,
     };
 
     console.log("🚀 Creating super admin account...");

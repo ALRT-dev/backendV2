@@ -33,7 +33,7 @@ export const createAdmin = async (
 ) => {
   try {
     // Only super admins can create new admin accounts
-    if (!req.admin || req.admin.role !== AdminRole.SUPER_ADMIN) {
+    if (!req.admin || req.admin.role !== AdminRole.superAdmin) {
       throw new HttpError(403, "Only super admins can create admin accounts");
     }
 

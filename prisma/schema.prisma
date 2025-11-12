@@ -280,7 +280,7 @@ model Admin {
   email        String    @unique
   passwordHash String
   name         String?
-  role         AdminRole @default(ADMIN)
+  role         AdminRole @default(admin)
   isActive     Boolean   @default(true)
 
   // Security fields
@@ -298,7 +298,7 @@ model Admin {
 }
 
 enum AdminRole {
-  SUPER_ADMIN
-  ADMIN
-  MODERATOR
+  superAdmin
+  admin
+  moderator
 }

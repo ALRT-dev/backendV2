@@ -23,7 +23,7 @@ export const createAdminSchema = z.object({
     .min(1, "Name is required")
     .max(100, "Name too long")
     .optional(),
-  role: z.enum(AdminRole).default(AdminRole.ADMIN),
+  role: z.enum(AdminRole).default(AdminRole.admin),
 });
 
 export type CreateAdminBody = z.infer<typeof createAdminSchema>;
