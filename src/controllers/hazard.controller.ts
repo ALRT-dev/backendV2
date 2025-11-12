@@ -1267,35 +1267,3 @@ export const deleteAllHazards = async (
     next(error);
   }
 };
-
-// Controller to sync hazards from different sources
-export const syncHazardsFromDifferentSourcesController = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { deleteOldHazards } = req.query;
-    let deletedHazardsCount = 0;
-    if (deleteOldHazards && parseBoolean(deleteOldHazards)) {
-      // Delete old hazards first
-      const deletedHazards = await prisma.hazard.deleteMany({});
-      console.log("Deleted old hazards:", deletedHazards.count);
-      deletedHazardsCount = deletedHazards.count;
-    }
-
-    const createdHazards = await syncHazardsFromDifferentSources();
-    console.log(
-      "Created new hazards from different sources:",
-      createdHazards?.length
-    );
-
-    res.status(200).json({
-      deletedHazardsCount: deletedHazardsCount,
-      createdHazardsCount: createdHazards?.length || 0,
-      createdHazards,
-    });
-  } catch (error) {
-    next(error);
-  }
-};

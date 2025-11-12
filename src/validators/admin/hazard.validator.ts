@@ -1,4 +1,5 @@
 import z from "zod";
+import { SyncHazardsFromExternalSourceOption } from "../../enums/sync_hazards_from_external_source_option_types.js";
 
 export const getHazardsForAdminQuerySchema = z.object({
   searchString: z.string().optional(),
@@ -188,8 +189,8 @@ export const syncHazardsFromExternalSourceForAdminBodySchema = z.object({
   sourceIds: z.array(z.string()).optional(),
 
   syncOption: z
-    .enum(["replaceExisting", "ignoreExisting", "deleteExisting"])
-    .default("replaceExisting"),
+    .nativeEnum(SyncHazardsFromExternalSourceOption)
+    .default(SyncHazardsFromExternalSourceOption.replaceExisting),
 });
 
 export type SyncHazardsFromExternalSourceForAdminBody = z.infer<

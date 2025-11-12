@@ -9,7 +9,6 @@ import {
   viewHazard,
   updateHazard,
   getHazardFilters,
-  syncHazardsFromDifferentSourcesController,
   deleteAllHazards,
 } from "../controllers/hazard.controller.js";
 import {
@@ -81,6 +80,5 @@ hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
 
 // admin
 hazardRouter.post("/delete-all", deleteAllHazards);
-hazardRouter.post("/sync", syncHazardsFromDifferentSourcesController);
 
 export default hazardRouter;

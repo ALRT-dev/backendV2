@@ -35,9 +35,13 @@ import {
 } from "./confidence_score.service.js";
 import { config } from "../utils/config.js";
 import { getAllSubHazardCategories } from "./hazard_category.service.js";
+import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 
 // Configuration for hazard sources
 interface HazardSourceConfig {
+  // Unique identifier for the hazard source
+  id: string;
+
   // The name of the hazard source
   name: string;
 
@@ -48,7 +52,10 @@ interface HazardSourceConfig {
   awsCompliantCategories?: string[];
 
   // Function to fetch hazard data from the source
-  fetchFunction: (categoryId: string) => Promise<Prisma.HazardCreateInput[]>;
+  fetchFunction: (
+    id: string,
+    categoryId: string
+  ) => Promise<Prisma.HazardCreateInput[]>;
 }
 
 /**
@@ -57,7 +64,13 @@ interface HazardSourceConfig {
  * Fetches data from all configured sources, summarizes it using AI, and stores new hazards in the database.
  * Sends notifications for newly created hazards.
  */
-export const syncHazardsFromDifferentSources = async () => {
+export const syncHazardsFromDifferentSources = async ({
+  sourceIds,
+  syncOption = SyncHazardsFromExternalSourceOption.ignoreExisting,
+}: {
+  sourceIds?: string[] | undefined;
+  syncOption?: SyncHazardsFromExternalSourceOption;
+}): Promise<Hazard[]> => {
   try {
     // Clean up expired cache entries
     cleanupGeocodingCache();
@@ -77,68 +90,80 @@ export const syncHazardsFromDifferentSources = async () => {
 
     const sources: HazardSourceConfig[] = [
       {
+        id: "rfs",
         name: "RFS",
         categoryId: "bushfire",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromRFS,
       },
       {
+        id: "bom",
         name: "BoM",
         categoryId: "weatherAndEnvironment",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromBoM,
       },
       {
+        id: "nsw-transport",
         name: "NSW Transport live traffic hazards",
         categoryId: "transportAndTravel",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromLiveTrafficHazards,
       },
       {
+        id: "nsw-air-quality",
         name: "NSW air quality",
         categoryId: "weatherAndEnvironment",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromAirQuality,
       },
       {
+        id: "act-es",
         name: "ACT Emergency Services",
         categoryId: "healthAndEmergency",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromACT,
       },
       {
+        id: "cfs",
         name: "CFS",
         categoryId: "bushfire",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromCFS,
       },
       {
+        id: "vice-fire",
         name: "Vice Fire Services",
         categoryId: "bushfire",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromViceFireServices,
       },
       {
+        id: "qld-fire",
         name: "QLD Fire Department",
         categoryId: "bushfire",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsDataFromQLDFireDepartment,
       },
       {
+        id: "nt-fire-and-rescue",
         name: "NT Fire and Rescue",
         categoryId: "bushfire",
         awsCompliantCategories: awsCompliantCategories,
         fetchFunction: getHazardsFromNTFireAndRescue,
       },
-    ];
+    ].filter((source) =>
+      sourceIds && sourceIds.length > 0 ? sourceIds.includes(source.id) : true
+    );
 
     return await Promise.all(
       sources.map((source) =>
-        syncHazardsFromSource(source, availableCategories)
+        syncHazardsFromSource(source, availableCategories, syncOption)
       )
     ).then((results) => results.flat());
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
+    return [];
   }
 };
 
@@ -150,8 +175,9 @@ export const syncHazardsFromDifferentSources = async () => {
  */
 const syncHazardsFromSource = async (
   sourceConfig: HazardSourceConfig,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-) => {
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[],
+  syncOption: SyncHazardsFromExternalSourceOption
+): Promise<Hazard[]> => {
   try {
     const category = await prisma.hazardCategory.findFirst({
       where: { id: sourceConfig.categoryId },
@@ -161,7 +187,10 @@ const syncHazardsFromSource = async (
       throw new Error(`Hazard category '${sourceConfig.categoryId}' not found`);
     }
 
-    const hazards = await sourceConfig.fetchFunction(category.id);
+    const hazards = await sourceConfig.fetchFunction(
+      sourceConfig.id,
+      category.id
+    );
 
     console.log(
       `------------------------------------> Fetched ${hazards.length} hazards from ${sourceConfig.name}.`
@@ -173,6 +202,7 @@ const syncHazardsFromSource = async (
       ...(sourceConfig.awsCompliantCategories && {
         awsCompliantCategories: sourceConfig.awsCompliantCategories,
       }),
+      syncOption,
     });
 
     console.log(
@@ -204,17 +234,19 @@ const summarizeAndPostHazards = async ({
   hazardDatas,
   availableCategories,
   awsCompliantCategories,
+  syncOption,
 }: {
   hazardDatas: Prisma.HazardCreateInput[];
   availableCategories?: (HazardCategory & { parent: HazardCategory | null })[];
   awsCompliantCategories?: string[];
+  syncOption: SyncHazardsFromExternalSourceOption;
 }): Promise<Hazard[]> => {
   try {
     console.log(
       `Processing ${hazardDatas.length} hazards with rate limiting...`
     );
 
-    // Step 1: Check for existing hazards and prepare for geocoding
+    // Step 1: Check for existing hazards and prepare for geocoding based on sync option
     const hazardsToProcess: Array<{
       hazardData: Prisma.HazardCreateInput;
       isUpdate: boolean;
@@ -228,15 +260,54 @@ const summarizeAndPostHazards = async ({
           where: { id: hazardData.id },
         });
 
-        if (existing?.description === hazardData.description) {
-          console.log("Hazard already exists, skipping:", hazardData.title);
-          continue;
+        if (existing) {
+          // Handle different sync options
+          if (
+            syncOption === SyncHazardsFromExternalSourceOption.ignoreExisting
+          ) {
+            // Only skip if the content has not changed
+            if (existing.description === hazardData.description) {
+              console.log("Hazard already exists, ignoring:", hazardData.title);
+              continue;
+            }
+            // Process if content has changed
+            console.log("Hazard content changed, updating:", hazardData.title);
+            hazardsToProcess.push({
+              hazardData,
+              isUpdate: true,
+            });
+          } else if (
+            syncOption === SyncHazardsFromExternalSourceOption.deleteExisting
+          ) {
+            console.log(
+              "Deleting existing hazard to recreate:",
+              hazardData.title
+            );
+            // Delete the existing hazard first
+            await prisma.hazard.delete({
+              where: { id: hazardData.id },
+            });
+            // Add to processing list as a new creation (not an update)
+            hazardsToProcess.push({
+              hazardData,
+              isUpdate: false,
+            });
+          } else if (
+            syncOption === SyncHazardsFromExternalSourceOption.replaceExisting
+          ) {
+            console.log("Replacing existing hazard:", hazardData.title);
+            hazardsToProcess.push({
+              hazardData,
+              isUpdate: true,
+            });
+          }
+        } else {
+          // No existing hazard, add as new
+          hazardsToProcess.push({
+            hazardData,
+            isUpdate: false,
+          });
         }
-
-        hazardsToProcess.push({
-          hazardData,
-          isUpdate: !!existing,
-        });
       } catch (error) {
         console.log("Error checking existing hazard:", error);
       }
@@ -361,19 +432,34 @@ const summarizeAndPostHazards = async ({
       (h): h is NonNullable<typeof h> => h !== null
     );
 
-    // Step 4: Create/update hazards in database
+    // Step 4: Create/update hazards in database based on sync option
     const createdHazards: Hazard[] = [];
 
     for (const { hazardData, isUpdate } of validSummarizedHazards) {
       if (!hazardData.id) continue;
 
       try {
-        const createdHazard = await prisma.hazard.upsert({
-          where: { id: hazardData.id },
-          create: hazardData,
-          update: hazardData,
-          include: buildHazardInclude(),
-        });
+        let createdHazard: Hazard;
+
+        if (
+          syncOption === SyncHazardsFromExternalSourceOption.deleteExisting &&
+          !isUpdate
+        ) {
+          // For deleteExisting option, when isUpdate is false, it means we deleted the existing record
+          // so we should create a new one
+          createdHazard = await prisma.hazard.create({
+            data: hazardData,
+            include: buildHazardInclude(),
+          });
+        } else {
+          // For replaceExisting or when creating truly new hazards
+          createdHazard = await prisma.hazard.upsert({
+            where: { id: hazardData.id },
+            create: hazardData,
+            update: hazardData,
+            include: buildHazardInclude(),
+          });
+        }
 
         console.log(
           `${isUpdate ? "Updated" : "Created"} hazard:`,
@@ -408,6 +494,7 @@ const summarizeAndPostHazards = async ({
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromRFS = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -421,9 +508,10 @@ export const getHazardsDataFromRFS = async (
     // Ensure the source exists before creating hazards
     const rfsSource = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "NSW Rural Fire Service",
         url,
       },
@@ -458,6 +546,7 @@ export const getHazardsDataFromRFS = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromBoM = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -471,9 +560,10 @@ export const getHazardsDataFromBoM = async (
     // Ensure the source exists before creating hazards
     const bomSource = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "Bureau of Meteorology",
         url,
       },
@@ -503,6 +593,7 @@ export const getHazardsDataFromBoM = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromLiveTrafficHazards = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -526,9 +617,10 @@ export const getHazardsDataFromLiveTrafficHazards = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url: "https://opendata.transport.nsw.gov.au/dataset/live-traffic-hazards",
+        id,
       },
       create: {
+        id,
         name: "NSW Transport Live Traffic Hazards",
         url: "https://opendata.transport.nsw.gov.au/dataset/live-traffic-hazards",
       },
@@ -591,6 +683,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromAirQuality = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -606,9 +699,10 @@ export const getHazardsDataFromAirQuality = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "NSW Air Quality",
         url,
       },
@@ -638,6 +732,7 @@ export const getHazardsDataFromAirQuality = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromACT = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -646,9 +741,10 @@ export const getHazardsDataFromACT = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "ACT Emergency Services",
         url,
       },
@@ -677,6 +773,7 @@ export const getHazardsDataFromACT = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromCFS = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -690,9 +787,10 @@ export const getHazardsDataFromCFS = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "SA Country Fire Service",
         url,
       },
@@ -722,6 +820,7 @@ export const getHazardsDataFromCFS = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromViceFireServices = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -730,9 +829,10 @@ export const getHazardsDataFromViceFireServices = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "Vice Fire Service",
         url,
       },
@@ -761,6 +861,7 @@ export const getHazardsDataFromViceFireServices = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsDataFromQLDFireDepartment = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -770,9 +871,10 @@ export const getHazardsDataFromQLDFireDepartment = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "QLD Fire Department",
         url,
       },
@@ -801,6 +903,7 @@ export const getHazardsDataFromQLDFireDepartment = async (
  * and converts it into an array of HazardCreateInput objects.
  */
 export const getHazardsFromNTFireAndRescue = async (
+  id: string,
   categoryId: string
 ): Promise<Prisma.HazardCreateInput[]> => {
   try {
@@ -814,9 +917,10 @@ export const getHazardsFromNTFireAndRescue = async (
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
       where: {
-        url,
+        id,
       },
       create: {
+        id,
         name: "NT Fire and Rescue",
         url,
       },

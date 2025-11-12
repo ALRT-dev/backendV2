@@ -296,6 +296,25 @@ export const deleteHazardForAdmin = async (
   }
 };
 
+export const syncHazardsFromExternalSourceForAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { sourceIds, syncOption }: SyncHazardsFromExternalSourceForAdminBody =
+      req.body;
+
+    const createdHazards = await syncHazardsFromDifferentSources({
+      sourceIds,
+      syncOption,
+    });
+    res.status(200).json(createdHazards);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getHazardSourcesForAdmin = async (
   req: Request,
   res: Response,
