@@ -52,6 +52,17 @@ const retryWithBackoff = async <T>(
 
       // If it's a rate limit error and we have retries left
       if (error?.status === 429 && attempt < maxRetries) {
+        // Don't retry if it's a quota exceeded error (insufficient_quota)
+        if (
+          error?.code === "insufficient_quota" ||
+          error?.type === "insufficient_quota"
+        ) {
+          console.log(
+            "OpenAI quota exceeded, not retrying. Please check your billing and quota limits."
+          );
+          throw error;
+        }
+
         const retryAfterMs =
           error?.headers?.["retry-after-ms"] ||
           (error?.headers?.["retry-after"]
