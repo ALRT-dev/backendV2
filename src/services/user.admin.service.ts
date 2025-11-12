@@ -1,0 +1,88 @@
+import { HttpError } from "../models/http_error.js";
+import prisma from "../utils/prisma_client.util.js";
+import type { CreateAdminBody } from "../validators/admin/user.validator.js";
+import { hashAdminPassword } from "./admin_security.service.js";
+
+export const getAdminProfile = async (adminId: string) => {
+  try {
+    const admin = await prisma.admin.findUnique({
+      where: { id: adminId },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!admin) {
+      throw new HttpError(404, "Admin not found");
+    }
+
+    return admin;
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw error;
+    }
+    throw new HttpError(500, "Failed to fetch admin profile");
+  }
+};
+
+export const createAdminAccount = async (data: CreateAdminBody) => {
+  try {
+    // Check if admin already exists
+    const existingAdmin = await prisma.admin.findUnique({
+      where: { email: data.email },
+      select: { id: true },
+    });
+
+    if (existingAdmin) {
+      throw new HttpError(400, "Admin account with this email already exists");
+    }
+
+    // Hash password
+    const passwordHash = await hashAdminPassword(data.password);
+
+    // Create admin
+    const admin = await prisma.admin.create({
+      data: {
+        email: data.email,
+        passwordHash,
+        ...(data.name && { name: data.name }),
+        role: data.role,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    return admin;
+  } catch (error) {
+    if (error instanceof HttpError) {
+      throw error;
+    }
+    throw new HttpError(500, "Failed to create admin account");
+  }
+};
+
+export const deactivateAdmin = async (adminId: string) => {
+  try {
+    await prisma.admin.update({
+      where: { id: adminId },
+      data: { isActive: false },
+    });
+
+    return { success: true };
+  } catch (error) {
+    throw new HttpError(500, "Failed to deactivate admin");
+  }
+};

@@ -274,3 +274,31 @@ model UserPushNotificationSetting {
   @@index([userId])
   @@index([settingType])
 }
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true)
+
+  // Security fields
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime  @default(now())
+
+  // Audit fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+}

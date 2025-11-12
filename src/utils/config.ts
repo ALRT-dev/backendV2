@@ -42,6 +42,27 @@ export const config = {
     refreshExpirationDays: parseInt(getRequiredEnv("JWT_REFRESH_EXP_D"), 10),
   },
 
+  // Admin JWT - Separate secrets for better security isolation
+  adminJwt: {
+    accessSecret: getRequiredEnv("ADMIN_JWT_ACCESS_SECRET"),
+    accessExpirationMinutes: parseInt(
+      getRequiredEnv("ADMIN_JWT_ACCESS_EXP_M"),
+      10
+    ),
+    refreshSecret: getRequiredEnv("ADMIN_JWT_REFRESH_SECRET"),
+    refreshExpirationDays: parseInt(
+      getRequiredEnv("ADMIN_JWT_REFRESH_EXP_D"),
+      10
+    ),
+  },
+
+  // Admin Credentials
+  adminCredentials: {
+    superAdminEmail: getRequiredEnv("SUPER_ADMIN_EMAIL"),
+    superAdminPassword: getRequiredEnv("SUPER_ADMIN_PASSWORD"),
+    superAdminName: getRequiredEnv("SUPER_ADMIN_NAME"),
+  },
+
   // Google OAuth
   googleOAuth: {
     clientIdWeb: getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID_WEB"),

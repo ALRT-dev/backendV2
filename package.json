@@ -12,7 +12,8 @@
     "prisma:migrate:reset": "dotenv -e .env.dev -- npx prisma migrate reset",
     "prisma:migrate:status": "dotenv -e .env.dev -- npx prisma migrate status",
     "prisma:migrate:resolve": "dotenv -e .env.dev -- npx prisma migrate resolve",
-    "prisma:generate": "dotenv -e .env.dev -- npx prisma generate"
+    "prisma:generate": "dotenv -e .env.dev -- npx prisma generate",
+    "super-admin:create": "dotenv -e .env.dev -- tsx src/scripts/create-super-admin.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.913.0",
