@@ -5,9 +5,6 @@ import {
   createAIPrompt,
   updateAIPrompt,
   deleteAIPrompt,
-  activateAIPrompt,
-  deactivateAIPrompt,
-  validateAIPromptContent,
 } from "../../controllers/admin/ai-prompt.controller.js";
 import { requireAdminAuth } from "../../middlewares/auth.admin.middleware.js";
 
@@ -20,8 +17,5 @@ adminAIPromptRouter.get("/:id", getAIPromptById);
 adminAIPromptRouter.post("/", createAIPrompt);
 adminAIPromptRouter.put("/:id", updateAIPrompt);
 adminAIPromptRouter.delete("/:id", deleteAIPrompt);
-adminAIPromptRouter.patch("/:id/activate", activateAIPrompt);
-adminAIPromptRouter.patch("/:id/deactivate", deactivateAIPrompt);
-adminAIPromptRouter.post("/validate", validateAIPromptContent);
 
 export default adminAIPromptRouter;

@@ -2,37 +2,12 @@
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
-
-// Type definition for AIPrompt (temporary until Prisma generates types)
-export interface AIPrompt {
-  id: string;
-  name: string;
-  description?: string | null;
-  content: string;
-  variables: any; // JSON
-  version: string;
-  isActive: boolean;
-  createdById: string;
-  updatedById?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy?: any;
-  updatedBy?: any;
-}
+import type { AIPrompt, Prisma } from "@prisma/client";
 
 // Cache for prompts to avoid database calls on every AI request
 const promptCache = new Map<string, AIPrompt>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const cacheTimestamps = new Map<string, number>();
-
-/**
- * Supported prompt types for the application
- */
-export enum PromptType {
-  REVIEW_AND_SUMMARIZE = "review_and_summarize",
-  SUMMARIZE = "summarize",
-  SEVERITY_ASSESSMENT = "severity_assessment",
-}
 
 /**
  * Interface for prompt variables
@@ -49,118 +24,13 @@ export interface CreatePromptData {
   description?: string;
   content: string;
   variables: string[];
-  version?: string;
-  isActive?: boolean;
 }
 
 export interface UpdatePromptData {
   description?: string;
   content?: string;
   variables?: string[];
-  version?: string;
-  isActive?: boolean;
 }
-
-/**
- * Initialize AI prompts in the database if they don't exist
- */
-export const initializeAIPrompts = async (): Promise<void> => {
-  try {
-    const count = await prisma.aIPrompt.count();
-    if (count > 0) {
-      return;
-    }
-
-    // Find the super admin to use as creator
-    const superAdmin = await prisma.admin.findUnique({
-      where: { email: config.adminCredentials.superAdminEmail },
-    });
-
-    if (!superAdmin) {
-      console.log("Super admin not found, skipping AI prompts initialization");
-      return;
-    }
-
-    // Define the three prompts to create
-    const defaultPrompts = [
-      {
-        name: PromptType.REVIEW_AND_SUMMARIZE,
-        description:
-          "Reviews and summarizes hazard reports to determine validity, severity, and clarity",
-        content: "", // Empty content for now, will be filled later
-        variables: [
-          "title",
-          "description",
-          "locationname",
-          "latitude",
-          "longitude",
-          "category",
-        ],
-        version: "1.0",
-        isActive: true,
-      },
-      {
-        name: PromptType.SUMMARIZE,
-        description:
-          "Summarizes hazard reports to generate standardized titles, descriptions, and categorization",
-        content: "", // Empty content for now, will be filled later
-        variables: [
-          "title",
-          "description",
-          "locationname",
-          "latitude",
-          "longitude",
-          "categoriesinfo",
-          "parentcategoriesinfo",
-        ],
-        version: "1.0",
-        isActive: true,
-      },
-      {
-        name: PromptType.SEVERITY_ASSESSMENT,
-        description:
-          "Determines hazard severity levels and appropriate call-to-action messages",
-        content: "", // Empty content for now, will be filled later
-        variables: [
-          "title",
-          "description",
-          "locationname",
-          "latitude",
-          "longitude",
-          "category",
-          "severitykeywords",
-          "allowedseveritylevels",
-        ],
-        version: "1.0",
-        isActive: true,
-      },
-    ];
-
-    // Check and create each prompt
-    for (const promptData of defaultPrompts) {
-      const existingPrompt = await prisma.aIPrompt.findFirst({
-        where: { name: promptData.name },
-      });
-
-      if (!existingPrompt) {
-        console.log(`Creating AI prompt: ${promptData.name}`);
-        await prisma.aIPrompt.create({
-          data: {
-            ...promptData,
-            createdById: superAdmin.id,
-          },
-        });
-      } else {
-        console.log(`AI prompt already exists: ${promptData.name}`);
-      }
-    }
-
-    console.log("AI prompts initialization completed");
-  } catch (error) {
-    console.error("Error initializing AI prompts:", error);
-    // Don't throw the error, just log it, as prompts are not critical for basic functionality
-  }
-};
 
 /**
  * Retrieves an active AI prompt by name with caching
@@ -175,15 +45,9 @@ export const getPromptByName = async (name: string): Promise<AIPrompt> => {
   }
 
   // Fetch from database
-  const prompt = (await prisma.aIPrompt.findFirst({
-    where: {
-      name,
-      isActive: true,
-    },
-    orderBy: {
-      version: "desc", // Get latest version
-    },
-  })) as AIPrompt | null;
+  const prompt = await prisma.aIPrompt.findFirst({
+    where: { name },
+  });
 
   if (!prompt) {
     throw new HttpError(
@@ -242,6 +106,64 @@ export const getRawPromptByName = async (name: string): Promise<string> => {
 };
 
 /**
+ * Retrieves all AI prompts.
+ */
+export const getAllPrompts = async (): Promise<AIPrompt[]> => {
+  const prompts = prisma.aIPrompt.findMany({
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      updatedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+    orderBy: [{ name: "asc" }],
+  });
+
+  return prompts;
+};
+
+/**
+ * Retrieves a single AI prompt by ID (Admin only)
+ */
+export const getPromptById = async (promptId: string): Promise<AIPrompt> => {
+  const prompt = await prisma.aIPrompt.findUnique({
+    where: { id: promptId },
+    include: {
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      updatedBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!prompt) {
+    throw new HttpError(404, `Prompt with ID '${promptId}' not found`);
+  }
+
+  return prompt;
+};
+
+/**
  * Creates a new AI prompt (Admin only)
  */
 export const createPrompt = async (
@@ -266,8 +188,6 @@ export const createPrompt = async (
       ...(promptData.description && { description: promptData.description }),
       content: promptData.content,
       variables: promptData.variables,
-      version: promptData.version || "1.0",
-      ...(promptData.isActive && { isActive: promptData.isActive }),
       createdById: adminId,
     },
     include: {
@@ -331,95 +251,6 @@ export const updatePrompt = async (
   clearCache();
 
   return updatedPrompt;
-};
-
-/**
- * Retrieves all AI prompts.
- */
-export const getAllPrompts = async (
-  page: number = 1,
-  pageSize: number = 20,
-  includeInactive: boolean = false
-): Promise<AIPrompt[]> => {
-  const where = includeInactive ? {} : { isActive: true };
-
-  const prompts = prisma.aIPrompt.findMany({
-    where,
-    include: {
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      updatedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-    orderBy: [{ isActive: "desc" }, { createdAt: "desc" }],
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  });
-
-  return prompts;
-};
-
-/**
- * Retrieves a single AI prompt by ID (Admin only)
- */
-export const getPromptById = async (promptId: string): Promise<AIPrompt> => {
-  const prompt = await prisma.aIPrompt.findUnique({
-    where: { id: promptId },
-    include: {
-      createdBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      updatedBy: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-  });
-
-  if (!prompt) {
-    throw new HttpError(404, `Prompt with ID '${promptId}' not found`);
-  }
-
-  return prompt;
-};
-
-/**
- * Deactivates an AI prompt (Admin only)
- */
-export const deactivatePrompt = async (
-  promptId: string,
-  adminId: string
-): Promise<AIPrompt> => {
-  const prompt = await updatePrompt(promptId, { isActive: false }, adminId);
-  return prompt;
-};
-
-/**
- * Activates an AI prompt (Admin only)
- */
-export const activatePrompt = async (
-  promptId: string,
-  adminId: string
-): Promise<AIPrompt> => {
-  const prompt = await updatePrompt(promptId, { isActive: true }, adminId);
-  return prompt;
 };
 
 /**
@@ -499,14 +330,95 @@ export const clearCache = (): void => {
 };
 
 /**
- * Gets cache statistics (Admin only)
+ * Initialize AI prompts in the database if they don't exist
  */
-export const getCacheStats = (): {
-  cacheSize: number;
-  cachedPrompts: string[];
-} => {
-  return {
-    cacheSize: promptCache.size,
-    cachedPrompts: Array.from(promptCache.keys()),
-  };
+export const initializeAIPrompts = async (): Promise<void> => {
+  try {
+    const count = await prisma.aIPrompt.count();
+    if (count > 0) {
+      return;
+    }
+
+    // Find the super admin to use as creator
+    const superAdmin = await prisma.admin.findUnique({
+      where: { email: config.adminCredentials.superAdminEmail },
+    });
+
+    if (!superAdmin) {
+      console.log("Super admin not found, skipping AI prompts initialization");
+      return;
+    }
+
+    // Define the three prompts to create
+    const defaultPrompts: Prisma.AIPromptCreateInput[] = [
+      {
+        name: "User Report Review and Summarization",
+        description:
+          "Reviews and summarizes hazard reports to determine validity, severity, and clarity",
+        content: "", // Empty content for now, will be filled later
+        variables: [
+          "title",
+          "description",
+          "locationname",
+          "latitude",
+          "longitude",
+          "category",
+        ],
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: "Summarization",
+        description:
+          "Summarizes hazard reports to generate standardized titles, descriptions, and categorization",
+        content: "", // Empty content for now, will be filled later
+        variables: [
+          "title",
+          "description",
+          "locationname",
+          "latitude",
+          "longitude",
+          "categoriesinfo",
+          "parentcategoriesinfo",
+        ],
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: "Severity and Call-to-Action",
+        description:
+          "Determines hazard severity levels and appropriate call-to-action messages",
+        content: "", // Empty content for now, will be filled later
+        variables: [
+          "title",
+          "description",
+          "locationname",
+          "latitude",
+          "longitude",
+          "category",
+          "severitykeywords",
+          "allowedseveritylevels",
+        ],
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+    ];
+
+    // Check and create each prompt
+    for (const promptData of defaultPrompts) {
+      const existingPrompt = await prisma.aIPrompt.findFirst({
+        where: { name: promptData.name },
+      });
+
+      if (!existingPrompt) {
+        console.log(`Creating AI prompt: ${promptData.name}`);
+        await prisma.aIPrompt.create({
+          data: promptData,
+        });
+      } else {
+        console.log(`AI prompt already exists: ${promptData.name}`);
+      }
+    }
+
+    console.log("AI prompts initialization completed");
+  } catch (error) {
+    console.error("Error initializing AI prompts:", error);
+  }
 };

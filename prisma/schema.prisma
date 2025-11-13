@@ -283,17 +283,16 @@ model Admin {
   role         AdminRole @default(admin)
   isActive     Boolean   @default(true)
 
-  // Security fields
   lastLoginAt         DateTime?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
   passwordChangedAt   DateTime  @default(now())
 
-  // Relations
-  promptsCreated AIPrompt[] @relation("AIPromptCreatedBy")
-  promptsUpdated AIPrompt[] @relation("AIPromptUpdatedBy")
+  promptsCreated        AIPrompt[]      @relation("AIPromptCreatedBy")
+  promptsUpdated        AIPrompt[]      @relation("AIPromptUpdatedBy")
+  configurationsCreated Configuration[] @relation("ConfigurationCreatedBy")
+  configurationsUpdated Configuration[] @relation("ConfigurationUpdatedBy")
 
-  // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -314,21 +313,33 @@ model AIPrompt {
   content     String // The actual prompt content with placeholder variables
   variables   Json // JSON array of variable names expected in the prompt
 
-  // Versioning
-  version  String  @default("1.0")
-  isActive Boolean @default(true)
-
-  // Admin tracking
   createdById String
   updatedById String?
   createdBy   Admin   @relation("AIPromptCreatedBy", fields: [createdById], references: [id])
   updatedBy   Admin?  @relation("AIPromptUpdatedBy", fields: [updatedById], references: [id])
 
-  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([name])
-  @@index([isActive])
-  @@index([name, isActive])
+}
+
+enum ConfigurationKey {
+  aiPrompts
+}
+
+model Configuration {
+  id          String           @id @default(uuid())
+  key         ConfigurationKey @unique
+  value       Json
+  title       String
+  description String?
+
+  createdById String?
+  updatedById String?
+  createdBy   Admin?  @relation("ConfigurationCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Admin?  @relation("ConfigurationUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

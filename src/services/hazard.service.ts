@@ -6,6 +6,7 @@ import {
   type Hazard,
   type HazardCategory,
   FireStatus,
+  ConfigurationKey,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -25,7 +26,8 @@ import {
 } from "../utils/hazard.util.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
 import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
-import { getRawPromptByName, PromptType } from "./ai-prompt.service.js";
+import { getPromptById } from "./ai-prompt.service.js";
+import { getAIPromptConfiguration } from "./configuration.service.js";
 
 /**
  * Utility function to add delay between API calls
@@ -430,16 +432,19 @@ export const reviewHazard = async ({
   longitude: number;
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
-  const response = await retryWithBackoff(async () => {
-    const promptContent = await getRawPromptByName(
-      PromptType.REVIEW_AND_SUMMARIZE
-    );
-    const userContent = `Please analyze this hazard report:
+  const { userReportReviewAndSummarizePromptId } =
+    await getAIPromptConfiguration();
+  const { content: promptContent } = await getPromptById(
+    userReportReviewAndSummarizePromptId
+  );
+
+  const userContent = `Please analyze this hazard report:
       TITLE: ${title || "[No title provided]"}
       DESCRIPTION: ${description || "[No description provided]"}
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
+  const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -487,6 +492,9 @@ export const summarizeHazard = async ({
     | undefined
     | null;
 }): Promise<AISummaryResponse> => {
+  const { summarizePromptId } = await getAIPromptConfiguration();
+  const { content: promptContent } = await getPromptById(summarizePromptId);
+
   const parentCategories =
     availableCategories
       ?.map((cat) => cat.parent)
@@ -516,9 +524,7 @@ export const summarizeHazard = async ({
       )
       .join("\n\n") || "";
 
-  const response = await retryWithBackoff(async () => {
-    const promptContent = await getRawPromptByName(PromptType.SUMMARIZE);
-    const userContent = `Please standardize this hazard report:
+  const userContent = `Please standardize this hazard report:
     TITLE: ${title}
     DESCRIPTION: ${description}
     LOCATION: ${locationName || ""} (${latitude}, ${longitude})
@@ -529,6 +535,7 @@ export const summarizeHazard = async ({
     AVAILABLE PARENT CATEGORIES:
     ${parentCategoriesInfo}`;
 
+  const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -608,6 +615,12 @@ export const getAISeverity = async ({
   callToAction: string;
 }> => {
   try {
+    const { severityAndCallToActionPromptId } =
+      await getAIPromptConfiguration();
+    const { content: promptContent } = await getPromptById(
+      severityAndCallToActionPromptId
+    );
+
     const defaultSeverityKeywords: SeverityKeywords = {
       unknown: ["not applicable"],
       info: ["miscellaneous incident", "unclassified", "investigating"],
@@ -682,11 +695,7 @@ export const getAISeverity = async ({
       .filter(Boolean)
       .join("\n");
 
-    const response = await retryWithBackoff(async () => {
-      const promptContent = await getRawPromptByName(
-        PromptType.SEVERITY_ASSESSMENT
-      );
-      const userContent = `Please assess the severity of this hazard:
+    const userContent = `Please assess the severity of this hazard:
 
       TITLE: ${title}
       DESCRIPTION: ${description}
@@ -699,6 +708,7 @@ export const getAISeverity = async ({
       ALLOWED SEVERITY LEVELS:
       - ${severityLevels.join("\n- ")}`;
 
+    const response = await retryWithBackoff(async () => {
       return await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
