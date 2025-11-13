@@ -289,6 +289,10 @@ model Admin {
   lockedUntil         DateTime?
   passwordChangedAt   DateTime  @default(now())
 
+  // Relations
+  promptsCreated AIPrompt[] @relation("AIPromptCreatedBy")
+  promptsUpdated AIPrompt[] @relation("AIPromptUpdatedBy")
+
   // Audit fields
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -301,4 +305,30 @@ enum AdminRole {
   superAdmin
   admin
   moderator
+}
+
+model AIPrompt {
+  id          String  @id @default(uuid())
+  name        String  @unique // e.g., "review_and_summarize", "summarize", "severity_assessment"
+  description String? // Human-readable description of what this prompt does
+  content     String // The actual prompt content with placeholder variables
+  variables   Json // JSON array of variable names expected in the prompt
+
+  // Versioning
+  version  String  @default("1.0")
+  isActive Boolean @default(true)
+
+  // Admin tracking
+  createdById String
+  updatedById String?
+  createdBy   Admin   @relation("AIPromptCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Admin?  @relation("AIPromptUpdatedBy", fields: [updatedById], references: [id])
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+  @@index([name, isActive])
 }

@@ -25,7 +25,7 @@ import {
 } from "../utils/hazard.util.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
 import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
-import { config } from "../utils/config.js";
+import { getRawPromptByName, PromptType } from "./ai-prompt.service.js";
 
 /**
  * Utility function to add delay between API calls
@@ -431,23 +431,26 @@ export const reviewHazard = async ({
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
   const response = await retryWithBackoff(async () => {
-    return await openai.responses.create({
-      prompt: {
-        id: config.openAI.reviewAndSummarizePromptId,
-        version: config.openAI.reviewAndSummarizePromptVersion,
-        variables: {
-          title: title || "[No title provided]",
-          description: description || "[No description provided]",
-          locationname: locationName || "",
-          latitude: latitude.toString(),
-          longitude: longitude.toString(),
-          category: category.name,
-        },
-      },
+    const promptContent = await getRawPromptByName(
+      PromptType.REVIEW_AND_SUMMARIZE
+    );
+    const userContent = `Please analyze this hazard report:
+      TITLE: ${title || "[No title provided]"}
+      DESCRIPTION: ${description || "[No description provided]"}
+      LOCATION: ${locationName || ""} (${latitude}, ${longitude})
+      CATEGORY: ${category.name}`;
+
+    return await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: promptContent },
+        { role: "user", content: userContent },
+      ],
+      response_format: { type: "json_object" },
     });
   });
 
-  const content = response.output_text;
+  const content = response.choices[0]?.message?.content;
   if (!content) {
     throw new HttpError(500, "AI review failed: Empty response from AI");
   }
@@ -514,24 +517,29 @@ export const summarizeHazard = async ({
       .join("\n\n") || "";
 
   const response = await retryWithBackoff(async () => {
-    return await openai.responses.create({
-      prompt: {
-        id: config.openAI.summarizePromptId,
-        version: config.openAI.summarizePromptVersion,
-        variables: {
-          title,
-          description,
-          locationname: locationName || "",
-          latitude: latitude.toString(),
-          longitude: longitude.toString(),
-          categoriesinfo: categoriesInfo,
-          parentcategoriesinfo: parentCategoriesInfo,
-        },
-      },
+    const promptContent = await getRawPromptByName(PromptType.SUMMARIZE);
+    const userContent = `Please standardize this hazard report:
+    TITLE: ${title}
+    DESCRIPTION: ${description}
+    LOCATION: ${locationName || ""} (${latitude}, ${longitude})
+
+    AVAILABLE CATEGORIES:
+    ${categoriesInfo}
+
+    AVAILABLE PARENT CATEGORIES:
+    ${parentCategoriesInfo}`;
+
+    return await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: promptContent },
+        { role: "user", content: userContent },
+      ],
+      response_format: { type: "json_object" },
     });
   });
 
-  const content = response.output_text;
+  const content = response.choices[0]?.message?.content;
   if (!content) {
     throw new HttpError(500, "AI summarization failed: Empty response from AI");
   }
@@ -675,25 +683,33 @@ export const getAISeverity = async ({
       .join("\n");
 
     const response = await retryWithBackoff(async () => {
-      return await openai.responses.create({
-        prompt: {
-          id: config.openAI.getSeverityAndCallToActionPromptId,
-          version: config.openAI.getSeverityAndCallToActionPromptVersion,
-          variables: {
-            title,
-            description,
-            locationname: locationName || "",
-            latitude: latitude.toString(),
-            longitude: longitude.toString(),
-            category: category.name,
-            severitykeywords: keywordContext,
-            allowedseveritylevels: `- ${severityLevels.join("\n- ")}`,
-          },
-        },
+      const promptContent = await getRawPromptByName(
+        PromptType.SEVERITY_ASSESSMENT
+      );
+      const userContent = `Please assess the severity of this hazard:
+
+      TITLE: ${title}
+      DESCRIPTION: ${description}
+      LOCATION: ${locationName || ""} (${latitude}, ${longitude})
+      CATEGORY: ${category.name}
+
+      SEVERITY KEYWORDS:
+      ${keywordContext}
+
+      ALLOWED SEVERITY LEVELS:
+      - ${severityLevels.join("\n- ")}`;
+
+      return await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: promptContent },
+          { role: "user", content: userContent },
+        ],
+        response_format: { type: "json_object" },
       });
     });
 
-    const context = response.output_text;
+    const context = response.choices[0]?.message?.content;
     if (!context) {
       throw new HttpError(
         500,
