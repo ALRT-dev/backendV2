@@ -463,7 +463,7 @@ const summarizeAndPostHazards = async ({
           return null;
         }
       },
-      8, // Process 8 at a time
+      25, // Process 25 at a time
       2000 // Wait 2 seconds between batches
     );
 
