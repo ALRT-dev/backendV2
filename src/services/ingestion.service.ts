@@ -156,66 +156,64 @@ export const syncHazardsFromDifferentSources = async ({
       sourceIds && sourceIds.length > 0 ? sourceIds.includes(source.id) : true
     );
 
-    return await Promise.all(
-      sources.map((source) =>
-        syncHazardsFromSource(source, availableCategories, syncOption)
-      )
-    ).then((results) => results.flat());
-  } catch (error) {
-    console.error("Error during hazard sync from different sources:", error);
-    return [];
-  }
-};
-
-/**
- * Syncs hazards from a single source to the database.
- *
- * Fetches data, summarizes it using AI, and stores new hazards in the database.
- * Sends notifications for newly created hazards.
- */
-const syncHazardsFromSource = async (
-  sourceConfig: HazardSourceConfig,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[],
-  syncOption: SyncHazardsFromExternalSourceOption
-): Promise<Hazard[]> => {
-  try {
-    const category = await prisma.hazardCategory.findFirst({
-      where: { id: sourceConfig.categoryId },
-      select: { id: true },
-    });
-    if (!category) {
-      throw new Error(`Hazard category '${sourceConfig.categoryId}' not found`);
-    }
-
-    const hazards = await sourceConfig.fetchFunction(
-      sourceConfig.id,
-      category.id
+    // Step 1: Fetch all hazards from all sources simultaneously
+    console.log(
+      `---------------------------------------> Fetching hazards from ${sources.length} sources...`
     );
+
+    const allHazardData = await Promise.all(
+      sources.map(async (source) => {
+        try {
+          const category = await prisma.hazardCategory.findFirst({
+            where: { id: source.categoryId },
+            select: { id: true },
+          });
+          if (!category) {
+            console.error(
+              `Hazard category '${source.categoryId}' not found for ${source.name}`
+            );
+            return [];
+          }
+
+          const hazards = await source.fetchFunction(source.id, category.id);
+          console.log(
+            `---------------------------------------> Fetched ${hazards.length} hazards from ${source.name}`
+          );
+          return hazards;
+        } catch (error) {
+          console.error(`Error fetching from ${source.name}:`, error);
+          return [];
+        }
+      })
+    ).then((results) => results.flat());
 
     console.log(
-      `------------------------------------> Fetched ${hazards.length} hazards from ${sourceConfig.name}.`
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
     );
 
+    if (allHazardData.length === 0) {
+      console.log(
+        "--------------------------------------->No hazards to process"
+      );
+      return [];
+    }
+
+    // Step 2: Process all hazards together with summarizeAndPostHazards
     const createdHazards = await summarizeAndPostHazards({
-      hazardDatas: hazards,
+      hazardDatas: allHazardData,
       availableCategories,
-      ...(sourceConfig.awsCompliantCategories && {
-        awsCompliantCategories: sourceConfig.awsCompliantCategories,
-      }),
+      awsCompliantCategories,
       syncOption,
     });
 
     console.log(
-      `------------------------------------> Sync complete. Created ${
+      `---------------------------------------> Successfully processed ${
         createdHazards.length
-      } new hazards from ${
-        sourceConfig.name
-      }. Geocoding cache size: ${getGeocodingCacheSize()}`
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
-
     return createdHazards;
   } catch (error) {
-    console.error(`Error during ${sourceConfig.name} hazard sync:`, error);
+    console.error("Error during hazard sync from different sources:", error);
     return [];
   }
 };
@@ -243,7 +241,7 @@ const summarizeAndPostHazards = async ({
 }): Promise<Hazard[]> => {
   try {
     console.log(
-      `Processing ${hazardDatas.length} hazards with rate limiting...`
+      `---------------------------------------> Processing ${hazardDatas.length} hazards with rate limiting...`
     );
 
     // Step 1: Check for existing hazards and prepare for geocoding based on sync option
@@ -314,7 +312,6 @@ const summarizeAndPostHazards = async ({
     }
 
     if (hazardsToProcess.length === 0) {
-      console.log("No new hazards to process");
       return [];
     }
 

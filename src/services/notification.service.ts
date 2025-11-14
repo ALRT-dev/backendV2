@@ -138,14 +138,7 @@ const sendPushNotificationToTokens = async ({
       tokens: uniqueTokens,
     };
 
-    const response = await firebaseAdmin
-      .messaging()
-      .sendEachForMulticast(message);
-
-    console.log(
-      "Successfully sent push notification:",
-      JSON.stringify(response)
-    );
+    return firebaseAdmin.messaging().sendEachForMulticast(message);
   } catch (error) {
     console.error("Error sending push notification:", error);
   }

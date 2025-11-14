@@ -103,9 +103,9 @@ const processBatchWithRateLimit = async <T, R>(
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
     console.log(
-      `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
-        items.length / batchSize
-      )} (${batch.length} items)`
+      `---------------------------------------> Processing batch ${
+        Math.floor(i / batchSize) + 1
+      }/${Math.ceil(items.length / batchSize)} (${batch.length} items)`
     );
 
     const batchResults = await Promise.all(
@@ -116,7 +116,9 @@ const processBatchWithRateLimit = async <T, R>(
 
     // Add delay between batches (except for the last batch)
     if (i + batchSize < items.length) {
-      console.log(`Waiting ${delayBetweenBatches}ms before next batch...`);
+      console.log(
+        `---------------------------------------> Waiting ${delayBetweenBatches}ms before next batch...`
+      );
       await delay(delayBetweenBatches);
     }
   }
