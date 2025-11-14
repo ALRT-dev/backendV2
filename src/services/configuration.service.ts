@@ -345,7 +345,8 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
             promptMap[DefaultAIPromptNames.severityAndCallToAction],
         },
         title: "AI Prompts Configuration",
-        description: "Configuration for AI prompts used in hazard processing",
+        description:
+          "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportReviewAndSummarizePromptId, summarizePromptId, severityAndCallToActionPromptId",
       },
     ];
 
