@@ -350,11 +350,12 @@ const summarizeAndPostHazards = async ({
       return [];
     }
 
-    // Step 3: Use batch processing for AI summarization
-    const summarizedHazards = await processBatchWithRateLimit(
+    // Step 3: Process each hazard individually (summarize -> post) with rate limiting
+    const createdHazards = await processBatchWithRateLimit(
       geocodedHazards,
       async ({ hazardData, isUpdate }) => {
         try {
+          // Summarize the hazard first
           const summarized = await summarizeHazard({
             title: hazardData.title,
             description: hazardData.description,
@@ -385,41 +386,83 @@ const summarizeAndPostHazards = async ({
             confidenceScore = 75; // Fallback for official sources
           }
 
-          return {
-            hazardData: {
-              ...hazardData,
-              title: summarized.title || hazardData.title,
-              shortDescription: summarized.shortDescription,
-              aiSummary: summarized.summary,
-              aiConfidence: summarized.confidence,
-              severity: summarized.severity,
-              callToAction: summarized.callToAction,
-              ...(awsCompliantCategories &&
-                summarized.category && {
-                  isAwsCompliant:
-                    awsCompliantCategories.includes(summarized.category) &&
-                    awsCompliantSeverities.includes(summarized.severity),
-                }),
-              reviewStatus: HazardReviewStatus.accepted,
-              reviewedAt: new Date(),
-              confidenceScore,
-              confidenceScoreCalculatedAt: new Date(),
-              ...(summarized.category && {
-                category: {
-                  connect: {
-                    id: summarized.category,
-                  },
-                },
+          // Prepare the hazard data with AI summary
+          const finalHazardData = {
+            ...hazardData,
+            title: summarized.title || hazardData.title,
+            shortDescription: summarized.shortDescription,
+            aiSummary: summarized.summary,
+            aiConfidence: summarized.confidence,
+            severity: summarized.severity,
+            callToAction: summarized.callToAction,
+            ...(awsCompliantCategories &&
+              summarized.category && {
+                isAwsCompliant:
+                  awsCompliantCategories.includes(summarized.category) &&
+                  awsCompliantSeverities.includes(summarized.severity),
               }),
-              fireStatus: summarized.fireStatus || null,
-              expiresAt:
-                hazardData.expiresAt ||
-                getHazardExpiryDateFromSeverity(summarized.severity),
-            },
-            isUpdate,
+            reviewStatus: HazardReviewStatus.accepted,
+            reviewedAt: new Date(),
+            confidenceScore,
+            confidenceScoreCalculatedAt: new Date(),
+            ...(summarized.category && {
+              category: {
+                connect: {
+                  id: summarized.category,
+                },
+              },
+            }),
+            fireStatus: summarized.fireStatus || null,
+            expiresAt:
+              hazardData.expiresAt ||
+              getHazardExpiryDateFromSeverity(summarized.severity),
           };
+
+          // Immediately post the hazard after summarization
+          if (!finalHazardData.id) {
+            console.log("Hazard missing ID, skipping:", finalHazardData.title);
+            return null;
+          }
+
+          let createdHazard: Hazard;
+
+          if (
+            syncOption === SyncHazardsFromExternalSourceOption.deleteExisting &&
+            !isUpdate
+          ) {
+            // For deleteExisting option, when isUpdate is false, it means we deleted the existing record
+            // so we should create a new one
+            createdHazard = await prisma.hazard.create({
+              data: finalHazardData,
+              include: buildHazardInclude(),
+            });
+          } else {
+            // For replaceExisting or when creating truly new hazards
+            createdHazard = await prisma.hazard.upsert({
+              where: { id: finalHazardData.id },
+              create: finalHazardData,
+              update: finalHazardData,
+              include: buildHazardInclude(),
+            });
+          }
+
+          console.log(
+            `${isUpdate ? "Updated" : "Created"} hazard:`,
+            finalHazardData.title
+          );
+
+          // Send push notifications to users who subscribed to this area when a new hazard is created
+          sendPushNotificationAboutNewHazard(createdHazard);
+
+          // Send socket events to users who subscribed to this area when a new hazard is created
+          sendSocketEventAboutHazardToSubscribers({
+            hazard: createdHazard,
+            socketEvent: SocketEvent.newHazard,
+          });
+
+          return createdHazard;
         } catch (error) {
-          console.log("Error during summarization:", error);
+          console.log("Error during summarization and posting:", error);
           return null;
         }
       },
@@ -427,62 +470,13 @@ const summarizeAndPostHazards = async ({
       2000 // Wait 2 seconds between batches
     );
 
-    // Filter out null results
-    const validSummarizedHazards = summarizedHazards.filter(
+    // Filter out null results to get the final list of created hazards
+    const validCreatedHazards = createdHazards.filter(
       (h): h is NonNullable<typeof h> => h !== null
     );
 
-    // Step 4: Create/update hazards in database based on sync option
-    const createdHazards: Hazard[] = [];
-
-    for (const { hazardData, isUpdate } of validSummarizedHazards) {
-      if (!hazardData.id) continue;
-
-      try {
-        let createdHazard: Hazard;
-
-        if (
-          syncOption === SyncHazardsFromExternalSourceOption.deleteExisting &&
-          !isUpdate
-        ) {
-          // For deleteExisting option, when isUpdate is false, it means we deleted the existing record
-          // so we should create a new one
-          createdHazard = await prisma.hazard.create({
-            data: hazardData,
-            include: buildHazardInclude(),
-          });
-        } else {
-          // For replaceExisting or when creating truly new hazards
-          createdHazard = await prisma.hazard.upsert({
-            where: { id: hazardData.id },
-            create: hazardData,
-            update: hazardData,
-            include: buildHazardInclude(),
-          });
-        }
-
-        console.log(
-          `${isUpdate ? "Updated" : "Created"} hazard:`,
-          hazardData.title
-        );
-
-        // Send push notifications to users who subscribed to this area when a new hazard is created
-        sendPushNotificationAboutNewHazard(createdHazard);
-
-        // Send socket events to users who subscribed to this area when a new hazard is created
-        sendSocketEventAboutHazardToSubscribers({
-          hazard: createdHazard,
-          socketEvent: SocketEvent.newHazard,
-        });
-
-        createdHazards.push(createdHazard);
-      } catch (error) {
-        console.log("Error creating hazard:", error);
-      }
-    }
-
-    console.log(`Successfully processed ${createdHazards.length} hazards`);
-    return createdHazards;
+    console.log(`Successfully processed ${validCreatedHazards.length} hazards`);
+    return validCreatedHazards;
   } catch (error) {
     console.error("Error during hazard summarization and posting:", error);
     return [];
