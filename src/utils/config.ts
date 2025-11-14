@@ -73,20 +73,6 @@ export const config = {
   // OpenAI
   openAI: {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
-    reviewAndSummarizePromptId: getRequiredEnv(
-      "OPEN_AI_REVIEW_AND_SUMMARIZE_PROMPT_ID"
-    ),
-    reviewAndSummarizePromptVersion: getRequiredEnv(
-      "OPEN_AI_REVIEW_AND_SUMMARIZE_PROMPT_VERSION"
-    ),
-    summarizePromptId: getRequiredEnv("OPENAI_SUMMARIZE_PROMPT_ID"),
-    summarizePromptVersion: getRequiredEnv("OPENAI_SUMMARIZE_PROMPT_VERSION"),
-    getSeverityAndCallToActionPromptId: getRequiredEnv(
-      "OPENAI_GET_SEVERITY_AND_CALL_TO_ACTION_PROMPT_ID"
-    ),
-    getSeverityAndCallToActionPromptVersion: getRequiredEnv(
-      "OPENAI_GET_SEVERITY_AND_CALL_TO_ACTION_PROMPT_VERSION"
-    ),
   },
 
   // AWS S3
