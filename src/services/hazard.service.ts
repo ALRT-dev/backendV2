@@ -434,7 +434,7 @@ export const reviewHazard = async ({
 }): Promise<AIReviewResponse> => {
   const { userReportReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
-  const { content: promptContent } = await getPromptById(
+  const { content: promptContent, model } = await getPromptById(
     userReportReviewAndSummarizePromptId
   );
 
@@ -446,7 +446,7 @@ export const reviewHazard = async ({
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: model,
       messages: [
         { role: "system", content: promptContent },
         { role: "user", content: userContent },
@@ -493,7 +493,9 @@ export const summarizeHazard = async ({
     | null;
 }): Promise<AISummaryResponse> => {
   const { summarizePromptId } = await getAIPromptConfiguration();
-  const { content: promptContent } = await getPromptById(summarizePromptId);
+  const { content: promptContent, model } = await getPromptById(
+    summarizePromptId
+  );
 
   const parentCategories =
     availableCategories
@@ -537,7 +539,7 @@ export const summarizeHazard = async ({
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: model,
       messages: [
         { role: "system", content: promptContent },
         { role: "user", content: userContent },
@@ -617,7 +619,7 @@ export const getAISeverity = async ({
   try {
     const { severityAndCallToActionPromptId } =
       await getAIPromptConfiguration();
-    const { content: promptContent } = await getPromptById(
+    const { content: promptContent, model } = await getPromptById(
       severityAndCallToActionPromptId
     );
 
@@ -710,7 +712,7 @@ export const getAISeverity = async ({
 
     const response = await retryWithBackoff(async () => {
       return await openai.chat.completions.create({
-        model: "gpt-4o-mini",
+        model: model,
         messages: [
           { role: "system", content: promptContent },
           { role: "user", content: userContent },

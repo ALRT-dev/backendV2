@@ -22,6 +22,7 @@ import {
 import type { AISummaryResponse } from "../../models/ai_summary_response_interface.js";
 import { buildHazardInclude } from "../../utils/hazard.util.js";
 import { syncHazardsFromDifferentSources } from "../../services/ingestion.service.js";
+import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
 
 export const getHazardsForAdmin = async (
   req: Request,
@@ -67,11 +68,15 @@ export const getHazardsForAdmin = async (
 };
 
 export const createHazardForAdmin = async (
-  req: Request,
+  req: AdminRequest,
   res: Response,
   next: NextFunction
 ) => {
   try {
+    if (!req.admin) {
+      throw new HttpError(403, "Unauthorized");
+    }
+
     const {
       title,
       shortDescription,
@@ -88,11 +93,6 @@ export const createHazardForAdmin = async (
       sourceId,
       occurredAt,
     }: CreateHazardForAdminBody = req.body;
-
-    const { userId } = res;
-    if (!userId) {
-      throw new HttpError(401, "Unauthorized user");
-    }
 
     if (categoryId) {
       const category = await prisma.hazardCategory.findUnique({
@@ -134,6 +134,7 @@ export const createHazardForAdmin = async (
       );
     }
 
+    const today = new Date();
     const createdHazard = await prisma.hazard.create({
       data: {
         title: title || summarized.title,
@@ -149,12 +150,12 @@ export const createHazardForAdmin = async (
         ...(isAwsCompliant !== undefined && { isAwsCompliant }),
         severity: severity || summarized.severity,
         ...(sourceId && { sourceId }),
-        ...(!sourceId ? { reportedById: userId } : {}),
         ...(occurredAt && { occurredAt }),
         aiConfidence: summarized.confidence,
         confidenceScore,
         confidenceScoreCalculatedAt: new Date(),
         reviewStatus: HazardReviewStatus.accepted,
+        expiresAt: new Date(today.setMinutes(today.getMinutes() + 30)), // Default expiry 30 minutes from now
       },
     });
 
@@ -165,7 +166,7 @@ export const createHazardForAdmin = async (
 };
 
 export const updateHazardForAdmin = async (
-  req: Request,
+  req: AdminRequest,
   res: Response,
   next: NextFunction
 ) => {
@@ -173,6 +174,10 @@ export const updateHazardForAdmin = async (
     const hazardId = req.params.hazardId;
     if (!hazardId) {
       throw new HttpError(400, "hazardId parameter is required");
+    }
+
+    if (!req.admin) {
+      throw new HttpError(403, "Unauthorized");
     }
 
     const {

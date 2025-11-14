@@ -312,6 +312,7 @@ model AIPrompt {
   description String? // Human-readable description of what this prompt does
   content     String // The actual prompt content with placeholder variables
   variables   Json // JSON array of variable names expected in the prompt
+  model       String // e.g., "gpt-4o-mini", "gpt-5-nano", "gpt-3.5-turbo"
 
   createdById String
   updatedById String?

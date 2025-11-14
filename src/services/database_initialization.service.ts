@@ -12,8 +12,7 @@ export const initializeDatabase = async (): Promise<void> => {
   try {
     await Promise.all([
       initializeHazardCategories(),
-      initializeAIPrompts(),
-      initializeDefaultConfigurations(),
+      initializeAIPrompts().then(() => initializeDefaultConfigurations()),
     ]);
 
     console.log("Database initialization completed successfully");

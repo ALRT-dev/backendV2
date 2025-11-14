@@ -65,24 +65,18 @@ export const createAIPrompt = async (
     }
     const adminId = req.admin.id;
 
-    const { name, description, content, variables }: CreatePromptData =
-      req.body;
+    const createData: CreatePromptData = req.body;
 
     // Validate prompt content
-    const validation = validatePromptContent(content, variables);
+    const validation = validatePromptContent(
+      createData.content,
+      createData.variables
+    );
     if (!validation.isValid) {
       throw new HttpError(400, "Invalid prompt content");
     }
 
-    const prompt = await createPrompt(
-      {
-        name,
-        ...(description && { description }),
-        content,
-        variables,
-      },
-      adminId
-    );
+    const prompt = await createPrompt(createData, adminId);
 
     res.status(201).json(prompt);
   } catch (error) {

@@ -2,6 +2,7 @@ import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { ConfigurationKey, type Configuration } from "@prisma/client";
 import type { AIPromptConfiguration } from "../models/ai_prompt_configuration_interface.js";
+import { DefaultAIPromptNames } from "./ai-prompt.service.js";
 
 // Cache for configurations to avoid database calls
 const configCache = new Map<string, Configuration>();
@@ -311,14 +312,37 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       return;
     }
 
+    // Fetch AI prompts by their default names
+    const prompts = await prisma.aIPrompt.findMany({
+      where: {
+        name: {
+          in: [
+            DefaultAIPromptNames.userReportReviewAndSummarize,
+            DefaultAIPromptNames.summarization,
+            DefaultAIPromptNames.severityAndCallToAction,
+          ],
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+    const promptMap: Record<string, string | null> = {};
+    for (const prompt of prompts) {
+      promptMap[prompt.name] = prompt.id;
+    }
+
     // Define default configurations
     const defaultConfigs: CreateConfigurationData[] = [
       {
         key: ConfigurationKey.aiPrompts,
         value: {
-          userReportReviewAndSummarizePromptId: null,
-          summarizePromptId: null,
-          severityAndCallToActionPromptId: null,
+          userReportReviewAndSummarizePromptId:
+            promptMap[DefaultAIPromptNames.userReportReviewAndSummarize],
+          summarizePromptId: promptMap[DefaultAIPromptNames.summarization],
+          severityAndCallToActionPromptId:
+            promptMap[DefaultAIPromptNames.severityAndCallToAction],
         },
         title: "AI Prompts Configuration",
         description: "Configuration for AI prompts used in hazard processing",
