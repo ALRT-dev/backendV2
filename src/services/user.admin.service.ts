@@ -1,7 +1,9 @@
+import { AdminRole } from "@prisma/client";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import type { CreateAdminBody } from "../validators/admin/user.validator.js";
 import { hashAdminPassword } from "./admin_security.service.js";
+import { config } from "../utils/config.js";
 
 export const getAdminProfile = async (adminId: string) => {
   try {
@@ -84,5 +86,34 @@ export const deactivateAdmin = async (adminId: string) => {
     return { success: true };
   } catch (error) {
     throw new HttpError(500, "Failed to deactivate admin");
+  }
+};
+
+/**
+ * Activates the super admin account if none exists.
+ */
+export const activateSuperAdmin = async () => {
+  try {
+    const isAnySuperAdminActive = await prisma.admin.count({
+      where: { role: AdminRole.superAdmin, isActive: true },
+    });
+    if (isAnySuperAdminActive > 0) {
+      return;
+    }
+
+    const admin = await createAdminAccount({
+      email: config.adminCredentials.superAdminEmail,
+      password: config.adminCredentials.superAdminPassword,
+      name: config.adminCredentials.superAdminName,
+      role: AdminRole.superAdmin,
+    });
+
+    console.log("✅ Super admin account activated successfully!");
+    console.log("📧 Email:", admin.email);
+    console.log("👤 Name:", admin.name);
+    console.log("🛡️  Role:", admin.role);
+    console.log("📅 Created:", admin.createdAt.toISOString());
+  } catch (error) {
+    throw new HttpError(500, "Failed to activate super admin");
   }
 };
