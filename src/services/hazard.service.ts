@@ -291,7 +291,6 @@ export const getHazardsApplyingFiltersRaw = async (
 
   query += `
       WHERE ${whereClause}
-      ORDER BY ${orderByClause}
       ${limitClause}
     ),
     hazard_medias AS (
@@ -323,7 +322,8 @@ export const getHazardsApplyingFiltersRaw = async (
       hd.*,
       COALESCE(hm.medias, '[]'::json) as medias
     FROM hazard_data hd
-    LEFT JOIN hazard_medias hm ON hd.id = hm."hazardId"`;
+    LEFT JOIN hazard_medias hm ON hd.id = hm."hazardId"
+    ORDER BY ${orderByClause.replace(/h\./g, "hd.")}`;
 
   // Execute the optimized query
   const hazards = (await prisma.$queryRawUnsafe(
