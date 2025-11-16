@@ -440,7 +440,7 @@ export const createHazard = async (
       // Create the hazard first
       const hazard = await tx.hazard.create({
         data: {
-          title: suggestedTitle || title || "An unverified incident",
+          title: title || suggestedTitle || "An unverified incident",
           description: description || "",
           reviewStatus,
           reviewFeedback,
@@ -696,7 +696,7 @@ export const updateHazard = async (
       const updatedHazard = await tx.hazard.update({
         where: { id },
         data: {
-          title: suggestedTitle || title || "An unverified incident",
+          title: title || suggestedTitle || "An unverified incident",
           description: description || "",
           reviewStatus,
           reviewFeedback,
