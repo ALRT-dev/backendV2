@@ -236,7 +236,11 @@ export function parseGeoJsonToHazards(
         properties?.description || properties?.otherAdvice || title
       );
 
-      const hazardId = id && `${idPrefix}-${id}`;
+      const hazardId =
+        (id && `${idPrefix}-${id}`) ||
+        (properties?.guid &&
+          extractIdFromGUID(properties.guid) &&
+          `${idPrefix}-${extractIdFromGUID(properties.guid)}`);
 
       const hazard: Prisma.HazardCreateInput = {
         ...(hazardId && { id: hazardId }),
@@ -485,7 +489,9 @@ export async function parseRSSFeedToHazards(
 
     const id =
       (item.identifier && `${idPrefix}-${item.identifier}`) ||
-      (item.guid && `${idPrefix}-${cleanGUID(item.guid)}`) ||
+      (item.guid &&
+        extractIdFromGUID(item.guid) &&
+        `${idPrefix}-${extractIdFromGUID(item.guid)}`) ||
       (item.id && `${idPrefix}-${item.id}`);
 
     const hazard: Prisma.HazardCreateInput = {
@@ -719,17 +725,18 @@ function cleanDescription(html?: string): string {
 }
 
 /**
- * Extracts ID from GUID URLs or cleans GUID by removing HTML tags and trimming whitespace
+ * Extracts ID from GUID URLs or returns null if no pattern matches
  *
  * @param guid - The GUID string which may contain URLs with IDs
- * @returns Extracted ID from URL or cleaned GUID string
+ * @returns Extracted ID from URL or null if no pattern matches
  *
  * @example
  * extractIdFromGUID("http://emergency.vic.gov.au/respond/#!/incident/242688/moreinfo") // returns "242688"
  * extractIdFromGUID("https://data.eso.sa.gov.au/prod/cfs/criimson/1668103") // returns "1668103"
- * extractIdFromGUID("some-plain-guid") // returns "some-plain-guid"
+ * extractIdFromGUID("https://incidents.rfs.nsw.gov.au/api/v1/incidents/630789") // returns "630789"
+ * extractIdFromGUID("some-plain-guid") // returns null
  */
-function cleanGUID(guid: string): string {
+function extractIdFromGUID(guid: string): string | null {
   // First clean HTML tags
   const cleaned = guid
     .replace(/<br\s*\/?>/gi, "\n")
@@ -749,14 +756,20 @@ function cleanGUID(guid: string): string {
     return saGovMatch[1];
   }
 
+  // Pattern 3: https://incidents.rfs.nsw.gov.au/api/v1/incidents/630789
+  const rfsNswMatch = cleaned.match(/\/incidents\/(\d+)/);
+  if (rfsNswMatch && rfsNswMatch[1]) {
+    return rfsNswMatch[1];
+  }
+
   // General pattern: extract last numeric segment from URL path
   const urlMatch = cleaned.match(/https?:\/\/[^\/]+\/.*\/(\d+)(?:\/|$)/);
   if (urlMatch && urlMatch[1]) {
     return urlMatch[1];
   }
 
-  // If no URL pattern matches, return the cleaned string
-  return cleaned;
+  // If no URL pattern matches, return null
+  return null;
 }
 
 /**
