@@ -1,19 +1,8 @@
-import { HazardSeverity, OnboardingStep } from "@prisma/client";
+import { HazardSeverity } from "@prisma/client";
 import { PushNotificationPreference } from "../enums/notification_preference_types.js";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import { upsertUserOwnLocationSubscription } from "./user.service.js";
-
-/**
- * Initiates the onboarding process for a given user by setting their onboarding step to 'location'
- * @param userId - The ID of the user
- */
-export const startOnboarding = async (userId: string): Promise<void> => {
-  await prisma.user.update({
-    where: { id: userId },
-    data: { onboardingStep: OnboardingStep.location },
-  });
-};
 
 /**
  * Sets the user's location information during onboarding
@@ -39,7 +28,6 @@ export const setUserLocation = async ({
       latitude,
       longitude,
       locationName,
-      onboardingStep: OnboardingStep.radius,
     },
   });
 };
@@ -71,11 +59,6 @@ export const setUserRadius = async ({
     longitude: user.longitude,
     locationName: user.locationName || "My Location",
     radiusKm: radiusInKm,
-  });
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { onboardingStep: OnboardingStep.pushNotification },
   });
 };
 
@@ -122,11 +105,6 @@ export const setPushNotificationPreference = async ({
       })
     )
   );
-
-  await prisma.user.update({
-    where: { id: userId },
-    data: { onboardingStep: OnboardingStep.tosAcceptance },
-  });
 };
 
 /**
@@ -136,6 +114,6 @@ export const setPushNotificationPreference = async ({
 export const acceptTermsOfService = async (userId: string): Promise<void> => {
   await prisma.user.update({
     where: { id: userId },
-    data: { isTOSAccepted: true, onboardingStep: OnboardingStep.completed },
+    data: { isTOSAccepted: true, isOnboardingCompleted: true },
   });
 };

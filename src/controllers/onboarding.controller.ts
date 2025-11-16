@@ -1,7 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import {
-  startOnboarding,
   setUserLocation,
   setUserRadius,
   setPushNotificationPreference,
@@ -12,30 +11,6 @@ import type {
   SetUserRadiusInput,
   SetPushNotificationPreferenceInput,
 } from "../validators/onboarding.validator.js";
-import { OnboardingStep } from "@prisma/client";
-
-/// Controller to start the onboarding process for the authenticated user
-export const startUserOnboarding = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { userId } = res;
-    if (!userId) {
-      throw new HttpError(400, "Unauthenticated user");
-    }
-
-    await startOnboarding(userId);
-
-    res.status(200).json({
-      message: "Onboarding started successfully",
-      nextOnboardingStep: OnboardingStep.location,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 /// Controller to set user location during onboarding
 export const setOnboardingLocation = async (
@@ -61,7 +36,6 @@ export const setOnboardingLocation = async (
 
     res.status(200).json({
       message: "Location set successfully",
-      nextOnboardingStep: OnboardingStep.radius,
     });
   } catch (error) {
     next(error);
@@ -89,7 +63,6 @@ export const setOnboardingRadius = async (
 
     res.status(200).json({
       message: "Subscription radius set successfully",
-      nextOnboardingStep: OnboardingStep.pushNotification,
     });
   } catch (error) {
     next(error);
@@ -118,7 +91,6 @@ export const setOnboardingNotificationPreference = async (
 
     res.status(200).json({
       message: "Push notification preferences set successfully",
-      nextOnboardingStep: OnboardingStep.tosAcceptance,
     });
   } catch (error) {
     next(error);
@@ -141,7 +113,6 @@ export const acceptOnboardingTermsOfService = async (
 
     res.status(200).json({
       message: "Terms of service accepted successfully",
-      nextOnboardingStep: OnboardingStep.completed,
     });
   } catch (error) {
     next(error);

@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  startUserOnboarding,
   setOnboardingLocation,
   setOnboardingRadius,
   setOnboardingNotificationPreference,
@@ -16,7 +15,6 @@ import {
 
 const onboardingRouter = Router();
 
-onboardingRouter.post("/start", requireAuth, startUserOnboarding);
 onboardingRouter.post(
   "/location",
   requireAuth,

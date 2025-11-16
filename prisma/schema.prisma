@@ -11,22 +11,13 @@ datasource db {
   extensions = [postgis]
 }
 
-enum OnboardingStep {
-  welcome
-  location
-  radius
-  pushNotification
-  tosAcceptance
-  completed
-}
-
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
   passwordHash String  @default("")
   name         String?
 
-  onboardingStep OnboardingStep @default(welcome)
+  isOnboardingCompleted Boolean @default(false)
 
   isTOSAccepted Boolean @default(false)
 
