@@ -25,15 +25,6 @@ export const createHazardCategoryForAdminBodySchema = z.object({
     )
     .optional(),
 
-  severityKeywords: z.record(z.string(), z.array(z.string())).optional(),
-
-  callToActions: z.record(z.string(), z.string()).optional(),
-
-  aiInstructions: z
-    .string()
-    .max(1000, "AI instructions must be at most 1000 characters")
-    .optional(),
-
   parentId: z.string().optional(),
 });
 
@@ -59,15 +50,6 @@ export const updateHazardCategoryForAdminBodySchema = z.object({
       /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
       "Color must be a valid hex color code"
     )
-    .optional(),
-
-  severityKeywords: z.record(z.string(), z.array(z.string())).optional(),
-
-  callToActions: z.record(z.string(), z.string()).optional(),
-
-  aiInstructions: z
-    .string()
-    .max(1000, "AI instructions must be at most 1000 characters")
     .optional(),
 
   parentId: z.string().optional(),

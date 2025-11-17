@@ -1,5 +1,5 @@
 export interface AIPromptConfiguration {
-  userReportReviewAndSummarizePromptId: string;
-  summarizePromptId: string;
+  userReportedAlertReviewAndSummarizePromptId: string;
+  officialAlertSummarizationPromptId: string;
   severityAndCallToActionPromptId: string;
 }

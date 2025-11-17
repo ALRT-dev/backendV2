@@ -434,10 +434,10 @@ export const reviewHazard = async ({
   longitude: number;
   locationName?: string | undefined | null;
 }): Promise<AIReviewResponse> => {
-  const { userReportReviewAndSummarizePromptId } =
+  const { userReportedAlertReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    userReportReviewAndSummarizePromptId
+    userReportedAlertReviewAndSummarizePromptId
   );
 
   const userContent = `Please analyze this hazard report:
@@ -472,7 +472,7 @@ export const reviewHazard = async ({
 };
 
 /**
- * Summarizes a hazard report using AI to generate a concise title, short description, summary, confidence level, and severity.
+ * Summarizes a hazard report using AI to generate a concise title, short description, summary, callToAction and confidence level.
  *
  * The AI provides a structured response to standardize the hazard report for clarity and actionability.
  */
@@ -482,62 +482,23 @@ export const summarizeHazard = async ({
   latitude,
   longitude,
   locationName,
-  availableCategories,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  availableCategories?:
-    | (HazardCategory & { parent: HazardCategory | null })[]
-    | undefined
-    | null;
 }): Promise<AISummaryResponse> => {
-  const { summarizePromptId } = await getAIPromptConfiguration();
+  const { officialAlertSummarizationPromptId } =
+    await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    summarizePromptId
+    officialAlertSummarizationPromptId
   );
-
-  const parentCategories =
-    availableCategories
-      ?.map((cat) => cat.parent)
-      ?.filter((cat) => cat !== null)
-      .reduce<HazardCategory[]>((acc, curr) => {
-        if (curr && !acc.find((c) => c.id === curr.id)) {
-          acc.push(curr);
-        }
-        return acc;
-      }, []) || [];
-
-  const categoriesInfo =
-    availableCategories
-      ?.map((cat) =>
-        cat.aiInstructions && cat.aiInstructions.length !== 0
-          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
-          : `- CATEGORY: ${cat.id}`
-      )
-      .join("\n\n") || "";
-
-  const parentCategoriesInfo =
-    parentCategories
-      ?.map((cat) =>
-        cat.aiInstructions && cat.aiInstructions.length !== 0
-          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
-          : `- CATEGORY: ${cat.id}`
-      )
-      .join("\n\n") || "";
 
   const userContent = `Please standardize this hazard report:
     TITLE: ${title}
     DESCRIPTION: ${description}
-    LOCATION: ${locationName || ""} (${latitude}, ${longitude})
-
-    AVAILABLE CATEGORIES:
-    ${categoriesInfo}
-
-    AVAILABLE PARENT CATEGORIES:
-    ${parentCategoriesInfo}`;
+    LOCATION: ${locationName || ""} (${latitude}, ${longitude})`;
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({
@@ -556,216 +517,14 @@ export const summarizeHazard = async ({
   }
 
   try {
-    const aiSummary = JSON.parse(content) as {
-      title: string;
-      shortDescription: string;
-      summary: string;
-      confidence: "high" | "medium" | "low";
-      category?: string;
-      fireStatus?: string | null;
-    };
-
-    const { severity, callToAction } = await getAISeverity({
-      title,
-      description,
-      latitude,
-      longitude,
-      locationName,
-      categoryId: aiSummary.category ?? "other",
-    });
-
-    const fullResponse: AISummaryResponse = {
-      ...aiSummary,
-      category: aiSummary.category ?? "other",
-      severity,
-      callToAction,
-      fireStatus:
-        aiSummary.fireStatus && aiSummary.fireStatus in FireStatus
-          ? (aiSummary.fireStatus as FireStatus)
-          : null,
-    };
-
-    return fullResponse;
+    const aiSummary = JSON.parse(content) as AISummaryResponse;
+    return aiSummary;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);
     throw new HttpError(
       500,
       "AI summarization failed: Invalid response format"
     );
-  }
-};
-
-/**
- * Determines the severity of a hazard report using AI based on its title, description, and location.
- *
- * The AI analyzes the content and provides a severity level from predefined categories.
- */
-export const getAISeverity = async ({
-  title,
-  description,
-  latitude,
-  longitude,
-  locationName,
-  categoryId,
-}: {
-  title: string;
-  description: string;
-  latitude: number;
-  longitude: number;
-  categoryId: string;
-  locationName?: string | undefined | null;
-}): Promise<{
-  severity: HazardSeverity;
-  callToAction: string;
-}> => {
-  try {
-    const { severityAndCallToActionPromptId } =
-      await getAIPromptConfiguration();
-    const { content: promptContent, model } = await getPromptById(
-      severityAndCallToActionPromptId
-    );
-
-    const defaultSeverityKeywords: SeverityKeywords = {
-      unknown: ["not applicable"],
-      info: ["miscellaneous incident", "unclassified", "investigating"],
-      advice: ["notable incident", "monitor situation", "potential concern"],
-      watchAndAct: [
-        "significant incident",
-        "action required",
-        "serious concern",
-      ],
-      emergency: ["critical incident", "immediate action", "life threatening"],
-    };
-    const defaultCallToActions: SeverityCallToActions = {
-      unknown: ["No action required"],
-      info: ["Stay informed and monitor updates"],
-      advice: ["Be cautious and stay alert", "Follow official guidance"],
-      watchAndAct: [
-        "Prepare to take action",
-        "Follow evacuation orders if issued",
-      ],
-      emergency: [
-        "Evacuate immediately",
-        "Seek shelter and follow emergency services instructions",
-      ],
-    };
-
-    let category = await prisma.hazardCategory.findUnique({
-      where: { id: categoryId },
-    });
-    if (!category) {
-      category = await prisma.hazardCategory.findFirst({
-        where: { id: "other" },
-      });
-      if (!category) {
-        category = await prisma.hazardCategory.create({
-          data: {
-            id: "other",
-            name: "Other",
-            description: "Miscellaneous hazards not fitting other categories",
-            severityKeywords: defaultSeverityKeywords,
-            callToActions: defaultCallToActions,
-          },
-        });
-      }
-    }
-    let severityKeywords = category.severityKeywords as SeverityKeywords | null;
-    if (!severityKeywords) {
-      severityKeywords = defaultSeverityKeywords;
-    }
-    let callToActions = category.callToActions as SeverityCallToActions | null;
-    if (!callToActions) {
-      callToActions = defaultCallToActions;
-    }
-
-    // Available severity levels
-    const severityLevels = Object.keys(
-      severityKeywords
-    ) as (keyof SeverityKeywords)[];
-
-    // If callToActions is missing any severity level, fill with defaults
-    for (const level of severityLevels) {
-      if (!callToActions[level] || callToActions[level].length === 0) {
-        callToActions[level] = defaultCallToActions[level];
-      }
-    }
-
-    // Create keyword context for each severity level
-    const keywordContext = Object.entries(severityKeywords)
-      .map(([severity, keywords]) => {
-        if (keywords.length === 0) return `${severity}: ${severity}`;
-        return `${severity}: ${keywords.map((e) => `"${e}"`).join(", ")}`;
-      })
-      .filter(Boolean)
-      .join("\n");
-
-    const userContent = `Please assess the severity of this hazard:
-
-      TITLE: ${title}
-      DESCRIPTION: ${description}
-      LOCATION: ${locationName || ""} (${latitude}, ${longitude})
-      CATEGORY: ${category.name}
-
-      SEVERITY KEYWORDS:
-      ${keywordContext}
-
-      ALLOWED SEVERITY LEVELS:
-      - ${severityLevels.join("\n- ")}`;
-
-    const response = await retryWithBackoff(async () => {
-      return await openai.chat.completions.create({
-        model: model,
-        messages: [
-          { role: "system", content: promptContent },
-          { role: "user", content: userContent },
-        ],
-        response_format: { type: "json_object" },
-      });
-    });
-
-    const context = response.choices[0]?.message?.content;
-    if (!context) {
-      throw new HttpError(
-        500,
-        "Severity determination failed: Empty response from AI"
-      );
-    }
-
-    const aiResponse = JSON.parse(context) as {
-      severity: HazardSeverity;
-      callToAction: string;
-    };
-    return aiResponse;
-  } catch (error) {
-    console.error("Error in getAISeverity:", error);
-
-    // Fallback to keyword matching if OpenAI fails
-    try {
-      const category = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-
-      if (category?.severityKeywords) {
-        const severityKeywords = category.severityKeywords as SeverityKeywords;
-        const severity = performKeywordMatchingForSeverity(
-          title,
-          description,
-          severityKeywords
-        );
-
-        return {
-          severity,
-          callToAction: getSeverityCallToActions(severity)[0] || "",
-        };
-      }
-    } catch (fallbackError) {
-      console.error("Error in fallback keyword matching:", fallbackError);
-    }
-
-    return {
-      severity: HazardSeverity.unknown,
-      callToAction: getSeverityCallToActions(HazardSeverity.unknown)[0] || "",
-    };
   }
 };
 

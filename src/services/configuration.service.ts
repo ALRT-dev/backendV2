@@ -317,9 +317,8 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       where: {
         name: {
           in: [
-            DefaultAIPromptNames.userReportReviewAndSummarize,
-            DefaultAIPromptNames.summarization,
-            DefaultAIPromptNames.severityAndCallToAction,
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarization,
+            DefaultAIPromptNames.officialAlertSummarization,
           ],
         },
       },
@@ -338,15 +337,16 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       {
         key: ConfigurationKey.aiPrompts,
         value: {
-          userReportReviewAndSummarizePromptId:
-            promptMap[DefaultAIPromptNames.userReportReviewAndSummarize],
-          summarizePromptId: promptMap[DefaultAIPromptNames.summarization],
-          severityAndCallToActionPromptId:
-            promptMap[DefaultAIPromptNames.severityAndCallToAction],
+          userReportedAlertReviewAndSummarizePromptId:
+            promptMap[
+              DefaultAIPromptNames.userReportedAlertReviewAndSummarization
+            ],
+          officialAlertSummarizationPromptId:
+            promptMap[DefaultAIPromptNames.officialAlertSummarization],
         },
         title: "AI Prompts Configuration",
         description:
-          "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportReviewAndSummarizePromptId, summarizePromptId, severityAndCallToActionPromptId",
+          "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportedAlertReviewAndSummarizePromptId, officialAlertSummarizationPromptId, severityAndCallToActionPromptId",
       },
     ];
 
@@ -355,7 +355,9 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       await createConfiguration(configData, superAdmin.id);
     }
 
-    console.log("Default configurations initialized successfully");
+    console.log(
+      "---------------------------------------> Default configurations initialized successfully"
+    );
   } catch (error) {
     console.error("Error initializing default configurations:", error);
   }

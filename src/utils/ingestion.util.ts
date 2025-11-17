@@ -1,4 +1,9 @@
-import { HazardSeverity, type Prisma } from "@prisma/client";
+import {
+  FireStatus,
+  HazardSeverity,
+  type HazardCategory,
+  type Prisma,
+} from "@prisma/client";
 import type {
   Feature,
   FeatureCollection,
@@ -12,6 +17,15 @@ import {
   convertAddressToLatLng,
   convertLatLngToAddress,
 } from "../services/google_map.service.js";
+import {
+  awsCompliantSeverities,
+  getSeverityFromDescription,
+} from "./ingestion.severity.util.js";
+import {
+  awsCompliantCategoryIds,
+  getCategoryFromDescription,
+  getFireStatusFromDescription,
+} from "./ingestion.category.util.js";
 
 /**
  * GEOCODING OPTIMIZATION UTILITIES:
@@ -208,12 +222,17 @@ export const populateHazardWithGeocoding = async (
  * const hazards = parseGeoJsonToHazards(geoJsonData, categoryId);
  * ```
  */
-export function parseGeoJsonToHazards(
-  data: FeatureCollection,
-  categoryId: string,
-  idPrefix: string = "geojson",
-  dateFormat: "DD/MM/YYYY" | "MM/DD/YYYY" = "MM/DD/YYYY"
-): Prisma.HazardCreateInput[] {
+export function parseGeoJsonToHazards({
+  data,
+  availableCategories,
+  idPrefix = "geojson",
+  dateFormat = "MM/DD/YYYY",
+}: {
+  data: FeatureCollection;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+  idPrefix: string;
+  dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY";
+}): Prisma.HazardCreateInput[] {
   if (!data.features?.length) return [];
 
   return data.features
@@ -232,9 +251,12 @@ export function parseGeoJsonToHazards(
       const title =
         properties?.title || properties?.displayName || "Untitled Hazard";
 
-      const description = cleanDescription(
-        properties?.description || properties?.otherAdvice || title
-      );
+      const description =
+        idPrefix === "nsw-transport"
+          ? extractNSWTrafficDescription(properties)
+          : cleanDescription(
+              properties?.description || properties?.otherAdvice || title
+            );
 
       const hazardId =
         (id && `${idPrefix}-${id}`) ||
@@ -242,13 +264,28 @@ export function parseGeoJsonToHazards(
           extractIdFromGUID(properties.guid) &&
           `${idPrefix}-${extractIdFromGUID(properties.guid)}`);
 
+      const severity = getSeverityFromDescription(description);
+      const category = getCategoryFromDescription(
+        description,
+        availableCategories
+      );
+      const fireStatus = getFireStatusFromDescription(description);
+      const isAwsCompliant =
+        awsCompliantSeverities.includes(severity) &&
+        awsCompliantCategoryIds.includes(category.id);
+
       const hazard: Prisma.HazardCreateInput = {
         ...(hazardId && { id: hazardId }),
         title,
         description,
+        severity,
         category: {
-          connect: { id: categoryId },
+          connect: { id: category.id },
         },
+        ...(category.isFireRelated && {
+          fireStatus: fireStatus || FireStatus.active,
+        }),
+        isAwsCompliant,
         latitude,
         longitude,
         occurredAt: parseValidDate(properties?.pubDate, dateFormat),
@@ -861,6 +898,40 @@ function parseValidDate(
   return parsedDate;
 }
 
+/**
+ * Extracts a detailed description from NSW RFS traffic incident properties
+ */
+function extractNSWTrafficDescription(properties: GeoJsonProperties): string {
+  const {
+    displayName,
+    incidentKind,
+    mainCategory,
+    subCategoryA,
+    adviceA,
+    adviceB,
+    adviceC,
+    otherAdvice,
+  } = properties!;
+  const descriptionParts: string[] = [];
+
+  if (displayName) descriptionParts.push(`${displayName}`);
+  if (incidentKind) descriptionParts.push(`Incident Kind: ${incidentKind}`);
+  if (mainCategory) descriptionParts.push(`Main Category: ${mainCategory}`);
+  if (subCategoryA && subCategoryA !== "null")
+    descriptionParts.push(`Sub Category: ${subCategoryA}`);
+  if (adviceA?.trim() || adviceB?.trim() || adviceC?.trim())
+    descriptionParts.push(
+      `Advice: ${[adviceA, adviceB, adviceC]
+        .filter((advice) => advice?.trim())
+        .join("; ")}`
+    );
+  if (otherAdvice?.trim())
+    descriptionParts.push(
+      `Other Advice: ${cleanDescription(otherAdvice?.trim())}`
+    );
+
+  return descriptionParts.join("\n");
+}
 /**
  * Cleans RSS title by extracting the main incident description
  * and removing location prefixes if they seem redundant

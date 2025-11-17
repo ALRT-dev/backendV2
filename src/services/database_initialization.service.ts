@@ -8,8 +8,6 @@ import { activateSuperAdmin } from "./user.admin.service.js";
  * This function should be called when the server starts
  */
 export const initializeDatabase = async (): Promise<void> => {
-  console.log("Starting database initialization...");
-
   try {
     await activateSuperAdmin();
 
@@ -18,7 +16,9 @@ export const initializeDatabase = async (): Promise<void> => {
       initializeAIPrompts().then(() => initializeDefaultConfigurations()),
     ]);
 
-    console.log("Database initialization completed successfully");
+    console.log(
+      "---------------------------------------> Database initialization completed successfully"
+    );
   } catch (error) {
     console.error("Database initialization failed:", error);
     throw error;
