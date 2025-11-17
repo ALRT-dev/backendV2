@@ -70,11 +70,18 @@ model HazardCategory {
 }
 
 enum HazardSeverity {
-  unknown // Used only for user reported hazards
-  info // For AWS and Non-AWS: info
-  advice // For AWS: advice ------ For Non-AWS: low
-  watchAndAct // For AWS: watchAndAct ------ For Non-AWS: moderate
-  emergency // For AWS: emergency ------ For Non-AWS: high
+  unknown
+  info
+  advice
+  watchAndAct
+  emergency
+}
+
+enum HazardSeverityBand {
+  info
+  monitor
+  action
+  critical
 }
 
 enum AIConfidence {
@@ -91,14 +98,14 @@ enum FireStatus {
 }
 
 model Hazard {
-  id               String          @id @default(uuid())
+  id               String             @id @default(uuid())
   title            String
   description      String
   shortDescription String?
   aiSummary        String?
-  aiSeverity       HazardSeverity?
   aiConfidence     AIConfidence?
-  severity         HazardSeverity  @default(unknown)
+  severity         HazardSeverity     @default(unknown)
+  severityBand     HazardSeverityBand @default(info)
   callToAction     String?
 
   fireStatus FireStatus? // Only applies to fire-related hazards

@@ -72,11 +72,11 @@ export const syncHazardsFromDifferentSources = async ({
     const availableCategories = await getAllSubHazardCategories();
 
     const sources: HazardSourceConfig[] = [
-      // {
-      //   id: "rfs",
-      //   name: "RFS",
-      //   fetchFunction: getHazardsDataFromRFS,
-      // },
+      {
+        id: "rfs",
+        name: "RFS",
+        fetchFunction: getHazardsDataFromRFS,
+      },
       // {
       //   id: "bom",
       //   name: "BoM",

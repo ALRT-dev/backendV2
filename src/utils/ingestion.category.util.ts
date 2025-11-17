@@ -56,6 +56,7 @@ export const awsCompliantCategoryIds: string[] = [
   "flood",
   "extremeHeat",
   "damagingWinds",
+  "earthquake",
 ];
 
 /**

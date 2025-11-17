@@ -1,6 +1,7 @@
 import {
   FireStatus,
   HazardSeverity,
+  HazardSeverityBand,
   type HazardCategory,
   type Prisma,
 } from "@prisma/client";
@@ -19,6 +20,8 @@ import {
 } from "../services/google_map.service.js";
 import {
   awsCompliantSeverities,
+  getSeverityBandFromAWSCompliantSeverity,
+  getSeverityBandFromDescription,
   getSeverityFromDescription,
 } from "./ingestion.severity.util.js";
 import {
@@ -274,11 +277,21 @@ export function parseGeoJsonToHazards({
         awsCompliantSeverities.includes(severity) &&
         awsCompliantCategoryIds.includes(category.id);
 
+      let severityBand: HazardSeverityBand = HazardSeverityBand.info;
+      if (isAwsCompliant) {
+        // AWS compliant - derive severity band from severity
+        severityBand = getSeverityBandFromAWSCompliantSeverity(severity);
+      } else {
+        // Non AWS compliant - derive severity band from description
+        severityBand = getSeverityBandFromDescription(description);
+      }
+
       const hazard: Prisma.HazardCreateInput = {
         ...(hazardId && { id: hazardId }),
         title,
         description,
         severity,
+        severityBand,
         category: {
           connect: { id: category.id },
         },
