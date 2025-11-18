@@ -2,7 +2,7 @@
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
-import type { AIPrompt, Prisma } from "@prisma/client";
+import { type AIPrompt, type Prisma } from "@prisma/client";
 
 // Cache for prompts to avoid database calls on every AI request
 const promptCache = new Map<string, AIPrompt>();
@@ -333,8 +333,18 @@ export const clearCache = (): void => {
  * Used during initialization to create default prompts if they do not already exist
  */
 export enum DefaultAIPromptNames {
-  userReportedAlertReviewAndSummarization = "User Reported Alert Review and Summarization",
-  officialAlertSummarization = "Official Alert Summarization",
+  userReportedAlertReviewAndSummarizationInfo = "[INFO] User Reported Alert Review and Summarization",
+  userReportedAlertReviewAndSummarizationMonitor = "[MONITOR] User Reported Alert Review and Summarization",
+  userReportedAlertReviewAndSummarizationAction = "[ACTION] User Reported Alert Review and Summarization",
+  userReportedAlertReviewAndSummarizationCritical = "[CRITICAL ]User Reported Alert Review and Summarization",
+  officialAlertSummarizationInfo = "[INFO] Official Alert Summarization",
+  officialAlertSummarizationMonitor = "[MONITOR] Official Alert Summarization",
+  officialAlertSummarizationAction = "[ACTION] Official Alert Summarization",
+  officialAlertSummarizationCritical = "[CRITICAL ] Official Alert Summarization",
+  officialAwsAlertSummarizationInfo = "[INFO] Official AWS Alert Summarization",
+  officialAwsAlertSummarizationMonitor = "[MONITOR] Official AWS Alert Summarization",
+  officialAwsAlertSummarizationAction = "[ACTION] Official AWS Alert Summarization",
+  officialAwsAlertSummarizationCritical = "[CRITICAL ] Official AWS Alert Summarization",
 }
 
 /**
@@ -357,20 +367,13 @@ export const initializeAIPrompts = async (): Promise<void> => {
       return;
     }
 
-    // Define the three prompts to create
-    const defaultPrompts: Prisma.AIPromptCreateInput[] = [
-      {
-        name: DefaultAIPromptNames.userReportedAlertReviewAndSummarization,
-        description:
-          "Used to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.",
-        content: `You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.
+    const userReportedAlertReviewAndSummarizationPrompt = `You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.
 
 REVIEW GUIDELINES:
 - Check for profanity, nonsense, sexual content, discriminatory language; reject such reports.
 - **Don't reject** if description is not provided.
 - Provide constructive feedback for improvement **only if rejecting** (max 200 chars).
 - Create a clear, concise title (max 80 chars) summarizing the hazard (follow the SUMMARY GUIDELINES below for summary).
-- Write a one-line short description (max 120 chars) for notifications.
 
 SUMMARY GUIDELINES:
 Tone Requirements:
@@ -463,69 +466,19 @@ Always respond with valid JSON containing these exact fields:
     "summary": "string", (based on SUMMARY GUIDELINES above)
     "callToAction": "string", (based on CALL TO ACTION GUIDELINES above)
     "confidence": "high|medium|low" (based on CONFIDENCE LEVEL GUIDELINES described above)
-}`,
-        variables: [
-          "title",
-          "description",
-          "locationname",
-          "latitude",
-          "longitude",
-          "category",
-        ],
-        model: "gpt-5-nano",
-        createdBy: { connect: { id: superAdmin.id } },
-      },
-      {
-        name: DefaultAIPromptNames.officialAlertSummarization,
-        description:
-          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
-        content: `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate hazard category (if applicable), fire status and a confidence level that help people understand the situation quickly.
+}`;
 
-STEP 1 — TEMPLATE SELECTION (MANDATORY)
-Select the correct template based on the combination of:
-- alertType (aws | official | user)
-- category (weather, health, transport, safety, etc.)
-- severityBand (info | monitor | action | critical)
+    const officialAlertSummarizationPrompt = `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.
 
-Combine them into one key:
-Example:
-- official + transport + monitor → official_transport_monitor
-- user + safety + info → user_safety_info
-
-You MUST use the template that matches this key.  
-Templates define tone, structure, and allowed strength of wording.
-
-STEP 2 — FILL THE TEMPLATE USING ONLY SAFE FIELDS
-You are only allowed to insert the following fields:
-
-{location}
-- official alertType: full location (address + suburb + state)
-- user alertType: suburb ONLY (never include street names or exact addresses)
-
-{agency}
-- Only for official alertTypes (e.g., BOM, NSW SES)
-
-{hazard}
-- From the category (bushfire, crime, flood, storm, heat, smoke, crash, etc.)
-
-{status}
-- Only if provided by the official source in the description (“under control”, “major delays”, etc.)
-
-NEVER insert:
-- personal names
-- street addresses for user alerts
-- medical advice
-- guesses, assumptions, or invented details
-
-STEP 3 — SUMMARY GUIDELINES
+SUMMARY GUIDELINES
 Generate “summary” using the following rules:
 - MUST be one single sentence
 - MUST be ≤ 25 words
 - Calm, factual, plain language
-- Only information relevant to the hazard
-- Must match the template tone (aws / official / user)
+- Only information relevant to the hazard type.
+- Follow TONE GUIDANCE below for tone.
 
-STEP 4 — CALL-TO-ACTION GUIDELINES
+CALL-TO-ACTION GUIDELINES
 First, scan the hazard description for ANY actionable items:
 - Direct instructions (“evacuate immediately”, “close windows”, “avoid area”)
 - Safety recommendations (“use caution”, “keep medication nearby”)
@@ -537,36 +490,25 @@ If ANY exist:
 
 If NO action exists in the description:
 → Create your own callToAction based on:
-   - severity band
    - category
-   - template tone
-   - context
+   - context of the hazard
+   - TONE GUIDANCE below for tone.
+
 
 MUST be ≤ 25 words.
 
-STEP 5 — TONE RULES
-aws alertType:
-- Strong and direct when required
-- Always aligned with AWS severity level
-- Never softer than the official AWS meaning
+TONE GUIDANCE
+- Use a calm, neutral, informational tone.
+- Do not imply danger, urgency, or action.
+- Simply acknowledge that something exists or has been reported.
+- Keep the language soft, factual, and non-directive.
 
-official (non-AWS) alertType:
-- Calm, neutral, factual
-- No drama
-- Only advise action if official source includes it
-
-user alertType:
-- Always soft and cautious
-- NEVER give strong action wording
-  (No “evacuate”, “leave now”, “shelter immediately”, etc.)
-- Encourage awareness only
-
-STEP 6 — WORD LIMITS (STRICT)
+WORD LIMITS (STRICT)
 - summary ≤ 25 words
 - callToAction ≤ 25 words
 Shorten aggressively if needed.
 
-STEP 7 - CONFIDENCE LEVEL GUIDELINES:
+CONFIDENCE LEVEL GUIDELINES:
 Generate confidence level based on the following criteria:
 - "high": Detailed, specific, credible information
 - "medium": Some ambiguity or missing data
@@ -578,16 +520,120 @@ Always respond with **valid JSON** in this format:
   "summary": "string" (single sentence),
   "callToAction": "string", (single sentence)
   "confidence": "high|medium|low",
-}`,
-        variables: [
-          "title",
-          "description",
-          "locationname",
-          "latitude",
-          "longitude",
-          "categoriesinfo",
-          "parentcategoriesinfo",
-        ],
+}`;
+
+    // Define the three prompts to create
+    const defaultPrompts: Prisma.AIPromptCreateInput[] = [
+      // User Reported Alert Review and Summarization Prompts
+      {
+        name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo,
+        description:
+          "Used to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.",
+        content: userReportedAlertReviewAndSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationMonitor,
+        description:
+          "Used to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.",
+        content: userReportedAlertReviewAndSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationAction,
+        description:
+          "Used to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.",
+        content: userReportedAlertReviewAndSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationCritical,
+        description:
+          "Used to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.",
+        content: userReportedAlertReviewAndSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+
+      // Official Alert Summarization Prompts
+      {
+        name: DefaultAIPromptNames.officialAlertSummarizationInfo,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAlertSummarizationMonitor,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAlertSummarizationAction,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAlertSummarizationCritical,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+
+      // Official AWS Alert Summarization Prompts
+      {
+        name: DefaultAIPromptNames.officialAwsAlertSummarizationInfo,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAwsAlertSummarizationMonitor,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAwsAlertSummarizationAction,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.officialAwsAlertSummarizationCritical,
+        description:
+          "Used to interpret incoming alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: officialAlertSummarizationPrompt,
+        variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
       },
@@ -595,15 +641,11 @@ Always respond with **valid JSON** in this format:
 
     // Check and create each prompt
     for (const promptData of defaultPrompts) {
-      const existingPrompt = await prisma.aIPrompt.findFirst({
+      await prisma.aIPrompt.upsert({
         where: { name: promptData.name },
+        create: promptData,
+        update: promptData,
       });
-
-      if (!existingPrompt) {
-        await prisma.aIPrompt.create({
-          data: promptData,
-        });
-      }
     }
 
     console.log(

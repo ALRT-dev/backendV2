@@ -420,6 +420,7 @@ export const reviewHazard = async ({
   latitude,
   longitude,
   locationName,
+  severityBand,
 }: {
   title: string | undefined | null;
   description: string | undefined | null;
@@ -427,11 +428,12 @@ export const reviewHazard = async ({
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
+  severityBand: HazardSeverityBand;
 }): Promise<AIReviewResponse> => {
   const { userReportedAlertReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    userReportedAlertReviewAndSummarizePromptId
+    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`]
   );
 
   const userContent = `Please analyze this hazard report:
@@ -491,10 +493,15 @@ export const summarizeHazard = async ({
   isAwsCompliant: boolean;
   severityBand: HazardSeverityBand;
 }): Promise<AISummaryResponse> => {
-  const { officialAlertSummarizationPromptId } =
-    await getAIPromptConfiguration();
+  const {
+    officialAlertSummarizationPromptId,
+    officialAwsAlertSummarizationPromptId,
+  } = await getAIPromptConfiguration();
+  const requiredPromptId = isAwsCompliant
+    ? officialAwsAlertSummarizationPromptId[`${severityBand}PromptId`]
+    : officialAlertSummarizationPromptId[`${severityBand}PromptId`];
   const { content: promptContent, model } = await getPromptById(
-    officialAlertSummarizationPromptId
+    requiredPromptId
   );
 
   const userContent = `Standardize the following hazard report using the rules and templates in the system prompt:
@@ -502,9 +509,7 @@ export const summarizeHazard = async ({
   - title: ${title}
   - description: ${description}
   - location: ${locationName || ""} (${latitude}, ${longitude})
-  - alertType: ${isAwsCompliant ? "aws" : "official"}
   - category: ${categoryName}
-  - severityBand: ${severityBand}
   - agency: ${sourceName}`;
 
   const response = await retryWithBackoff(async () => {

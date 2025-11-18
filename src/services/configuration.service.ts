@@ -316,10 +316,7 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
     const prompts = await prisma.aIPrompt.findMany({
       where: {
         name: {
-          in: [
-            DefaultAIPromptNames.userReportedAlertReviewAndSummarization,
-            DefaultAIPromptNames.officialAlertSummarization,
-          ],
+          in: Object.values(DefaultAIPromptNames),
         },
       },
       select: {
@@ -337,12 +334,55 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       {
         key: ConfigurationKey.aiPrompts,
         value: {
-          userReportedAlertReviewAndSummarizePromptId:
-            promptMap[
-              DefaultAIPromptNames.userReportedAlertReviewAndSummarization
-            ],
-          officialAlertSummarizationPromptId:
-            promptMap[DefaultAIPromptNames.officialAlertSummarization],
+          userReportedAlertReviewAndSummarizePromptId: {
+            infoPromptId:
+              promptMap[
+                DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo
+              ],
+            monitorPromptId:
+              promptMap[
+                DefaultAIPromptNames
+                  .userReportedAlertReviewAndSummarizationMonitor
+              ],
+            actionPromptId:
+              promptMap[
+                DefaultAIPromptNames
+                  .userReportedAlertReviewAndSummarizationAction
+              ],
+            criticalPromptId:
+              promptMap[
+                DefaultAIPromptNames
+                  .userReportedAlertReviewAndSummarizationCritical
+              ],
+          },
+          officialAlertSummarizationPromptId: {
+            infoPromptId:
+              promptMap[DefaultAIPromptNames.officialAlertSummarizationInfo],
+            monitorPromptId:
+              promptMap[DefaultAIPromptNames.officialAlertSummarizationMonitor],
+            actionPromptId:
+              promptMap[DefaultAIPromptNames.officialAlertSummarizationAction],
+            criticalPromptId:
+              promptMap[
+                DefaultAIPromptNames.officialAlertSummarizationCritical
+              ],
+          },
+          officialAwsAlertSummarizationPromptId: {
+            infoPromptId:
+              promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationInfo],
+            monitorPromptId:
+              promptMap[
+                DefaultAIPromptNames.officialAwsAlertSummarizationMonitor
+              ],
+            actionPromptId:
+              promptMap[
+                DefaultAIPromptNames.officialAwsAlertSummarizationAction
+              ],
+            criticalPromptId:
+              promptMap[
+                DefaultAIPromptNames.officialAwsAlertSummarizationCritical
+              ],
+          },
         },
         title: "AI Prompts Configuration",
         description:

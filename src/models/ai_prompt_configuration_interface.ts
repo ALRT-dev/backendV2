@@ -1,5 +1,20 @@
 export interface AIPromptConfiguration {
-  userReportedAlertReviewAndSummarizePromptId: string;
-  officialAlertSummarizationPromptId: string;
-  severityAndCallToActionPromptId: string;
+  userReportedAlertReviewAndSummarizePromptId: {
+    infoPromptId: string;
+    monitorPromptId: string;
+    actionPromptId: string;
+    criticalPromptId: string;
+  };
+  officialAlertSummarizationPromptId: {
+    infoPromptId: string;
+    monitorPromptId: string;
+    actionPromptId: string;
+    criticalPromptId: string;
+  };
+  officialAwsAlertSummarizationPromptId: {
+    infoPromptId: string;
+    monitorPromptId: string;
+    actionPromptId: string;
+    criticalPromptId: string;
+  };
 }
