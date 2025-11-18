@@ -160,18 +160,18 @@ export const syncHazardsFromDifferentSources = async ({
       return [];
     }
 
-    // // Step 2: Process all hazards together with summarizeAndPostHazards
-    // const createdHazards = await summarizeAndPostHazards({
-    //   hazardDatas: allHazardData,
-    //   syncOption,
-    // });
+    // Step 2: Process all hazards together with summarizeAndPostHazards
+    const createdHazards = await summarizeAndPostHazards({
+      hazardDatas: allHazardData,
+      syncOption,
+    });
 
-    // console.log(
-    //   `---------------------------------------> Successfully processed ${
-    //     createdHazards.length
-    //   } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
-    // );
-    // return createdHazards;
+    console.log(
+      `---------------------------------------> Successfully processed ${
+        createdHazards.length
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
+    );
+    return createdHazards;
     return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);

@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import {
   HazardReviewStatus,
   HazardSeverity,
+  HazardSeverityBand,
   HazardVoteType,
   MediaType,
   type Hazard,
@@ -52,6 +53,7 @@ import {
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
 import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
 import { syncHazardsFromDifferentSources } from "../services/ingestion.service.js";
+import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -379,6 +381,9 @@ export const createHazard = async (
         latitude,
         longitude,
         locationName,
+        severityBand:
+          (description && getSeverityBandFromDescription(description)) ||
+          HazardSeverityBand.info,
       });
     } catch (error) {
       console.log("Error during hazard review:", error);
@@ -665,6 +670,9 @@ export const updateHazard = async (
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
+        severityBand: getSeverityBandFromDescription(
+          description || existingHazard.description
+        ),
       });
     } catch (error) {
       console.log("Error during hazard review:", error);

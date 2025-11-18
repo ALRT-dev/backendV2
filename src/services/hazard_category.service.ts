@@ -3,7 +3,6 @@ import prisma from "../utils/prisma_client.util.js";
 import type {
   HazardCategory,
   HazardReviewStatus,
-  HazardSeverity,
   LocationSubscription,
   Prisma,
 } from "@prisma/client";
@@ -13,7 +12,6 @@ import type { HazardSeverityWithAwsCompliant } from "../models/hazard_search_par
  * Check if any hazard categories exist in the database
  */
 export const hasExistingCategories = async (): Promise<boolean> => {
-  return false;
   try {
     const count = await prisma.hazardCategory.count();
     return count > 0;
