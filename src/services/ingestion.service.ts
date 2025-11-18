@@ -81,11 +81,11 @@ export const syncHazardsFromDifferentSources = async ({
         name: "RFS",
         fetchFunction: getHazardsDataFromRFS,
       },
-      // {
-      //   id: "bom",
-      //   name: "BoM",
-      //   fetchFunction: getHazardsDataFromBoM,
-      // },
+      {
+        id: "bom",
+        name: "BoM",
+        fetchFunction: getHazardsDataFromBoM,
+      },
       {
         id: "nsw-transport",
         name: "NSW Transport live traffic hazards",
@@ -96,31 +96,31 @@ export const syncHazardsFromDifferentSources = async ({
       //   name: "NSW air quality",
       //   fetchFunction: getHazardsDataFromAirQuality,
       // },
-      // {
-      //   id: "act-es",
-      //   name: "ACT Emergency Services",
-      //   fetchFunction: getHazardsDataFromACT,
-      // },
-      // {
-      //   id: "cfs",
-      //   name: "CFS",
-      //   fetchFunction: getHazardsDataFromCFS,
-      // },
-      // {
-      //   id: "vice-fire",
-      //   name: "Vice Fire Services",
-      //   fetchFunction: getHazardsDataFromViceFireServices,
-      // },
-      // {
-      //   id: "qld-fire",
-      //   name: "QLD Fire Department",
-      //   fetchFunction: getHazardsDataFromQLDFireDepartment,
-      // },
-      // {
-      //   id: "nt-fire-and-rescue",
-      //   name: "NT Fire and Rescue",
-      //   fetchFunction: getHazardsFromNTFireAndRescue,
-      // },
+      {
+        id: "act-es",
+        name: "ACT Emergency Services",
+        fetchFunction: getHazardsDataFromACT,
+      },
+      {
+        id: "cfs",
+        name: "CFS",
+        fetchFunction: getHazardsDataFromCFS,
+      },
+      {
+        id: "vice-fire",
+        name: "Vice Fire Services",
+        fetchFunction: getHazardsDataFromViceFireServices,
+      },
+      {
+        id: "qld-fire",
+        name: "QLD Fire Department",
+        fetchFunction: getHazardsDataFromQLDFireDepartment,
+      },
+      {
+        id: "nt-fire-and-rescue",
+        name: "NT Fire and Rescue",
+        fetchFunction: getHazardsFromNTFireAndRescue,
+      },
     ].filter((source) =>
       sourceIds && sourceIds.length > 0 ? sourceIds.includes(source.id) : true
     );
@@ -149,28 +149,29 @@ export const syncHazardsFromDifferentSources = async ({
     ).then((results) => results.flat());
 
     console.log(
-      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`,
+      allHazardData
     );
 
     if (allHazardData.length === 0) {
       console.log(
-        "--------------------------------------->No hazards to process"
+        "---------------------------------------> No hazards to process"
       );
       return [];
     }
 
-    // Step 2: Process all hazards together with summarizeAndPostHazards
-    const createdHazards = await summarizeAndPostHazards({
-      hazardDatas: allHazardData,
-      syncOption,
-    });
+    // // Step 2: Process all hazards together with summarizeAndPostHazards
+    // const createdHazards = await summarizeAndPostHazards({
+    //   hazardDatas: allHazardData,
+    //   syncOption,
+    // });
 
-    console.log(
-      `---------------------------------------> Successfully processed ${
-        createdHazards.length
-      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
-    );
-    return createdHazards;
+    // console.log(
+    //   `---------------------------------------> Successfully processed ${
+    //     createdHazards.length
+    //   } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
+    // );
+    // return createdHazards;
     return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
@@ -482,7 +483,7 @@ export const getHazardsDataFromRFS = async (
  */
 export const getHazardsDataFromBoM = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
@@ -506,7 +507,10 @@ export const getHazardsDataFromBoM = async (
     });
 
     const data = await response.json();
-    const hazards = parseBoMWarningsToHazards(data, categoryId);
+    const hazards = parseBoMWarningsToHazards({
+      data,
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -656,7 +660,7 @@ export const getHazardsDataFromAirQuality = async (
  */
 export const getHazardsDataFromACT = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://esa.act.gov.au/feeds/currentincidents.xml";
@@ -674,7 +678,11 @@ export const getHazardsDataFromACT = async (
       update: {},
     });
 
-    const hazards = await parseRSSFeedToHazards(url, categoryId, "act-es");
+    const hazards = await parseRSSFeedToHazards({
+      url,
+      idPrefix: "act-es",
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -693,7 +701,7 @@ export const getHazardsDataFromACT = async (
  */
 export const getHazardsDataFromCFS = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
@@ -717,7 +725,10 @@ export const getHazardsDataFromCFS = async (
     });
 
     const data = await response.json();
-    const hazards = parseCFSFeedToHazards(data, categoryId);
+    const hazards = parseCFSFeedToHazards({
+      data,
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -736,7 +747,7 @@ export const getHazardsDataFromCFS = async (
  */
 export const getHazardsDataFromViceFireServices = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS";
@@ -754,7 +765,11 @@ export const getHazardsDataFromViceFireServices = async (
       update: {},
     });
 
-    const hazards = await parseRSSFeedToHazards(url, categoryId, "vice-fire");
+    const hazards = await parseRSSFeedToHazards({
+      url,
+      idPrefix: "vice-fire",
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -773,7 +788,7 @@ export const getHazardsDataFromViceFireServices = async (
  */
 export const getHazardsDataFromQLDFireDepartment = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
@@ -792,7 +807,11 @@ export const getHazardsDataFromQLDFireDepartment = async (
       update: {},
     });
 
-    const hazards = await parseRSSFeedToHazards(url, categoryId, "qld-fire");
+    const hazards = await parseRSSFeedToHazards({
+      url,
+      idPrefix: "qld-fire",
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,
@@ -811,7 +830,7 @@ export const getHazardsDataFromQLDFireDepartment = async (
  */
 export const getHazardsFromNTFireAndRescue = async (
   id: string,
-  categoryId: string
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json";
@@ -835,7 +854,10 @@ export const getHazardsFromNTFireAndRescue = async (
     });
 
     const data = await response.json();
-    const hazards = parseNTFireAndRescueToHazards(data, categoryId);
+    const hazards = parseNTFireAndRescueToHazards({
+      data,
+      availableCategories,
+    });
 
     return hazards.map((hazard) => ({
       ...hazard,

@@ -268,24 +268,8 @@ export function parseGeoJsonToHazards({
           extractIdFromGUID(properties.guid) &&
           `${idPrefix}-${extractIdFromGUID(properties.guid)}`);
 
-      const severity = getSeverityFromDescription(description);
-      const category = getCategoryFromDescription(
-        description,
-        availableCategories
-      );
-      const fireStatus = getFireStatusFromDescription(description);
-      const isAwsCompliant =
-        awsCompliantSeverities.includes(severity) &&
-        awsCompliantCategoryIds.includes(category.id);
-
-      let severityBand: HazardSeverityBand = HazardSeverityBand.info;
-      if (isAwsCompliant) {
-        // AWS compliant - derive severity band from severity
-        severityBand = getSeverityBandFromAWSCompliantSeverity(severity);
-      } else {
-        // Non AWS compliant - derive severity band from description
-        severityBand = getSeverityBandFromDescription(description);
-      }
+      const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+        getHazardAttributesFromDescription(description, availableCategories);
 
       const hazard: HazardDataWithRelations = {
         ...(hazardId && { id: hazardId }),
@@ -333,10 +317,13 @@ export function parseGeoJsonToHazards({
  * const hazards = parseBoMWarningsToHazards(bomWarningsData, categoryId);
  * ```
  */
-export function parseBoMWarningsToHazards(
-  data: any,
-  categoryId: string
-): HazardDataWithRelations[] {
+export function parseBoMWarningsToHazards({
+  data,
+  availableCategories,
+}: {
+  data: any;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations[] {
   if (!data?.results?.length) return [];
 
   return data.results.map((item: any) => {
@@ -345,10 +332,20 @@ export function parseBoMWarningsToHazards(
     );
     const id = item.identifier && `bom-${item.identifier}`;
 
+    const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+      getHazardAttributesFromDescription(description, availableCategories);
+
     const hazard: HazardDataWithRelations = {
       id,
       title: item.warning_title || "Unnamed Warning",
       description,
+      severity,
+      severityBand,
+      category,
+      ...(category.isFireRelated && {
+        fireStatus,
+      }),
+      isAwsCompliant,
       locationName: item.location,
       occurredAt: parseValidDate(item.begin_time),
       expiresAt: item.end_time ? parseValidDate(item.end_time) : null,
@@ -498,11 +495,15 @@ export function parseAirQualityToHazards(
  * const hazards = await parseRSSFeedToHazards(rssXml, categoryId);
  * ```
  */
-export async function parseRSSFeedToHazards(
-  url: string,
-  categoryId: string,
-  idPrefix: string = "rss"
-): Promise<HazardDataWithRelations[]> {
+export async function parseRSSFeedToHazards({
+  url,
+  idPrefix = "rss",
+  availableCategories,
+}: {
+  url: string;
+  idPrefix?: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): Promise<HazardDataWithRelations[]> {
   const parser = new Parser({
     customFields: {
       item: [
@@ -537,9 +538,19 @@ export async function parseRSSFeedToHazards(
         `${idPrefix}-${extractIdFromGUID(item.guid)}`) ||
       (item.id && `${idPrefix}-${item.id}`);
 
+    const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+      getHazardAttributesFromDescription(description, availableCategories);
+
     const hazard: HazardDataWithRelations = {
       id,
       title,
+      severity,
+      severityBand,
+      category,
+      ...(category.isFireRelated && {
+        fireStatus,
+      }),
+      isAwsCompliant,
       description,
       latitude,
       longitude,
@@ -574,10 +585,13 @@ export async function parseRSSFeedToHazards(
  * const hazards = parseCFSFeedToHazards(cfsData, categoryId);
  * ```
  */
-export function parseCFSFeedToHazards(
-  data: any[],
-  categoryId: string
-): HazardDataWithRelations[] {
+export function parseCFSFeedToHazards({
+  data,
+  availableCategories,
+}: {
+  data: any[];
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations[] {
   if (!Array.isArray(data) || !data.length) return [];
 
   return data.filter(Boolean).map((incident) => {
@@ -600,10 +614,20 @@ export function parseCFSFeedToHazards(
     // Generate unique ID for the incident
     const hazardId = IncidentNo && `cfs-${IncidentNo}`;
 
+    const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+      getHazardAttributesFromDescription(description, availableCategories);
+
     const hazard: HazardDataWithRelations = {
       id: hazardId,
       title,
       description,
+      severity,
+      severityBand,
+      category,
+      ...(category.isFireRelated && {
+        fireStatus,
+      }),
+      isAwsCompliant,
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
       occurredAt,
@@ -649,10 +673,13 @@ export function parseCFSFeedToHazards(
  * const hazards = parseNTFireToHazards(ntFireData, categoryId);
  * ```
  */
-export function parseNTFireAndRescueToHazards(
-  data: any,
-  categoryId: string
-): HazardDataWithRelations[] {
+export function parseNTFireAndRescueToHazards({
+  data,
+  availableCategories,
+}: {
+  data: any;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations[] {
   if (!data?.incidents?.features?.length) return [];
 
   return data.incidents.features
@@ -689,10 +716,20 @@ export function parseNTFireAndRescueToHazards(
         ? parseValidDate(properties._dateclosed)
         : null;
 
+      const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+        getHazardAttributesFromDescription(description, availableCategories);
+
       const hazard: HazardDataWithRelations = {
         ...(hazardId && { id: hazardId }),
         title,
         description,
+        severity,
+        severityBand,
+        category,
+        ...(category.isFireRelated && {
+          fireStatus,
+        }),
+        isAwsCompliant,
         locationName:
           properties?._location || properties?.Location || undefined,
         latitude: coordinates.latitude,
@@ -1261,5 +1298,40 @@ export const convertHazardDataWithRelationsToCreateInput = (
     source: {
       connect: { id: hazardData.source?.id || "other" },
     },
+  };
+};
+
+export const getHazardAttributesFromDescription = (
+  description: string,
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
+): {
+  severity: HazardSeverity;
+  severityBand: HazardSeverityBand;
+  category: HazardCategory;
+  fireStatus: FireStatus | null;
+  isAwsCompliant: boolean;
+} => {
+  const severity = getSeverityFromDescription(description);
+  const category = getCategoryFromDescription(description, availableCategories);
+  const fireStatus = getFireStatusFromDescription(description);
+  const isAwsCompliant =
+    awsCompliantSeverities.includes(severity) &&
+    awsCompliantCategoryIds.includes(category.id);
+
+  let severityBand: HazardSeverityBand = HazardSeverityBand.info;
+  if (isAwsCompliant) {
+    // AWS compliant - derive severity band from severity
+    severityBand = getSeverityBandFromAWSCompliantSeverity(severity);
+  } else {
+    // Non AWS compliant - derive severity band from description
+    severityBand = getSeverityBandFromDescription(description);
+  }
+
+  return {
+    severity,
+    severityBand,
+    category,
+    fireStatus,
+    isAwsCompliant,
   };
 };

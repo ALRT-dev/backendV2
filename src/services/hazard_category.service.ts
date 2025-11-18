@@ -13,6 +13,7 @@ import type { HazardSeverityWithAwsCompliant } from "../models/hazard_search_par
  * Check if any hazard categories exist in the database
  */
 export const hasExistingCategories = async (): Promise<boolean> => {
+  return false;
   try {
     const count = await prisma.hazardCategory.count();
     return count > 0;
@@ -121,7 +122,7 @@ export const populateInitialCategories = async () => {
                 id: "ambulanceResponse",
                 name: "Ambulance Response",
                 description: "Emergency medical services dispatched",
-                keywords: [],
+                keywords: ["ambulance response"],
               },
             },
           ],
@@ -131,7 +132,7 @@ export const populateInitialCategories = async () => {
         id: "weatherAndEnvironment",
         name: "Weather & Environment",
         description: "Weather and environmental hazards",
-        keywords: [],
+        keywords: ["marine wind"],
         color: "#97D7FA",
         subCategories: {
           connectOrCreate: [
@@ -144,10 +145,18 @@ export const populateInitialCategories = async () => {
                 isFireRelated: true,
                 keywords: [
                   "bush fire",
+                  "bushfire",
                   "wild fire",
+                  "wildfire",
+                  "grass",
                   "grass fire",
+                  "grassfire",
                   "forest fire",
+                  "forestfire",
                   "vegetation fire",
+                  "vegetationfire",
+                  "scrub fire",
+                  "scrubfire",
                 ],
               },
             },
@@ -174,7 +183,7 @@ export const populateInitialCategories = async () => {
                 name: "Other Fire",
                 description: "Unclassified fire incidents",
                 isFireRelated: true,
-                keywords: ["fire alarm"],
+                keywords: ["fire alarm", "false alarm"],
               },
             },
             {
@@ -282,7 +291,7 @@ export const populateInitialCategories = async () => {
                 id: "smoke",
                 name: "Smoke",
                 description: "Smoke from fires affecting air quality",
-                keywords: [],
+                keywords: ["smoke"],
               },
             },
             {
@@ -439,7 +448,7 @@ export const populateInitialCategories = async () => {
                 name: "Structural Fire",
                 description: "Fires in buildings and structures",
                 isFireRelated: true,
-                keywords: ["structure fire", "haystack fire"],
+                keywords: ["structure fire", "haystack fire", "structure"],
               },
             },
             {
@@ -475,7 +484,7 @@ export const populateInitialCategories = async () => {
                 id: "waterIssue",
                 name: "Water Issue",
                 description: "Water supply issues",
-                keywords: [],
+                keywords: ["burst water main"],
               },
             },
             {
@@ -532,7 +541,7 @@ export const populateInitialCategories = async () => {
         id: "other",
         name: "Other",
         description: "Miscellaneous Hazards Not Classified Elsewhere",
-        keywords: [],
+        keywords: ["assist other agency"],
         color: "#BAA27D",
         subCategories: {
           connectOrCreate: [

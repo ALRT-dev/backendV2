@@ -71,18 +71,16 @@ export const getCategoryFromDescription = (
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): HazardCategory => {
   const desc = description.toLowerCase();
+  const descWords = desc.split(/\s+/);
 
-  // Check child categories first
-  for (const category of availableCategories) {
-    const keywords = category.keywords.map((kw) => kw.toLowerCase());
-    for (const keyword of keywords) {
-      if (desc.includes(keyword)) {
-        return category;
-      }
-    }
-  }
+  const awsCategories = availableCategories.filter((cat) =>
+    awsCompliantCategoryIds.includes(cat.id)
+  );
 
-  // Check parent categories if no direct match found in child categories
+  const childCategories = availableCategories.filter(
+    (cat) => cat.parent !== null
+  );
+
   const parentCategories =
     availableCategories
       ?.map((cat) => cat.parent)
@@ -93,12 +91,76 @@ export const getCategoryFromDescription = (
         }
         return acc;
       }, []) || [];
-  for (const parentCategory of parentCategories) {
-    const keywords = parentCategory.keywords.map((kw) => kw.toLowerCase());
-    for (const keyword of keywords) {
-      if (desc.includes(keyword)) {
-        return parentCategory;
+
+  // Helper function for direct keyword matching (exact word/phrase match)
+  const hasDirectMatch = (
+    keywords: string[],
+    description: string,
+    words: string[]
+  ): boolean => {
+    return keywords.some((keyword) => {
+      const lowerKeyword = keyword.toLowerCase().trim();
+
+      // Handle multi-word phrases
+      if (lowerKeyword.includes(" ")) {
+        // For phrases, check exact phrase match with word boundaries
+        const regex = new RegExp(
+          `\\b${lowerKeyword.replace(/\s+/g, "\\s+")}\\b`,
+          "i"
+        );
+        return regex.test(description);
+      } else {
+        // For single words, check exact word match
+        return words.includes(lowerKeyword);
       }
+    });
+  };
+
+  // Helper function for normal keyword matching (substring match)
+  const hasNormalMatch = (keywords: string[], description: string): boolean => {
+    const lowerKeywords = keywords.map((kw) => kw.toLowerCase());
+    return lowerKeywords.some((keyword) => description.includes(keyword));
+  };
+
+  // 1. Check AWS categories with direct keyword matching first
+  for (const category of awsCategories) {
+    if (hasDirectMatch(category.keywords, desc, descWords)) {
+      return category;
+    }
+  }
+
+  // 2. Check AWS categories with normal keyword matching
+  for (const category of awsCategories) {
+    if (hasNormalMatch(category.keywords, desc)) {
+      return category;
+    }
+  }
+
+  // 3. Check child categories with direct keyword matching
+  for (const category of childCategories) {
+    if (hasDirectMatch(category.keywords, desc, descWords)) {
+      return category;
+    }
+  }
+
+  // 4. Check parent categories with direct keyword matching
+  for (const category of parentCategories) {
+    if (hasDirectMatch(category.keywords, desc, descWords)) {
+      return category;
+    }
+  }
+
+  // 5. Check child categories with normal keyword matching
+  for (const category of childCategories) {
+    if (hasNormalMatch(category.keywords, desc)) {
+      return category;
+    }
+  }
+
+  // 6. Check parent categories with normal keyword matching
+  for (const category of parentCategories) {
+    if (hasNormalMatch(category.keywords, desc)) {
+      return category;
     }
   }
 
