@@ -53,7 +53,7 @@ export const buildHazardsWhereClause = (
           },
         },
         {
-          shortDescription: {
+          description: {
             contains: searchString,
             mode: "insensitive",
           },
@@ -300,7 +300,7 @@ export const buildHazardsWhereClauseRaw = (
   // Apply search string filter if provided
   if (searchString) {
     whereConditions.push(
-      `(h.title ILIKE $${paramIndex} OR h."shortDescription" ILIKE $${paramIndex})`
+      `(h.title ILIKE $${paramIndex} OR h."description" ILIKE $${paramIndex})`
     );
     queryParams.push(`%${searchString}%`);
     paramIndex++;

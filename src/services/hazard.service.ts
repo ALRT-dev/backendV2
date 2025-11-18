@@ -2,11 +2,9 @@ import {
   type Prisma,
   type LocationSubscription,
   HazardVoteType,
-  HazardSeverity,
   type Hazard,
   type HazardCategory,
-  FireStatus,
-  ConfigurationKey,
+  HazardSeverityBand,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -21,11 +19,7 @@ import {
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
-  getSeverityCallToActions,
-  performKeywordMatchingForSeverity,
 } from "../utils/hazard.util.js";
-import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
-import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 
@@ -482,12 +476,20 @@ export const summarizeHazard = async ({
   latitude,
   longitude,
   locationName,
+  categoryName,
+  sourceName,
+  isAwsCompliant,
+  severityBand,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
+  categoryName: string;
+  sourceName: string;
+  isAwsCompliant: boolean;
+  severityBand: HazardSeverityBand;
 }): Promise<AISummaryResponse> => {
   const { officialAlertSummarizationPromptId } =
     await getAIPromptConfiguration();
@@ -495,10 +497,15 @@ export const summarizeHazard = async ({
     officialAlertSummarizationPromptId
   );
 
-  const userContent = `Please standardize this hazard report:
-    TITLE: ${title}
-    DESCRIPTION: ${description}
-    LOCATION: ${locationName || ""} (${latitude}, ${longitude})`;
+  const userContent = `Standardize the following hazard report using the rules and templates in the system prompt:
+  Inputs:
+  - title: ${title}
+  - description: ${description}
+  - location: ${locationName || ""} (${latitude}, ${longitude})
+  - alertType: ${isAwsCompliant ? "aws" : "official"}
+  - category: ${categoryName}
+  - severityBand: ${severityBand}
+  - agency: ${sourceName}`;
 
   const response = await retryWithBackoff(async () => {
     return await openai.chat.completions.create({

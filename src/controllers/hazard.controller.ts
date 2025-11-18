@@ -394,7 +394,6 @@ export const createHazard = async (
       reviewStatus,
       reviewFeedback,
       title: suggestedTitle,
-      shortDescription,
       summary: aiSummary,
       confidence: aiConfidence,
       callToAction,
@@ -447,7 +446,6 @@ export const createHazard = async (
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),
-          shortDescription,
           aiSummary,
           ...(aiConfidence && { aiConfidence }),
           callToAction,
@@ -682,7 +680,6 @@ export const updateHazard = async (
       reviewStatus,
       reviewFeedback,
       title: suggestedTitle,
-      shortDescription,
       summary: aiSummary,
       confidence: aiConfidence,
       callToAction,
@@ -703,7 +700,6 @@ export const updateHazard = async (
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),
-          shortDescription,
           aiSummary,
           callToAction,
           ...(aiConfidence && { aiConfidence }),

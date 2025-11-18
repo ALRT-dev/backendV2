@@ -217,6 +217,6 @@ const getNotificationTitleForNewHazard = (hazard: Hazard): string => {
  * Returns the notification body for a new hazard based on its short description or description.
  */
 const getNotificationBodyForNewHazard = (hazard: Hazard): string => {
-  const { shortDescription, description } = hazard;
-  return shortDescription || description || "A new alrt has been reported.";
+  const { description } = hazard;
+  return description || "A new alrt has been reported.";
 };

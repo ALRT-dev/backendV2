@@ -2,8 +2,8 @@ import {
   FireStatus,
   HazardSeverity,
   HazardSeverityBand,
+  Prisma,
   type HazardCategory,
-  type Prisma,
 } from "@prisma/client";
 import type {
   Feature,
@@ -29,6 +29,7 @@ import {
   getCategoryFromDescription,
   getFireStatusFromDescription,
 } from "./ingestion.category.util.js";
+import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 
 /**
  * GEOCODING OPTIMIZATION UTILITIES:
@@ -111,8 +112,8 @@ export const getGeocodingCacheSize = (): number => {
  * If locationName is missing, it uses latitude/longitude to fetch the address.
  */
 export const populateHazardWithGeocoding = async (
-  hazard: Prisma.HazardCreateInput
-): Promise<Prisma.HazardCreateInput> => {
+  hazard: HazardDataWithRelations
+): Promise<HazardDataWithRelations> => {
   // Skip geocoding if both coordinates and location are already present
   if (hazard.latitude && hazard.longitude && hazard.locationName) {
     return hazard;
@@ -235,7 +236,7 @@ export function parseGeoJsonToHazards({
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
   idPrefix: string;
   dateFormat?: "DD/MM/YYYY" | "MM/DD/YYYY";
-}): Prisma.HazardCreateInput[] {
+}): HazardDataWithRelations[] {
   if (!data.features?.length) return [];
 
   return data.features
@@ -286,15 +287,13 @@ export function parseGeoJsonToHazards({
         severityBand = getSeverityBandFromDescription(description);
       }
 
-      const hazard: Prisma.HazardCreateInput = {
+      const hazard: HazardDataWithRelations = {
         ...(hazardId && { id: hazardId }),
         title,
         description,
         severity,
         severityBand,
-        category: {
-          connect: { id: category.id },
-        },
+        category,
         ...(category.isFireRelated && {
           fireStatus: fireStatus || FireStatus.active,
         }),
@@ -309,7 +308,7 @@ export function parseGeoJsonToHazards({
 
       return hazard;
     })
-    .filter((hazard): hazard is Prisma.HazardCreateInput => hazard !== null);
+    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
 }
 
 /**
@@ -337,7 +336,7 @@ export function parseGeoJsonToHazards({
 export function parseBoMWarningsToHazards(
   data: any,
   categoryId: string
-): Prisma.HazardCreateInput[] {
+): HazardDataWithRelations[] {
   if (!data?.results?.length) return [];
 
   return data.results.map((item: any) => {
@@ -346,14 +345,11 @@ export function parseBoMWarningsToHazards(
     );
     const id = item.identifier && `bom-${item.identifier}`;
 
-    const hazard: Prisma.HazardCreateInput = {
+    const hazard: HazardDataWithRelations = {
       id,
       title: item.warning_title || "Unnamed Warning",
       description,
       locationName: item.location,
-      category: {
-        connect: { id: categoryId },
-      },
       occurredAt: parseValidDate(item.begin_time),
       expiresAt: item.end_time ? parseValidDate(item.end_time) : null,
     };
@@ -389,7 +385,7 @@ export function parseBoMWarningsToHazards(
 export function parseAirQualityToHazards(
   data: any[],
   categoryId: string
-): Prisma.HazardCreateInput[] {
+): HazardDataWithRelations[] {
   if (!Array.isArray(data) || !data.length) return [];
 
   return data
@@ -462,13 +458,10 @@ export function parseAirQualityToHazards(
 
       const id = item.Site_Id && `airquality-${item.Site_Id}`;
 
-      const hazard: Prisma.HazardCreateInput = {
+      const hazard: HazardDataWithRelations = {
         id,
         title,
         description,
-        category: {
-          connect: { id: categoryId },
-        },
         latitude,
         longitude,
         occurredAt,
@@ -477,7 +470,7 @@ export function parseAirQualityToHazards(
 
       return hazard;
     })
-    .filter((hazard): hazard is Prisma.HazardCreateInput => hazard !== null);
+    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
 }
 
 /**
@@ -509,7 +502,7 @@ export async function parseRSSFeedToHazards(
   url: string,
   categoryId: string,
   idPrefix: string = "rss"
-): Promise<Prisma.HazardCreateInput[]> {
+): Promise<HazardDataWithRelations[]> {
   const parser = new Parser({
     customFields: {
       item: [
@@ -544,13 +537,10 @@ export async function parseRSSFeedToHazards(
         `${idPrefix}-${extractIdFromGUID(item.guid)}`) ||
       (item.id && `${idPrefix}-${item.id}`);
 
-    const hazard: Prisma.HazardCreateInput = {
+    const hazard: HazardDataWithRelations = {
       id,
       title,
       description,
-      category: {
-        connect: { id: categoryId },
-      },
       latitude,
       longitude,
       occurredAt: parseValidDate(item.pubDate),
@@ -587,7 +577,7 @@ export async function parseRSSFeedToHazards(
 export function parseCFSFeedToHazards(
   data: any[],
   categoryId: string
-): Prisma.HazardCreateInput[] {
+): HazardDataWithRelations[] {
   if (!Array.isArray(data) || !data.length) return [];
 
   return data.filter(Boolean).map((incident) => {
@@ -610,13 +600,10 @@ export function parseCFSFeedToHazards(
     // Generate unique ID for the incident
     const hazardId = IncidentNo && `cfs-${IncidentNo}`;
 
-    const hazard: Prisma.HazardCreateInput = {
+    const hazard: HazardDataWithRelations = {
       id: hazardId,
       title,
       description,
-      category: {
-        connect: { id: categoryId },
-      },
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
       occurredAt,
@@ -665,7 +652,7 @@ export function parseCFSFeedToHazards(
 export function parseNTFireAndRescueToHazards(
   data: any,
   categoryId: string
-): Prisma.HazardCreateInput[] {
+): HazardDataWithRelations[] {
   if (!data?.incidents?.features?.length) return [];
 
   return data.incidents.features
@@ -702,15 +689,12 @@ export function parseNTFireAndRescueToHazards(
         ? parseValidDate(properties._dateclosed)
         : null;
 
-      const hazard: Prisma.HazardCreateInput = {
+      const hazard: HazardDataWithRelations = {
         ...(hazardId && { id: hazardId }),
         title,
         description,
         locationName:
           properties?._location || properties?.Location || undefined,
-        category: {
-          connect: { id: categoryId },
-        },
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
         occurredAt,
@@ -721,8 +705,8 @@ export function parseNTFireAndRescueToHazards(
     })
     .filter(
       (
-        hazard: Prisma.HazardCreateInput | null
-      ): hazard is Prisma.HazardCreateInput => hazard !== null
+        hazard: HazardDataWithRelations | null
+      ): hazard is HazardDataWithRelations => hazard !== null
     );
 }
 
@@ -1265,3 +1249,17 @@ function buildNTFireAndRescueDescription(properties: any): string {
 
   return parts.join("\n");
 }
+
+export const convertHazardDataWithRelationsToCreateInput = (
+  hazardData: HazardDataWithRelations
+): Prisma.HazardCreateInput => {
+  return {
+    ...hazardData,
+    category: {
+      connect: { id: hazardData.category?.id || "other" },
+    },
+    source: {
+      connect: { id: hazardData.source?.id || "other" },
+    },
+  };
+};

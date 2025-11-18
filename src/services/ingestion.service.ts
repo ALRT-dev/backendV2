@@ -1,8 +1,10 @@
 import {
   HazardReviewStatus,
   HazardSeverity,
+  HazardSeverityBand,
   type Hazard,
   type HazardCategory,
+  type HazardSource,
   type Prisma,
 } from "@prisma/client";
 import {
@@ -15,6 +17,7 @@ import {
   populateHazardWithGeocoding,
   cleanupGeocodingCache,
   getGeocodingCacheSize,
+  convertHazardDataWithRelationsToCreateInput,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -36,6 +39,7 @@ import {
 import { config } from "../utils/config.js";
 import { getAllSubHazardCategories } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
+import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 
 // Configuration for hazard sources
 interface HazardSourceConfig {
@@ -49,7 +53,7 @@ interface HazardSourceConfig {
   fetchFunction: (
     id: string,
     availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-  ) => Promise<Prisma.HazardCreateInput[]>;
+  ) => Promise<HazardDataWithRelations[]>;
 }
 
 /**
@@ -187,7 +191,7 @@ const summarizeAndPostHazards = async ({
   hazardDatas,
   syncOption,
 }: {
-  hazardDatas: Prisma.HazardCreateInput[];
+  hazardDatas: HazardDataWithRelations[];
   syncOption: SyncHazardsFromExternalSourceOption;
 }): Promise<Hazard[]> => {
   try {
@@ -197,7 +201,7 @@ const summarizeAndPostHazards = async ({
 
     // Step 1: Check for existing hazards and prepare for geocoding based on sync option
     const hazardsToProcess: Array<{
-      hazardData: Prisma.HazardCreateInput;
+      hazardData: HazardDataWithRelations;
       isUpdate: boolean;
     }> = [];
 
@@ -268,7 +272,7 @@ const summarizeAndPostHazards = async ({
 
     // Step 2: Geocode hazards sequentially to avoid overloading geocoding service
     const geocodedHazards: Array<{
-      hazardData: Prisma.HazardCreateInput;
+      hazardData: HazardDataWithRelations;
       isUpdate: boolean;
     }> = [];
 
@@ -310,6 +314,10 @@ const summarizeAndPostHazards = async ({
             locationName: hazardData.locationName,
             latitude: Number(hazardData.latitude),
             longitude: Number(hazardData.longitude),
+            categoryName: hazardData.category?.name || "Other",
+            sourceName: hazardData.source?.name || "Unknown",
+            isAwsCompliant: hazardData.isAwsCompliant ?? false,
+            severityBand: hazardData.severityBand || HazardSeverityBand.info,
           });
 
           // Calculate confidence score for ingested hazard (official source)
@@ -334,10 +342,9 @@ const summarizeAndPostHazards = async ({
           }
 
           // Prepare the hazard data with AI summary
-          const finalHazardData: Prisma.HazardCreateInput = {
+          const finalHazardData: HazardDataWithRelations = {
             ...hazardData,
             title: summarized.title || hazardData.title,
-            shortDescription: summarized.shortDescription,
             aiSummary: summarized.summary,
             aiConfidence: summarized.confidence,
             callToAction: summarized.callToAction,
@@ -367,15 +374,19 @@ const summarizeAndPostHazards = async ({
             // For deleteExisting option, when isUpdate is false, it means we deleted the existing record
             // so we should create a new one
             createdHazard = await prisma.hazard.create({
-              data: finalHazardData,
+              data: convertHazardDataWithRelationsToCreateInput(
+                finalHazardData
+              ),
               include: buildHazardInclude(),
             });
           } else {
             // For replaceExisting or when creating truly new hazards
             createdHazard = await prisma.hazard.upsert({
               where: { id: finalHazardData.id },
-              create: finalHazardData,
-              update: finalHazardData,
+              create:
+                convertHazardDataWithRelationsToCreateInput(finalHazardData),
+              update:
+                convertHazardDataWithRelationsToCreateInput(finalHazardData),
               include: buildHazardInclude(),
             });
           }
@@ -424,7 +435,7 @@ const summarizeAndPostHazards = async ({
 export const getHazardsDataFromRFS = async (
   id: string,
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json";
 
@@ -434,7 +445,7 @@ export const getHazardsDataFromRFS = async (
     }
 
     // Ensure the source exists before creating hazards
-    const rfsSource = await prisma.hazardSource.upsert({
+    const source = await prisma.hazardSource.upsert({
       where: {
         id,
       },
@@ -456,11 +467,7 @@ export const getHazardsDataFromRFS = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: rfsSource.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -476,7 +483,7 @@ export const getHazardsDataFromRFS = async (
 export const getHazardsDataFromBoM = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
       "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20";
@@ -486,7 +493,7 @@ export const getHazardsDataFromBoM = async (
     }
 
     // Ensure the source exists before creating hazards
-    const bomSource = await prisma.hazardSource.upsert({
+    const source = await prisma.hazardSource.upsert({
       where: {
         id,
       },
@@ -503,11 +510,7 @@ export const getHazardsDataFromBoM = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: bomSource.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -523,7 +526,7 @@ export const getHazardsDataFromBoM = async (
 export const getHazardsDataFromLiveTrafficHazards = async (
   id: string,
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     if (config.nswTransportApi.apiKey.length === 0) {
       console.warn(
@@ -555,7 +558,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (
       update: {},
     });
 
-    const hazardsPromises: Promise<Prisma.HazardCreateInput[]>[] = [];
+    const hazardsPromises: Promise<HazardDataWithRelations[]>[] = [];
 
     for (const url of urls) {
       const promise = fetch(url, {
@@ -579,11 +582,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (
 
           return hazards.map((hazard) => ({
             ...hazard,
-            source: {
-              connect: {
-                id: source.id,
-              },
-            },
+            source: source,
             id: hazard.id || generateHazardId(hazard),
           }));
         })
@@ -613,7 +612,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (
 export const getHazardsDataFromAirQuality = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
       "https://www.airquality.nsw.gov.au/_design/air-quality-api/connect-data-files/rest-observations";
@@ -642,11 +641,7 @@ export const getHazardsDataFromAirQuality = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -662,7 +657,7 @@ export const getHazardsDataFromAirQuality = async (
 export const getHazardsDataFromACT = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://esa.act.gov.au/feeds/currentincidents.xml";
 
@@ -683,11 +678,7 @@ export const getHazardsDataFromACT = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -703,7 +694,7 @@ export const getHazardsDataFromACT = async (
 export const getHazardsDataFromCFS = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
       "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json";
@@ -730,11 +721,7 @@ export const getHazardsDataFromCFS = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -750,7 +737,7 @@ export const getHazardsDataFromCFS = async (
 export const getHazardsDataFromViceFireServices = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS";
 
@@ -771,11 +758,7 @@ export const getHazardsDataFromViceFireServices = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -791,7 +774,7 @@ export const getHazardsDataFromViceFireServices = async (
 export const getHazardsDataFromQLDFireDepartment = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url =
       "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml";
@@ -813,11 +796,7 @@ export const getHazardsDataFromQLDFireDepartment = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -833,7 +812,7 @@ export const getHazardsDataFromQLDFireDepartment = async (
 export const getHazardsFromNTFireAndRescue = async (
   id: string,
   categoryId: string
-): Promise<Prisma.HazardCreateInput[]> => {
+): Promise<HazardDataWithRelations[]> => {
   try {
     const url = "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json";
 
@@ -860,11 +839,7 @@ export const getHazardsFromNTFireAndRescue = async (
 
     return hazards.map((hazard) => ({
       ...hazard,
-      source: {
-        connect: {
-          id: source.id,
-        },
-      },
+      source: source,
       id: hazard.id || generateHazardId(hazard),
     }));
   } catch (error) {
@@ -877,7 +852,7 @@ export const getHazardsFromNTFireAndRescue = async (
  * Generates a deterministic hash for a hazard-like object.
  * Only uses stable fields (exclude timestamps, etc.)
  */
-export function generateHazardId(obj: Prisma.HazardCreateInput): string {
+export function generateHazardId(obj: HazardDataWithRelations): string {
   // Create a stable copy with selected identifying fields
   const data = {
     title: obj.title,

@@ -73,11 +73,6 @@ export type GetHazardsForAdminQuery = z.infer<
 export const createHazardForAdminBodySchema = z.object({
   title: z.string().max(100, "Title must be at most 100 characters").optional(),
 
-  shortDescription: z
-    .string()
-    .min(1, "Short description is required")
-    .optional(),
-
   description: z
     .string()
     .min(1, "Description is required")
@@ -105,7 +100,7 @@ export const createHazardForAdminBodySchema = z.object({
     .max(200, "Location name must be at most 200 characters")
     .optional(),
 
-  categoryId: z.string().optional(),
+  categoryId: z.string(),
 
   fireStatus: z
     .enum(["active", "beingControlled", "underControl", "closed"])
@@ -128,11 +123,6 @@ export type CreateHazardForAdminBody = z.infer<
 
 export const updateHazardForAdminBodySchema = z.object({
   title: z.string().max(100, "Title must be at most 100 characters").optional(),
-
-  shortDescription: z
-    .string()
-    .min(1, "Short description is required")
-    .optional(),
 
   description: z
     .string()

@@ -339,7 +339,13 @@ export const populateInitialCategories = async () => {
                 name: "Vehicle Fire",
                 description: "Fires involving vehicles",
                 isFireRelated: true,
-                keywords: [],
+                keywords: [
+                  "vehicle fire",
+                  "car fire",
+                  "truck fire",
+                  "bus fire",
+                  "motorcycle fire",
+                ],
               },
             },
             {
