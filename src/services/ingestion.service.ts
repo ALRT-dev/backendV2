@@ -149,8 +149,7 @@ export const syncHazardsFromDifferentSources = async ({
     ).then((results) => results.flat());
 
     console.log(
-      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`,
-      allHazardData
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
     );
 
     if (allHazardData.length === 0) {
@@ -453,7 +452,7 @@ export const getHazardsDataFromRFS = async (
       create: {
         id,
         name: "NSW Rural Fire Service",
-        url,
+        url: "https://www.rfs.nsw.gov.au",
       },
       update: {},
     });
@@ -501,7 +500,7 @@ export const getHazardsDataFromBoM = async (
       create: {
         id,
         name: "Bureau of Meteorology",
-        url,
+        url: "https://www.bom.gov.au/weather-and-climate/warnings-and-alerts",
       },
       update: {},
     });
@@ -557,7 +556,7 @@ export const getHazardsDataFromLiveTrafficHazards = async (
       create: {
         id,
         name: "NSW Transport Live Traffic Hazards",
-        url: "https://opendata.transport.nsw.gov.au/dataset/live-traffic-hazards",
+        url: "https://www.livetraffic.com",
       },
       update: {},
     });
@@ -673,7 +672,7 @@ export const getHazardsDataFromACT = async (
       create: {
         id,
         name: "ACT Emergency Services",
-        url,
+        url: "https://esa.act.gov.au/",
       },
       update: {},
     });
@@ -719,7 +718,7 @@ export const getHazardsDataFromCFS = async (
       create: {
         id,
         name: "SA Country Fire Service",
-        url,
+        url: "https://www.cfs.sa.gov.au/warnings-restrictions/warnings/incidents-warnings/",
       },
       update: {},
     });
@@ -760,7 +759,7 @@ export const getHazardsDataFromViceFireServices = async (
       create: {
         id,
         name: "Vice Fire Service",
-        url,
+        url: "https://emergency.vic.gov.au",
       },
       update: {},
     });
@@ -802,7 +801,7 @@ export const getHazardsDataFromQLDFireDepartment = async (
       create: {
         id,
         name: "QLD Fire Department",
-        url,
+        url: "https://www.fire.qld.gov.au/Current-Incidents",
       },
       update: {},
     });
@@ -848,7 +847,7 @@ export const getHazardsFromNTFireAndRescue = async (
       create: {
         id,
         name: "NT Fire and Rescue",
-        url,
+        url: "https://pfes.nt.gov.au/fire-and-rescue-service/fire-incident-map",
       },
       update: {},
     });

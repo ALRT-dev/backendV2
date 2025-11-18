@@ -109,7 +109,10 @@ export const getSeverityFromDescription = (
   const desc = description.toLowerCase();
   for (const [severity, keywords] of Object.entries(severityKeywords)) {
     for (const keyword of keywords) {
-      if (desc.includes(keyword.toLowerCase())) {
+      if (
+        desc.includes(keyword.toLowerCase()) &&
+        !desc.includes(`${keyword.toLowerCase()}:`)
+      ) {
         return severity as HazardSeverity;
       }
     }

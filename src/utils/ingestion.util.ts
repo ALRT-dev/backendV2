@@ -268,6 +268,8 @@ export function parseGeoJsonToHazards({
           extractIdFromGUID(properties.guid) &&
           `${idPrefix}-${extractIdFromGUID(properties.guid)}`);
 
+      const link = properties?.webLinks?.[0]?.linkURL;
+
       const { severity, severityBand, category, fireStatus, isAwsCompliant } =
         getHazardAttributesFromDescription(description, availableCategories);
 
@@ -284,6 +286,7 @@ export function parseGeoJsonToHazards({
         isAwsCompliant,
         latitude,
         longitude,
+        link,
         occurredAt: parseValidDate(properties?.pubDate, dateFormat),
         expiresAt: properties?.end
           ? parseValidDate(properties.end, dateFormat)
