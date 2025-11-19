@@ -32,172 +32,6 @@ import {
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 
 /**
- * GEOCODING OPTIMIZATION UTILITIES:
- *
- * In-memory cache and rate limiting for Google Maps API calls
- * to reduce API usage from >5000 calls/month to <500 calls/month
- */
-
-// In-memory cache for geocoding results to reduce API calls
-const geocodingCache = new Map<
-  string,
-  { lat: number; lng: number; address: string; timestamp: number }
->();
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
-
-// Rate limiting for geocoding API calls
-let lastGeocodingCall = 0;
-const GEOCODING_DELAY_MS = 100; // 100ms delay between API calls
-
-/**
- * Adds a delay to respect API rate limits
- */
-const delay = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-/**
- * Cleans up expired cache entries to prevent memory leaks
- */
-export const cleanupGeocodingCache = (): void => {
-  const now = Date.now();
-  let deletedCount = 0;
-  const keysToDelete: string[] = [];
-
-  geocodingCache.forEach((value, key) => {
-    if (now - value.timestamp > CACHE_EXPIRY_MS) {
-      keysToDelete.push(key);
-    }
-  });
-
-  keysToDelete.forEach((key) => {
-    geocodingCache.delete(key);
-    deletedCount++;
-  });
-
-  if (deletedCount > 0) {
-    console.log(
-      `Cleaned up ${deletedCount} expired geocoding cache entries. Current cache size: ${geocodingCache.size}`
-    );
-  }
-};
-
-/**
- * Rate-limited geocoding wrapper
- */
-const rateLimitedGeocode = async <T>(
-  geocodeFunction: () => Promise<T>
-): Promise<T> => {
-  const now = Date.now();
-  const timeSinceLastCall = now - lastGeocodingCall;
-
-  if (timeSinceLastCall < GEOCODING_DELAY_MS) {
-    await delay(GEOCODING_DELAY_MS - timeSinceLastCall);
-  }
-
-  lastGeocodingCall = Date.now();
-  return geocodeFunction();
-};
-
-/**
- * Gets the current geocoding cache size for monitoring
- */
-export const getGeocodingCacheSize = (): number => {
-  return geocodingCache.size;
-};
-
-/**
- * Populates a single hazard with missing geocoding information using cache when possible.
- * If latitude/longitude is missing, it uses the locationName to fetch coordinates.
- * If locationName is missing, it uses latitude/longitude to fetch the address.
- */
-export const populateHazardWithGeocoding = async (
-  hazard: HazardDataWithRelations
-): Promise<HazardDataWithRelations> => {
-  // Skip geocoding if both coordinates and location are already present
-  if (hazard.latitude && hazard.longitude && hazard.locationName) {
-    return hazard;
-  }
-
-  try {
-    // Case 1: Missing coordinates but have location name
-    if (!hazard.latitude || !hazard.longitude) {
-      if (hazard.locationName) {
-        const cacheKey = `addr_${hazard.locationName}`;
-        const cached = geocodingCache.get(cacheKey);
-
-        if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
-          hazard.latitude = cached.lat;
-          hazard.longitude = cached.lng;
-          console.log(`Using cached coordinates for: ${hazard.locationName}`);
-        } else {
-          const result: GeocodeResult | undefined = await rateLimitedGeocode(
-            () => convertAddressToLatLng(hazard.locationName!)
-          );
-          if (result && result.geometry && result.geometry.location) {
-            hazard.latitude = result.geometry.location.lat;
-            hazard.longitude = result.geometry.location.lng;
-
-            // Cache the result
-            geocodingCache.set(cacheKey, {
-              lat: result.geometry.location.lat,
-              lng: result.geometry.location.lng,
-              address: hazard.locationName,
-              timestamp: Date.now(),
-            });
-            console.log(`Geocoded coordinates for: ${hazard.locationName}`);
-          } else {
-            console.warn(
-              `Geocoding failed for hazard location: ${hazard.locationName}`
-            );
-          }
-        }
-      }
-    }
-
-    // Case 2: Missing location name but have coordinates
-    if (hazard.latitude && hazard.longitude && !hazard.locationName) {
-      const cacheKey = `coords_${hazard.latitude}_${hazard.longitude}`;
-      const cached = geocodingCache.get(cacheKey);
-
-      if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
-        hazard.locationName = cached.address;
-        console.log(
-          `Using cached address for: ${hazard.latitude}, ${hazard.longitude}`
-        );
-      } else {
-        const address: string | undefined = await rateLimitedGeocode(() =>
-          convertLatLngToAddress(hazard.latitude!, hazard.longitude!)
-        );
-        if (address) {
-          hazard.locationName = address;
-
-          // Cache the result
-          geocodingCache.set(cacheKey, {
-            lat: hazard.latitude,
-            lng: hazard.longitude,
-            address: address,
-            timestamp: Date.now(),
-          });
-          console.log(
-            `Reverse geocoded address for: ${hazard.latitude}, ${hazard.longitude}`
-          );
-        } else {
-          console.warn(
-            `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
-          );
-        }
-      }
-    }
-
-    return hazard;
-  } catch (error) {
-    console.error(`Error during geocoding for hazard: ${hazard.title}`, error);
-    return hazard;
-  }
-};
-
-/**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
  *
  * @param data - The GeoJSON FeatureCollection
@@ -753,6 +587,172 @@ export function parseNTFireAndRescueToHazards({
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
 
 /**
+ * GEOCODING OPTIMIZATION UTILITIES:
+ *
+ * In-memory cache and rate limiting for Google Maps API calls
+ * to reduce API usage from >5000 calls/month to <500 calls/month
+ */
+
+// In-memory cache for geocoding results to reduce API calls
+const geocodingCache = new Map<
+  string,
+  { lat: number; lng: number; address: string; timestamp: number }
+>();
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Rate limiting for geocoding API calls
+let lastGeocodingCall = 0;
+const GEOCODING_DELAY_MS = 100; // 100ms delay between API calls
+
+/**
+ * Adds a delay to respect API rate limits
+ */
+const delay = (ms: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+};
+
+/**
+ * Cleans up expired cache entries to prevent memory leaks
+ */
+export const cleanupGeocodingCache = (): void => {
+  const now = Date.now();
+  let deletedCount = 0;
+  const keysToDelete: string[] = [];
+
+  geocodingCache.forEach((value, key) => {
+    if (now - value.timestamp > CACHE_EXPIRY_MS) {
+      keysToDelete.push(key);
+    }
+  });
+
+  keysToDelete.forEach((key) => {
+    geocodingCache.delete(key);
+    deletedCount++;
+  });
+
+  if (deletedCount > 0) {
+    console.log(
+      `Cleaned up ${deletedCount} expired geocoding cache entries. Current cache size: ${geocodingCache.size}`
+    );
+  }
+};
+
+/**
+ * Rate-limited geocoding wrapper
+ */
+const rateLimitedGeocode = async <T>(
+  geocodeFunction: () => Promise<T>
+): Promise<T> => {
+  const now = Date.now();
+  const timeSinceLastCall = now - lastGeocodingCall;
+
+  if (timeSinceLastCall < GEOCODING_DELAY_MS) {
+    await delay(GEOCODING_DELAY_MS - timeSinceLastCall);
+  }
+
+  lastGeocodingCall = Date.now();
+  return geocodeFunction();
+};
+
+/**
+ * Gets the current geocoding cache size for monitoring
+ */
+export const getGeocodingCacheSize = (): number => {
+  return geocodingCache.size;
+};
+
+/**
+ * Populates a single hazard with missing geocoding information using cache when possible.
+ * If latitude/longitude is missing, it uses the locationName to fetch coordinates.
+ * If locationName is missing, it uses latitude/longitude to fetch the address.
+ */
+export const populateHazardWithGeocoding = async (
+  hazard: HazardDataWithRelations
+): Promise<HazardDataWithRelations> => {
+  // Skip geocoding if both coordinates and location are already present
+  if (hazard.latitude && hazard.longitude && hazard.locationName) {
+    return hazard;
+  }
+
+  try {
+    // Case 1: Missing coordinates but have location name
+    if (!hazard.latitude || !hazard.longitude) {
+      if (hazard.locationName) {
+        const cacheKey = `addr_${hazard.locationName}`;
+        const cached = geocodingCache.get(cacheKey);
+
+        if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
+          hazard.latitude = cached.lat;
+          hazard.longitude = cached.lng;
+          console.log(`Using cached coordinates for: ${hazard.locationName}`);
+        } else {
+          const result: GeocodeResult | undefined = await rateLimitedGeocode(
+            () => convertAddressToLatLng(hazard.locationName!)
+          );
+          if (result && result.geometry && result.geometry.location) {
+            hazard.latitude = result.geometry.location.lat;
+            hazard.longitude = result.geometry.location.lng;
+
+            // Cache the result
+            geocodingCache.set(cacheKey, {
+              lat: result.geometry.location.lat,
+              lng: result.geometry.location.lng,
+              address: hazard.locationName,
+              timestamp: Date.now(),
+            });
+            console.log(`Geocoded coordinates for: ${hazard.locationName}`);
+          } else {
+            console.warn(
+              `Geocoding failed for hazard location: ${hazard.locationName}`
+            );
+          }
+        }
+      }
+    }
+
+    // Case 2: Missing location name but have coordinates
+    if (hazard.latitude && hazard.longitude && !hazard.locationName) {
+      const cacheKey = `coords_${hazard.latitude}_${hazard.longitude}`;
+      const cached = geocodingCache.get(cacheKey);
+
+      if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
+        hazard.locationName = cached.address;
+        console.log(
+          `Using cached address for: ${hazard.latitude}, ${hazard.longitude}`
+        );
+      } else {
+        const address: string | undefined = await rateLimitedGeocode(() =>
+          convertLatLngToAddress(hazard.latitude!, hazard.longitude!)
+        );
+        if (address) {
+          hazard.locationName = address;
+
+          // Cache the result
+          geocodingCache.set(cacheKey, {
+            lat: hazard.latitude,
+            lng: hazard.longitude,
+            address: address,
+            timestamp: Date.now(),
+          });
+          console.log(
+            `Reverse geocoded address for: ${hazard.latitude}, ${hazard.longitude}`
+          );
+        } else {
+          console.warn(
+            `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
+          );
+        }
+      }
+    }
+
+    return hazard;
+  } catch (error) {
+    console.error(`Error during geocoding for hazard: ${hazard.title}`, error);
+    return hazard;
+  }
+};
+
+/**
  * Maps air quality category to hazard severity based on standard air quality classifications
  *
  * @param category - Air quality category string (e.g., "GOOD", "POOR", "HAZARDOUS")
@@ -969,6 +969,7 @@ function extractNSWTrafficDescription(properties: GeoJsonProperties): string {
 
   return descriptionParts.join("\n");
 }
+
 /**
  * Cleans RSS title by extracting the main incident description
  * and removing location prefixes if they seem redundant
@@ -1290,6 +1291,10 @@ function buildNTFireAndRescueDescription(properties: any): string {
   return parts.join("\n");
 }
 
+/**
+ * Converts HazardDataWithRelations to Prisma HazardCreateInput
+ * by connecting related category and source entities
+ */
 export const convertHazardDataWithRelationsToCreateInput = (
   hazardData: HazardDataWithRelations
 ): Prisma.HazardCreateInput => {
@@ -1304,6 +1309,12 @@ export const convertHazardDataWithRelationsToCreateInput = (
   };
 };
 
+/**
+ * Extracts hazard attributes from description text
+ * @param description The hazard description text
+ * @param availableCategories The list of available hazard categories to match against
+ * @returns Object containing severity, severityBand, category, fireStatus, and isAwsCompliant
+ */
 export const getHazardAttributesFromDescription = (
   description: string,
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
