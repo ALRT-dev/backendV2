@@ -94,6 +94,11 @@ export const config = {
     apiKey: getOptionalEnv("NSW_TRANSPORT_API_KEY", ""),
   },
 
+  // WAQI API
+  waqiApi: {
+    apiToken: getOptionalEnv("WAQI_API_TOKEN", ""),
+  },
+
   // Google Maps API
   googleMapsApi: {
     apiKey: getOptionalEnv("GOOGLE_MAPS_API_KEY", ""),

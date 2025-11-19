@@ -18,6 +18,7 @@ import {
   cleanupGeocodingCache,
   getGeocodingCacheSize,
   convertHazardDataWithRelationsToCreateInput,
+  parseWAQIToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -120,6 +121,11 @@ export const syncHazardsFromDifferentSources = async ({
         id: "nt-fire-and-rescue",
         name: "NT Fire and Rescue",
         fetchFunction: getHazardsFromNTFireAndRescue,
+      },
+      {
+        id: "waqi",
+        name: "World Air Quality",
+        fetchFunction: getHazardsDataFromWAQI,
       },
     ].filter((source) =>
       sourceIds && sourceIds.length > 0 ? sourceIds.includes(source.id) : true
@@ -856,6 +862,66 @@ export const getHazardsFromNTFireAndRescue = async (
     const hazards = parseNTFireAndRescueToHazards({
       data,
       availableCategories,
+    });
+
+    return hazards.map((hazard) => ({
+      ...hazard,
+      source: source,
+      id: hazard.id || generateHazardId(hazard),
+    }));
+  } catch (error) {
+    console.error("Error fetching NT Fire and Rescue data:", error);
+    return [];
+  }
+};
+
+/**
+ * Fetches hazard data from the World Air Quality Index feed
+ * and converts it into an array of HazardDataWithRelations objects.
+ */
+export const getHazardsDataFromWAQI = async (
+  id: string,
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
+): Promise<HazardDataWithRelations[]> => {
+  try {
+    const australiaBounds = "-44.0,112.0,-10.0,154.0";
+    const url = `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch WAQI data: ${response.statusText}`);
+    }
+
+    // Ensure the source exists before creating hazards
+    const source = await prisma.hazardSource.upsert({
+      where: {
+        id,
+      },
+      create: {
+        id,
+        name: "World Air Quality Index",
+        url: "https://waqi.info/",
+      },
+      update: {},
+    });
+
+    const data = await response.json();
+    if (!data.data || data.data.length === 0) {
+      console.log("No WAQI data found for Australia.");
+      return [];
+    }
+
+    const category = availableCategories.find(
+      (cat) => cat.id === "poorAirQuality"
+    );
+    if (!category) {
+      console.log("Air Quality category not found, skipping WAQI hazards.");
+      return [];
+    }
+
+    const hazards = parseWAQIToHazards({
+      data: data.data,
+      category,
     });
 
     return hazards.map((hazard) => ({

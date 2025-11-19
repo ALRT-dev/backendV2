@@ -20,6 +20,7 @@ import {
 } from "../services/google_map.service.js";
 import {
   awsCompliantSeverities,
+  getSeverityBandFromAQI,
   getSeverityBandFromAWSCompliantSeverity,
   getSeverityBandFromDescription,
   getSeverityFromDescription,
@@ -300,6 +301,87 @@ export function parseAirQualityToHazards(
         longitude,
         occurredAt,
         severity,
+      };
+
+      return hazard;
+    })
+    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
+}
+
+/**
+ * Parses World Air Quality Index (WAQI) data to hazards
+ *
+ * @param data - Array of WAQI station data
+ * @param categoryId - The hazard category ID to associate with these hazards
+ * @returns Array of HazardDataWithRelations objects
+ *
+ * @example
+ * ```typescript
+ * const waqiData = [
+ *   {
+ *     "lat": -27.5358,
+ *     "lon": 152.9934,
+ *     "uid": 5116,
+ *     "aqi": "64",
+ *     "station": {
+ *       "name": "Rocklea",
+ *       "time": "2025-11-19T18:00:00+09:00"
+ *     }
+ *   }
+ * ];
+ * const hazards = parseWAQIToHazards(waqiData, categoryId);
+ * ```
+ */
+export function parseWAQIToHazards({
+  data,
+  category,
+}: {
+  data: Array<{
+    lat: number;
+    lon: number;
+    uid: number;
+    aqi: string;
+    station: {
+      name: string;
+      time: string;
+    };
+  }>;
+  category: HazardCategory;
+}): HazardDataWithRelations[] {
+  if (!Array.isArray(data) || !data.length) {
+    return [];
+  }
+
+  return data
+    .map((item) => {
+      const aqiValue = parseInt(item.aqi, 10);
+
+      const title = `Air Quality Alert - ${item.station.name}`;
+
+      // Build comprehensive description
+      const descriptionParts: string[] = [
+        `Station: ${item.station.name}`,
+        `AQI: ${aqiValue}`,
+        `Coordinates: ${item.lat}, ${item.lon}`,
+        `Last Updated: ${item.station.time}`,
+      ];
+
+      const description = descriptionParts.join("\n");
+
+      // Determine severity band based on AQI value
+      const severityBand = getSeverityBandFromAQI(aqiValue);
+
+      const id = `waqi-${item.uid}`;
+
+      const hazard: HazardDataWithRelations = {
+        id,
+        title,
+        description,
+        latitude: item.lat,
+        longitude: item.lon,
+        category,
+        severityBand,
+        occurredAt: parseValidDate(item.station.time),
       };
 
       return hazard;
