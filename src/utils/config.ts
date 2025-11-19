@@ -70,6 +70,11 @@ export const config = {
     clientIdAndroid: getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID_ANDROID"),
   },
 
+  // Apple OAuth
+  appleOAuth: {
+    audience: getRequiredEnv("APPLE_OAUTH_AUDIENCE"),
+  },
+
   // OpenAI
   openAI: {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
