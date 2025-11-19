@@ -6,7 +6,6 @@ import {
   type HazardCategory,
 } from "@prisma/client";
 import {
-  parseAirQualityToHazards,
   parseBoMWarningsToHazards,
   parseCFSFeedToHazards,
   parseGeoJsonToHazards,
@@ -45,7 +44,6 @@ export enum ExternalSourceId {
   rfs = "rfs",
   bom = "bom",
   nswTransport = "nsw-transport",
-  nswAirQuality = "nsw-air-quality",
   actEs = "act-es",
   cfs = "cfs",
   viceFire = "vice-fire",
@@ -55,21 +53,25 @@ export enum ExternalSourceId {
   openMeteo = "open-meteo",
 }
 
+// Configuration for hazard sources
 interface ExternalSource {
   id: ExternalSourceId;
   name: string;
   url: string;
-}
 
-// Configuration for hazard sources
-interface HazardSourceConfig {
-  source: ExternalSource;
+  apiUrl?: string | undefined;
+  apiUrls?: string[] | undefined;
+  fetchOptions?: RequestInit | undefined;
 
-  // Function to fetch hazard data from the source
-  fetchFunction: (
-    source: ExternalSource,
-    availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-  ) => Promise<HazardDataWithRelations[]>;
+  preCheck?:
+    | (() => Promise<
+        boolean | { skip: true; message?: string | undefined } | undefined
+      >)
+    | undefined;
+
+  parseFunction: (
+    responseData?: any
+  ) => HazardDataWithRelations[] | Promise<HazardDataWithRelations[]>;
 }
 
 /**
@@ -91,121 +93,223 @@ export const syncHazardsFromDifferentSources = async ({
 
     const availableCategories = await getAllSubHazardCategories();
 
-    const sourceConfigs: HazardSourceConfig[] = [
+    const australiaBounds = "-44.0,112.0,-10.0,154.0";
+    const australiaLocations = [
+      { name: "Sydney", lat: -33.8688, lon: 151.2093 },
+      { name: "Melbourne", lat: -37.8136, lon: 144.9631 },
+      { name: "Brisbane", lat: -27.4698, lon: 153.0251 },
+      { name: "Perth", lat: -31.9505, lon: 115.8605 },
+      { name: "Adelaide", lat: -34.9285, lon: 138.6007 },
+      { name: "Canberra", lat: -35.2809, lon: 149.13 },
+      { name: "Hobart", lat: -42.8821, lon: 147.3272 },
+      { name: "Darwin", lat: -12.4634, lon: 130.8456 },
+      { name: "Gold Coast", lat: -28.0167, lon: 153.4 },
+      { name: "Newcastle", lat: -32.9283, lon: 151.7817 },
+    ];
+
+    const externalSources: ExternalSource[] = [
       {
-        source: {
-          id: ExternalSourceId.rfs,
-          name: "NSW Rural Fire Service",
-          url: "https://www.rfs.nsw.gov.au",
-        },
-        fetchFunction: getHazardsDataFromRFS,
+        id: ExternalSourceId.rfs,
+        name: "NSW Rural Fire Service",
+        url: "https://www.rfs.nsw.gov.au",
+        apiUrl: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+        parseFunction: (responseData: any) =>
+          parseGeoJsonToHazards({
+            data: responseData,
+            availableCategories,
+            idPrefix: ExternalSourceId.rfs,
+            dateFormat: "DD/MM/YYYY",
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.bom,
-          name: "BoM",
-          url: "https://www.bom.gov.au",
-        },
-        fetchFunction: getHazardsDataFromBoM,
+        id: ExternalSourceId.bom,
+        name: "BoM",
+        url: "https://www.bom.gov.au",
+        apiUrl:
+          "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20",
+        parseFunction: (responseData: any) =>
+          parseBoMWarningsToHazards({
+            data: responseData,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.nswTransport,
-          name: "NSW Transport",
-          url: "https://www.transport.nsw.gov.au",
+        id: ExternalSourceId.nswTransport,
+        name: "NSW Transport",
+        url: "https://www.transport.nsw.gov.au",
+        apiUrls: [
+          "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
+          "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
+        ],
+        fetchOptions: {
+          headers: {
+            Authorization: `apikey ${config.nswTransportApi.apiKey}`,
+          },
         },
-        fetchFunction: getHazardsDataFromLiveTrafficHazards,
+        parseFunction: (responseData: any) =>
+          parseGeoJsonToHazards({
+            data: responseData,
+            availableCategories,
+            idPrefix: ExternalSourceId.nswTransport,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.actEs,
-          name: "ACT Emergency Services",
-          url: "https://www.act.gov.au",
-        },
-        fetchFunction: getHazardsDataFromACT,
+        id: ExternalSourceId.actEs,
+        name: "ACT Emergency Services",
+        url: "https://www.act.gov.au",
+        apiUrl: "https://esa.act.gov.au/feeds/currentincidents.xml",
+        parseFunction: () =>
+          parseRSSFeedToHazards({
+            url: "https://esa.act.gov.au/feeds/currentincidents.xml",
+            idPrefix: ExternalSourceId.actEs,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.cfs,
-          name: "CFS",
-          url: "https://www.cfs.sa.gov.au",
-        },
-        fetchFunction: getHazardsDataFromCFS,
+        id: ExternalSourceId.cfs,
+        name: "CFS",
+        url: "https://www.cfs.sa.gov.au",
+        apiUrl:
+          "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json",
+        parseFunction: (responseData: any) =>
+          parseCFSFeedToHazards({
+            data: responseData,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.viceFire,
-          name: "Vice Fire Services",
-          url: "https://www.vicefire.com",
-        },
-        fetchFunction: getHazardsDataFromViceFireServices,
+        id: ExternalSourceId.viceFire,
+        name: "Vice Fire Services",
+        url: "https://www.vicefire.com",
+        apiUrl: "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS",
+        parseFunction: () =>
+          parseRSSFeedToHazards({
+            url: "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS",
+            idPrefix: ExternalSourceId.viceFire,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.qldFire,
-          name: "QLD Fire Department",
-          url: "https://www.qld.gov.au",
-        },
-        fetchFunction: getHazardsDataFromQLDFireDepartment,
+        id: ExternalSourceId.qldFire,
+        name: "QLD Fire Department",
+        url: "https://www.qld.gov.au",
+        apiUrl:
+          "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml",
+        parseFunction: () =>
+          parseRSSFeedToHazards({
+            url: "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml",
+            idPrefix: ExternalSourceId.qldFire,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.ntFireAndRescue,
-          name: "NT Fire and Rescue",
-          url: "https://www.nt.gov.au",
-        },
-        fetchFunction: getHazardsFromNTFireAndRescue,
+        id: ExternalSourceId.ntFireAndRescue,
+        name: "NT Fire and Rescue",
+        url: "https://www.nt.gov.au",
+        apiUrl: "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json",
+        parseFunction: (responseData: any) =>
+          parseNTFireAndRescueToHazards({
+            data: responseData,
+            availableCategories,
+          }),
       },
       {
-        source: {
-          id: ExternalSourceId.waqi,
-          name: "World Air Quality",
-          url: "https://www.waqi.info",
+        id: ExternalSourceId.waqi,
+        name: "World Air Quality",
+        url: "https://www.waqi.info",
+        apiUrl: `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`,
+        parseFunction: (responseData: any) => {
+          if (!responseData.data || responseData.data.length === 0) {
+            console.log("No WAQI data found for Australia.");
+            return [];
+          }
+
+          const poorAirQualityCategory = availableCategories.find(
+            (cat) => cat.id === "poorAirQuality"
+          );
+          if (!poorAirQualityCategory) {
+            console.log(
+              "Poor Air Quality category not found, skipping WAQI hazards."
+            );
+            return [];
+          }
+
+          return parseWAQIToHazards({
+            data: responseData.data,
+            category: poorAirQualityCategory,
+          });
         },
-        fetchFunction: getHazardsDataFromWAQI,
       },
       {
-        source: {
-          id: ExternalSourceId.openMeteo,
-          name: "Open-Meteo",
-          url: "https://open-meteo.com",
+        id: ExternalSourceId.openMeteo,
+        name: "Open-Meteo",
+        url: "https://open-meteo.com",
+        apiUrls: australiaLocations.map((location) => {
+          const apiUrl =
+            "https://air-quality-api.open-meteo.com/v1/air-quality";
+          const params = new URLSearchParams({
+            latitude: location.lat.toString(),
+            longitude: location.lon.toString(),
+            current:
+              "uv_index,birch_pollen,grass_pollen,olive_pollen,ragweed_pollen",
+            timezone: "auto",
+          });
+          return `${apiUrl}?${params.toString()}`;
+        }),
+        parseFunction: (responseData: any) => {
+          const pollenCategory = availableCategories.find(
+            (cat: HazardCategory) => cat.id === "pollen"
+          );
+          const uvCategory = availableCategories.find(
+            (cat: HazardCategory) => cat.id === "uvIndex"
+          );
+          if (!pollenCategory || !uvCategory) {
+            console.log(
+              "Pollen or UV Index category not found, skipping Open-Meteo hazards."
+            );
+            return [];
+          }
+
+          return parseUVIndexAndPollenToHazards({
+            data: responseData,
+            uvCategory,
+            pollenCategory,
+          });
         },
-        fetchFunction: getHazardsFromOpenMeteo,
       },
     ].filter((sourceConfig) =>
       sourceIds && sourceIds.length > 0
-        ? sourceIds.includes(sourceConfig.source.id)
+        ? sourceIds.includes(sourceConfig.id)
         : true
     );
 
     // Step 1: Fetch all hazards from all sources simultaneously
     console.log(
-      `---------------------------------------> Fetching hazards from ${sourceConfigs.length} sources...`
+      `---------------------------------------> Fetching hazards from ${externalSources.length} sources...`
     );
 
     const allHazardData = await Promise.all(
-      sourceConfigs.map(async (sourceConfig) => {
+      externalSources.map(async (externalSource) => {
         try {
-          const hazards = await sourceConfig.fetchFunction(
-            sourceConfig.source,
+          const hazards = await fetchHazardsFromSource(
+            externalSource,
             availableCategories
           );
+
           console.log(
-            `---------------------------------------> Fetched ${hazards.length} hazards from ${sourceConfig.source.name}`
+            `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.name}`
           );
           return hazards;
         } catch (error) {
-          console.error(
-            `Error fetching from ${sourceConfig.source.name}:`,
-            error
-          );
+          console.error(`Error fetching from ${externalSource.name}:`, error);
           return [];
         }
       })
     ).then((results) => results.flat());
 
     console.log(
-      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`,
+      allHazardData
     );
 
     if (allHazardData.length === 0) {
@@ -227,6 +331,7 @@ export const syncHazardsFromDifferentSources = async ({
       } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
     return createdHazards;
+    return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
     return [];
@@ -484,522 +589,118 @@ const summarizeAndPostHazards = async ({
 };
 
 /**
- * Fetches hazard data from the NSW Rural Fire Service (RFS) feed
- * and converts it into an array of HazardCreateInput objects.
+ * Generic helper function to fetch hazards from an external source.
+ * Handles common patterns: upsert source, fetch data, parse, and map with IDs.
  */
-export const getHazardsDataFromRFS = async (
+const fetchHazardsFromSource = async <T = any>(
   externalSource: ExternalSource,
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
 ): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url = "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json";
+  const {
+    id,
+    name,
+    url,
+    apiUrl,
+    apiUrls,
+    fetchOptions,
+    parseFunction,
+    preCheck,
+  } = externalSource;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch RFS data: ${response.statusText}`);
+  try {
+    // Run pre-check if provided
+    if (preCheck) {
+      const checkResult = await preCheck();
+      if (typeof checkResult === "object" && checkResult.skip) {
+        if (checkResult.message) {
+          console.warn(checkResult.message);
+        }
+        return [];
+      }
     }
+
+    const externalSourceBasicInfo = {
+      id: id,
+      name: name,
+      url: url,
+    };
 
     // Ensure the source exists before creating hazards
     const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
+      where: { id: externalSourceBasicInfo.id },
+      create: externalSourceBasicInfo,
+      update: externalSourceBasicInfo,
     });
 
-    const data = await response.json();
-    const hazards = parseGeoJsonToHazards({
-      data,
-      availableCategories,
-      idPrefix: "rfs",
-      dateFormat: "DD/MM/YYYY",
-    });
+    // Handle single URL
+    if (apiUrl) {
+      // Check if parseFunction is async (RSS feeds)
+      if (parseFunction.length === 0) {
+        const hazards = await (
+          parseFunction as () => Promise<HazardDataWithRelations[]>
+        )();
+        return hazards.map((hazard) => ({
+          ...hazard,
+          source: source,
+          id: hazard.id || generateHazardId(hazard),
+        }));
+      }
 
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching RFS data:", error);
-    return [];
-  }
-};
+      // Standard JSON API fetching
+      const response = await fetch(apiUrl, fetchOptions);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${name} data: ${response.statusText}`);
+      }
 
-/**
- * Fetches hazard data from the Bureau of Meteorology (BoM) warnings feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromBoM = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url =
-      "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20";
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch BoM data: ${response.statusText}`);
-    }
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const data = await response.json();
-    const hazards = parseBoMWarningsToHazards({
-      data,
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching BoM data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the NSW Transport live traffic hazards feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromLiveTrafficHazards = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    if (config.nswTransportApi.apiKey.length === 0) {
-      console.warn(
-        "NSW Transport API key is not set. Skipping live traffic hazards fetch."
+      const data = await response.json();
+      const hazards = (parseFunction as (data: T) => HazardDataWithRelations[])(
+        data
       );
-      return [];
+
+      return hazards.map((hazard) => ({
+        ...hazard,
+        source: source,
+        id: hazard.id || generateHazardId(hazard),
+      }));
     }
 
-    const urls = [
-      "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
-      "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
-    ];
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const hazardsPromises: Promise<HazardDataWithRelations[]>[] = [];
-
-    for (const url of urls) {
-      const promise = fetch(url, {
-        headers: {
-          Authorization: `apikey ${config.nswTransportApi.apiKey}`,
-        },
-      })
-        .then(async (response) => {
+    // Handle multiple URLs
+    if (apiUrls && apiUrls.length > 0) {
+      const hazardsPromises = apiUrls.map(async (singleUrl) => {
+        try {
+          const response = await fetch(singleUrl, fetchOptions);
           if (!response.ok) {
             throw new Error(
-              `Failed to fetch live traffic hazards data: ${response.statusText}`
+              `Failed to fetch ${name} data from ${singleUrl}: ${response.statusText}`
             );
           }
 
           const data = await response.json();
-          const hazards = parseGeoJsonToHazards({
-            data,
-            availableCategories,
-            idPrefix: "nsw-transport",
-          });
+          const hazards = (
+            parseFunction as (
+              data: T,
+              source?: any
+            ) => HazardDataWithRelations[]
+          )(data, source);
 
           return hazards.map((hazard) => ({
             ...hazard,
             source: source,
             id: hazard.id || generateHazardId(hazard),
           }));
-        })
-        .catch((error) => {
-          console.error(
-            `Error fetching live traffic hazards from ${url}:`,
-            error
-          );
+        } catch (error) {
+          console.error(`Error fetching ${name} from ${singleUrl}:`, error);
           return [];
-        });
+        }
+      });
 
-      hazardsPromises.push(promise);
+      const hazardsArrays = await Promise.all(hazardsPromises);
+      return hazardsArrays.flat();
     }
 
-    const hazardsArrays = await Promise.all(hazardsPromises);
-    return hazardsArrays.flat();
-  } catch (error) {
-    console.error("Error fetching live traffic hazards:", error);
     return [];
-  }
-};
-
-/**
- * Fetches hazard data from the NSW Air Quality feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromAirQuality = async (
-  externalSource: ExternalSource,
-  categoryId: string
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url =
-      "https://www.airquality.nsw.gov.au/_design/air-quality-api/connect-data-files/rest-observations";
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch NSW Air Quality data: ${response.statusText}`
-      );
-    }
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const data = await response.json();
-    const hazards = parseAirQualityToHazards(data, categoryId);
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
   } catch (error) {
-    console.error("Error fetching NSW Air Quality data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the ACT Emergency Services feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromACT = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url = "https://esa.act.gov.au/feeds/currentincidents.xml";
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const hazards = await parseRSSFeedToHazards({
-      url,
-      idPrefix: "act-es",
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching ACT Emergency Services data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the SA Country Fire Service (CFS) feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromCFS = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url =
-      "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json";
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch CFS data: ${response.statusText}`);
-    }
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const data = await response.json();
-    const hazards = parseCFSFeedToHazards({
-      data,
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching CFS data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the Vice Fire Service feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromViceFireServices = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url = "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS";
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const hazards = await parseRSSFeedToHazards({
-      url,
-      idPrefix: "vice-fire",
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching Vice Fire Service data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the QLD Fire Department feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsDataFromQLDFireDepartment = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url =
-      "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml";
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const hazards = await parseRSSFeedToHazards({
-      url,
-      idPrefix: "qld-fire",
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching Vice Fire Service data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the NT Fire and Rescue feed
- * and converts it into an array of HazardCreateInput objects.
- */
-export const getHazardsFromNTFireAndRescue = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const url = "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json";
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch RFS data: ${response.statusText}`);
-    }
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const data = await response.json();
-    const hazards = parseNTFireAndRescueToHazards({
-      data,
-      availableCategories,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching NT Fire and Rescue data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the World Air Quality Index feed
- * and converts it into an array of HazardDataWithRelations objects.
- */
-export const getHazardsDataFromWAQI = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const australiaBounds = "-44.0,112.0,-10.0,154.0";
-    const url = `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch WAQI data: ${response.statusText}`);
-    }
-
-    // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    const data = await response.json();
-    if (!data.data || data.data.length === 0) {
-      console.log("No WAQI data found for Australia.");
-      return [];
-    }
-
-    let poorAirQualityCategory = availableCategories.find(
-      (cat) => cat.id === "poorAirQuality"
-    );
-    if (!poorAirQualityCategory) {
-      console.log(
-        "Poor Air Quality category not found, skipping WAQI hazards."
-      );
-      return [];
-    }
-
-    const hazards = parseWAQIToHazards({
-      data: data.data,
-      category: poorAirQualityCategory,
-    });
-
-    return hazards.map((hazard) => ({
-      ...hazard,
-      source: source,
-      id: hazard.id || generateHazardId(hazard),
-    }));
-  } catch (error) {
-    console.error("Error fetching WAQI data:", error);
-    return [];
-  }
-};
-
-/**
- * Fetches hazard data from the Open-Meteo Air Quality feed
- * and converts it into an array of HazardDataWithRelations objects.
- */
-export const getHazardsFromOpenMeteo = async (
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
-): Promise<HazardDataWithRelations[]> => {
-  try {
-    const locations = [
-      { name: "Sydney", lat: -33.8688, lon: 151.2093 },
-      { name: "Melbourne", lat: -37.8136, lon: 144.9631 },
-      { name: "Brisbane", lat: -27.4698, lon: 153.0251 },
-      { name: "Perth", lat: -31.9505, lon: 115.8605 },
-      { name: "Adelaide", lat: -34.9285, lon: 138.6007 },
-      { name: "Canberra", lat: -35.2809, lon: 149.13 },
-      { name: "Hobart", lat: -42.8821, lon: 147.3272 },
-      { name: "Darwin", lat: -12.4634, lon: 130.8456 },
-      { name: "Gold Coast", lat: -28.0167, lon: 153.4 },
-      { name: "Newcastle", lat: -32.9283, lon: 151.7817 },
-    ];
-
-    const url = `https://air-quality-api.open-meteo.com/v1/air-quality`;
-
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSource.id },
-      create: externalSource,
-      update: externalSource,
-    });
-
-    let pollenCategory = availableCategories.find((cat) => cat.id === "pollen");
-    let uvCategory = availableCategories.find((cat) => cat.id === "uvIndex");
-    if (!pollenCategory || !uvCategory) {
-      console.log(
-        "Pollen or UV Index category not found, skipping Open-Meteo hazards."
-      );
-      return [];
-    }
-
-    const hazards: HazardDataWithRelations[] = await Promise.all(
-      locations.map(async (location) => {
-        const params = new URLSearchParams({
-          latitude: location.lat.toString(),
-          longitude: location.lon.toString(),
-          current:
-            "uv_index,birch_pollen,grass_pollen,olive_pollen,ragweed_pollen",
-          timezone: "auto",
-        });
-
-        const response = fetch(`${url}?${params.toString()}`).then(
-          async (response) => {
-            if (!response.ok) {
-              console.error(
-                `Failed to fetch OpenMeteo data for ${location.name}: ${response.statusText}`
-              );
-              return [];
-            }
-
-            const data = await response.json();
-            const locationHazards = parseUVIndexAndPollenToHazards({
-              data,
-              uvCategory,
-              pollenCategory,
-            });
-
-            return locationHazards.map((hazard) => ({
-              ...hazard,
-              source: source,
-              id: hazard.id || generateHazardId(hazard),
-            }));
-          }
-        );
-        return response;
-      })
-    ).then((results) => results.flat());
-
-    return hazards;
-  } catch (error) {
-    console.error("Error fetching NT Fire and Rescue data:", error);
+    console.error(`Error fetching ${name} data:`, error);
     return [];
   }
 };

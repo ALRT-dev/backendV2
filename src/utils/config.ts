@@ -91,16 +91,16 @@ export const config = {
 
   // NSW Transport API
   nswTransportApi: {
-    apiKey: getOptionalEnv("NSW_TRANSPORT_API_KEY", ""),
+    apiKey: getRequiredEnv("NSW_TRANSPORT_API_KEY"),
   },
 
   // WAQI API
   waqiApi: {
-    apiToken: getOptionalEnv("WAQI_API_TOKEN", ""),
+    apiToken: getRequiredEnv("WAQI_API_TOKEN"),
   },
 
   // Google Maps API
   googleMapsApi: {
-    apiKey: getOptionalEnv("GOOGLE_MAPS_API_KEY", ""),
+    apiKey: getRequiredEnv("GOOGLE_MAPS_API_KEY"),
   },
 };
