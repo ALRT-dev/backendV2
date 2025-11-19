@@ -17,6 +17,7 @@ import {
   parseWAQIToHazards,
   parseUVIndexAndPollenToHazards,
   getGeocodingCacheSize,
+  parseSmartravellerToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -51,6 +52,7 @@ export enum ExternalSourceId {
   ntFireAndRescue = "nt-fire-and-rescue",
   waqi = "waqi",
   openMeteo = "open-meteo",
+  smartraveller = "smartraveller",
 }
 
 // Configuration for hazard sources
@@ -277,6 +279,17 @@ export const syncHazardsFromDifferentSources = async ({
           });
         },
       },
+      {
+        id: ExternalSourceId.smartraveller,
+        name: "Smartraveller",
+        url: "https://www.smartraveller.gov.au",
+        apiUrl: "https://www.smartraveller.gov.au/destinations-export",
+        parseFunction: (responseData: any) =>
+          parseSmartravellerToHazards({
+            data: responseData,
+            availableCategories,
+          }),
+      },
     ].filter((sourceConfig) =>
       sourceIds && sourceIds.length > 0
         ? sourceIds.includes(sourceConfig.id)
@@ -291,10 +304,7 @@ export const syncHazardsFromDifferentSources = async ({
     const allHazardData = await Promise.all(
       externalSources.map(async (externalSource) => {
         try {
-          const hazards = await fetchHazardsFromSource(
-            externalSource,
-            availableCategories
-          );
+          const hazards = await fetchHazardsFromSource(externalSource);
 
           console.log(
             `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.name}`
@@ -331,7 +341,6 @@ export const syncHazardsFromDifferentSources = async ({
       } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
     return createdHazards;
-    return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
     return [];
@@ -593,8 +602,7 @@ const summarizeAndPostHazards = async ({
  * Handles common patterns: upsert source, fetch data, parse, and map with IDs.
  */
 const fetchHazardsFromSource = async <T = any>(
-  externalSource: ExternalSource,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
+  externalSource: ExternalSource
 ): Promise<HazardDataWithRelations[]> => {
   const {
     id,
