@@ -188,3 +188,62 @@ export const getSeverityBandFromAQI = (aqi: number): HazardSeverityBand => {
     return HazardSeverityBand.info; // Default to info for invalid AQI
   }
 };
+
+/**
+ * Map UV Index to hazard severity band.
+ *
+ * UV Index Scale:
+ * 0-2: Low
+ * 3-5: Moderate
+ * 6-7: High
+ * 8-10: Very High
+ * 11+: Extreme
+ *
+ * @param uvIndex - The UV Index value.
+ * @returns The corresponding HazardSeverityBand.
+ */
+export const getSeverityBandFromUVIndex = (
+  uvIndex: number
+): HazardSeverityBand => {
+  if (uvIndex >= 0 && uvIndex <= 2) {
+    return HazardSeverityBand.info; // Low
+  } else if (uvIndex >= 3 && uvIndex <= 5) {
+    return HazardSeverityBand.monitor; // Moderate
+  } else if (uvIndex >= 6 && uvIndex <= 7) {
+    return HazardSeverityBand.action; // High
+  } else if (uvIndex >= 8 && uvIndex <= 10) {
+    return HazardSeverityBand.critical; // Very High
+  } else if (uvIndex >= 11) {
+    return HazardSeverityBand.critical; // Extreme
+  } else {
+    return HazardSeverityBand.info; // Default for invalid values
+  }
+};
+
+/**
+ * Map pollen count to hazard severity band.
+ *
+ * Pollen count categories (grains/m³):
+ * 0-30: Low
+ * 31-60: Moderate
+ * 61-90: High
+ * 91+: Very High
+ *
+ * @param pollenCount - The pollen count value.
+ * @returns The corresponding HazardSeverityBand.
+ */
+export const getSeverityBandFromPollenCount = (
+  pollenCount: number
+): HazardSeverityBand => {
+  if (pollenCount >= 0 && pollenCount <= 30) {
+    return HazardSeverityBand.info; // Low
+  } else if (pollenCount >= 31 && pollenCount <= 60) {
+    return HazardSeverityBand.monitor; // Moderate
+  } else if (pollenCount >= 61 && pollenCount <= 90) {
+    return HazardSeverityBand.action; // High
+  } else if (pollenCount >= 91) {
+    return HazardSeverityBand.critical; // Very High
+  } else {
+    return HazardSeverityBand.info; // Default for invalid values
+  }
+};

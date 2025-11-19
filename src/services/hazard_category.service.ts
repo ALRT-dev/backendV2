@@ -403,6 +403,20 @@ export const populateInitialCategories = async () => {
               },
             },
             {
+              where: { id: "uvIndex" },
+              create: {
+                id: "uvIndex",
+                name: "UV Index",
+                description: "Ultraviolet index and related health warnings",
+                keywords: [
+                  "uv index",
+                  "ultraviolet index",
+                  "uv warning",
+                  "uv alert",
+                ],
+              },
+            },
+            {
               where: { id: "poorAirQuality" },
               create: {
                 id: "poorAirQuality",

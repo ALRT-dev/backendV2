@@ -23,6 +23,8 @@ import {
   getSeverityBandFromAQI,
   getSeverityBandFromAWSCompliantSeverity,
   getSeverityBandFromDescription,
+  getSeverityBandFromPollenCount,
+  getSeverityBandFromUVIndex,
   getSeverityFromDescription,
 } from "./ingestion.severity.util.js";
 import {
@@ -387,6 +389,170 @@ export function parseWAQIToHazards({
       return hazard;
     })
     .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
+}
+
+/**
+ * Converts UV index and pollen data into an array of Hazard objects
+ *
+ * @param data - Array of UV index and pollen objects from Open-Meteo API
+ * @param uvCategory - The hazard category for UV index hazards
+ * @param pollenCategory - The hazard category for pollen hazards
+ * @returns Array of Prisma HazardCreateInput objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const uvPollenData = [
+ *   {
+ *     latitude: -37.8,
+ *     longitude: 145.0,
+ *     timezone: "Australia/Melbourne",
+ *     current: {
+ *       time: "2025-11-19T21:00",
+ *       uv_index: 8.5,
+ *       birch_pollen: 15.2,
+ *       grass_pollen: 45.7,
+ *       olive_pollen: null,
+ *       ragweed_pollen: 12.3
+ *     }
+ *   }
+ * ];
+ * const hazards = parseUVIndexAndPollenToHazards(uvPollenData, uvCategory, pollenCategory);
+ * ```
+ */
+export function parseUVIndexAndPollenToHazards({
+  data,
+  uvCategory,
+  pollenCategory,
+}: {
+  data: Array<{
+    latitude: number;
+    longitude: number;
+    timezone?: string;
+    timezone_abbreviation?: string;
+    current: {
+      time: string;
+      uv_index: number;
+      birch_pollen?: number | null;
+      grass_pollen?: number | null;
+      olive_pollen?: number | null;
+      ragweed_pollen?: number | null;
+    };
+  }>;
+  uvCategory: HazardCategory;
+  pollenCategory: HazardCategory;
+}): HazardDataWithRelations[] {
+  if (!Array.isArray(data) || !data.length) {
+    return [];
+  }
+
+  const hazards: HazardDataWithRelations[] = [];
+
+  data.forEach((item) => {
+    const { latitude, longitude, timezone, current } = item;
+    const locationId = `${latitude.toFixed(1)}_${longitude.toFixed(1)}`;
+
+    // Create UV Index hazard if UV index is significant (> 2)
+    if (current.uv_index != null && current.uv_index > 2) {
+      const uvSeverityBand = getSeverityBandFromUVIndex(current.uv_index);
+      const uvLevel = getUVLevel(current.uv_index);
+
+      const uvTitle = `UV Index Alert - ${uvLevel}`;
+      const uvDescriptionParts: string[] = [
+        `UV Index: ${current.uv_index.toFixed(2)}`,
+        `Level: ${uvLevel}`,
+        `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      ];
+
+      if (timezone) {
+        uvDescriptionParts.push(`Timezone: ${timezone}`);
+      }
+
+      uvDescriptionParts.push(`Last Updated: ${current.time}`);
+
+      const uvHazard: HazardDataWithRelations = {
+        id: `uv-${locationId}`,
+        title: uvTitle,
+        description: uvDescriptionParts.join("\n"),
+        latitude,
+        longitude,
+        category: uvCategory,
+        severityBand: uvSeverityBand,
+        occurredAt: parseValidDate(current.time),
+      };
+
+      hazards.push(uvHazard);
+    }
+
+    // Create pollen hazards for each type with significant levels
+    const pollenTypes = [
+      { key: "birch_pollen" as const, name: "Birch" },
+      { key: "grass_pollen" as const, name: "Grass" },
+      { key: "olive_pollen" as const, name: "Olive" },
+      { key: "ragweed_pollen" as const, name: "Ragweed" },
+    ];
+
+    pollenTypes.forEach((pollenType) => {
+      const pollenValue = current[pollenType.key];
+
+      // Only create hazard if pollen count is significant (> 30)
+      if (pollenValue != null && pollenValue > 30) {
+        const pollenSeverityBand = getSeverityBandFromPollenCount(pollenValue);
+        const pollenLevel = getPollenLevel(pollenValue);
+
+        const pollenTitle = `${pollenType.name} Pollen Alert - ${pollenLevel}`;
+        const pollenDescriptionParts: string[] = [
+          `Pollen Type: ${pollenType.name}`,
+          `Count: ${pollenValue.toFixed(1)} grains/m³`,
+          `Level: ${pollenLevel}`,
+          `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        ];
+
+        if (timezone) {
+          pollenDescriptionParts.push(`Timezone: ${timezone}`);
+        }
+
+        pollenDescriptionParts.push(`Last Updated: ${current.time}`);
+
+        const pollenHazard: HazardDataWithRelations = {
+          id: `pollen-${pollenType.key.replace("_pollen", "")}-${locationId}`,
+          title: pollenTitle,
+          description: pollenDescriptionParts.join("\n"),
+          latitude,
+          longitude,
+          category: pollenCategory,
+          severityBand: pollenSeverityBand,
+          occurredAt: parseValidDate(current.time),
+        };
+
+        hazards.push(pollenHazard);
+      }
+    });
+  });
+
+  return hazards;
+}
+
+/**
+ * Get UV level description from UV index value
+ */
+function getUVLevel(uvIndex: number): string {
+  if (uvIndex >= 0 && uvIndex <= 2) return "Low";
+  if (uvIndex >= 3 && uvIndex <= 5) return "Moderate";
+  if (uvIndex >= 6 && uvIndex <= 7) return "High";
+  if (uvIndex >= 8 && uvIndex <= 10) return "Very High";
+  if (uvIndex >= 11) return "Extreme";
+  return "Unknown";
+}
+
+/**
+ * Get pollen level description from pollen count
+ */
+function getPollenLevel(pollenCount: number): string {
+  if (pollenCount >= 0 && pollenCount <= 30) return "Low";
+  if (pollenCount >= 31 && pollenCount <= 60) return "Moderate";
+  if (pollenCount >= 61 && pollenCount <= 90) return "High";
+  if (pollenCount >= 91) return "Very High";
+  return "Unknown";
 }
 
 /**
