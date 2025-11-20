@@ -1141,8 +1141,6 @@ export const populateHazardWithGeocoding = async (
       }
     }
 
-    console.log("Hazard after geocoding coordinates:", hazard);
-
     // Case 2: Missing location name but have coordinates
     if (hazard.latitude && hazard.longitude && !hazard.locationName) {
       const cacheKey = `coords_${hazard.latitude}_${hazard.longitude}`;

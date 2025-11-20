@@ -482,6 +482,7 @@ export const summarizeHazard = async ({
   sourceName,
   isAwsCompliant,
   severityBand,
+  useDummy = false,
 }: {
   title: string;
   description: string;
@@ -492,7 +493,17 @@ export const summarizeHazard = async ({
   sourceName: string;
   isAwsCompliant: boolean;
   severityBand: HazardSeverityBand;
+  useDummy?: boolean;
 }): Promise<AISummaryResponse> => {
+  if (useDummy) {
+    return {
+      title,
+      summary: description,
+      callToAction: "Please stay informed and take necessary precautions.",
+      confidence: "high",
+    };
+  }
+
   const {
     officialAlertSummarizationPromptId,
     officialAwsAlertSummarizationPromptId,

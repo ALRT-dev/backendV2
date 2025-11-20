@@ -74,6 +74,18 @@ interface ExternalSource {
   parseFunction: (
     responseData?: any
   ) => HazardDataWithRelations[] | Promise<HazardDataWithRelations[]>;
+
+  /**
+   * Optional severity band filter configuration.
+   * If provided, only hazards with these severity bands will be created.
+   * However, if an existing hazard drops below the minimum severity, it will be updated to reflect the change.
+   */
+  severityBandFilter?:
+    | {
+        /** Minimum severity bands to create new hazards (e.g., ['monitor', 'action', 'critical']) */
+        minimumSeverityBands: HazardSeverityBand[];
+      }
+    | undefined;
 }
 
 /**
@@ -115,6 +127,13 @@ export const syncHazardsFromDifferentSources = async ({
         name: "NSW Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
         apiUrl: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
+        severityBandFilter: {
+          minimumSeverityBands: [
+            HazardSeverityBand.monitor,
+            HazardSeverityBand.action,
+            HazardSeverityBand.critical,
+          ],
+        },
         parseFunction: (responseData: any) =>
           parseGeoJsonToHazards({
             data: responseData,
@@ -328,10 +347,24 @@ export const syncHazardsFromDifferentSources = async ({
       return [];
     }
 
-    // Step 2: Process all hazards together with summarizeAndPostHazards
+    // // Step 2: Process all hazards together with summarizeAndPostHazards
+    const severityBandFilters = new Map<
+      ExternalSourceId,
+      HazardSeverityBand[]
+    >();
+    externalSources.forEach((source) => {
+      if (source.severityBandFilter) {
+        severityBandFilters.set(
+          source.id,
+          source.severityBandFilter.minimumSeverityBands
+        );
+      }
+    });
+
     const createdHazards = await summarizeAndPostHazards({
       hazardDatas: allHazardData,
       syncOption,
+      severityBandFilters,
     });
 
     console.log(
@@ -351,16 +384,18 @@ export const syncHazardsFromDifferentSources = async ({
  * Sends notifications for newly created hazards.
  *
  * @param hazardDatas Array of hazard data to be summarized and posted.
- * @param awsCompliantCategories Optional array of AWS compliant category IDs. This will mark hazards as AWS compliant if their category is in this list.
- * @param allowedSeverities Optional array of allowed severities for the hazards.
+ * @param syncOption The sync option to use for existing hazards.
+ * @param severityBandFilters Map of source IDs to their severity band filter configurations.
  * @returns Array of created Hazard objects.
  */
 const summarizeAndPostHazards = async ({
   hazardDatas,
   syncOption,
+  severityBandFilters,
 }: {
   hazardDatas: HazardDataWithRelations[];
   syncOption: SyncHazardsFromExternalSourceOption;
+  severityBandFilters: Map<ExternalSourceId, HazardSeverityBand[]>;
 }): Promise<Hazard[]> => {
   try {
     console.log(
@@ -381,18 +416,67 @@ const summarizeAndPostHazards = async ({
           where: { id: hazardData.id },
         });
 
+        // Check if this source has severity band filtering configured
+        const sourceId = hazardData.source?.id as ExternalSourceId;
+        const minimumSeverityBands = sourceId
+          ? severityBandFilters.get(sourceId)
+          : undefined;
+        const hasSeverityFilter = minimumSeverityBands !== undefined;
+        const currentSeverityBand =
+          hazardData.severityBand || HazardSeverityBand.info;
+
+        // Apply severity filter logic
+        if (hasSeverityFilter) {
+          const meetsMinimumSeverity =
+            minimumSeverityBands.includes(currentSeverityBand);
+
+          // Skip new hazards that don't meet minimum severity
+          if (!existing && !meetsMinimumSeverity) {
+            console.log(
+              `[${hazardData.source?.id}] Skipping hazard with severity ${currentSeverityBand} (below minimum):`,
+              hazardData.title
+            );
+            continue;
+          }
+
+          // Update existing hazards even if they drop below minimum (to reflect the downgrade)
+          if (
+            existing &&
+            !meetsMinimumSeverity &&
+            currentSeverityBand !== existing.severityBand
+          ) {
+            console.log(
+              `[${hazardData.source?.id}] Hazard severity downgraded to ${currentSeverityBand}, updating:`,
+              hazardData.title
+            );
+            hazardsToProcess.push({
+              hazardData,
+              isUpdate: true,
+            });
+            continue;
+          }
+        }
+
+        // Handle existing hazards based on sync option
         if (existing) {
-          // Handle different sync options
           if (
             syncOption === SyncHazardsFromExternalSourceOption.ignoreExisting
           ) {
-            // Only skip if the content has not changed
             if (existing.description === hazardData.description) {
-              console.log("Hazard already exists, ignoring:", hazardData.title);
+              console.log(
+                `${
+                  hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+                }Hazard already exists, ignoring:`,
+                hazardData.title
+              );
               continue;
             }
-            // Process if content has changed
-            console.log("Hazard content changed, updating:", hazardData.title);
+            console.log(
+              `${
+                hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+              }Hazard content changed, updating:`,
+              hazardData.title
+            );
             hazardsToProcess.push({
               hazardData,
               isUpdate: true,
@@ -401,14 +485,14 @@ const summarizeAndPostHazards = async ({
             syncOption === SyncHazardsFromExternalSourceOption.deleteExisting
           ) {
             console.log(
-              "Deleting existing hazard to recreate:",
+              `${
+                hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+              }Deleting existing hazard to recreate:`,
               hazardData.title
             );
-            // Delete the existing hazard first
             await prisma.hazard.delete({
               where: { id: hazardData.id },
             });
-            // Add to processing list as a new creation (not an update)
             hazardsToProcess.push({
               hazardData,
               isUpdate: false,
@@ -416,14 +500,27 @@ const summarizeAndPostHazards = async ({
           } else if (
             syncOption === SyncHazardsFromExternalSourceOption.replaceExisting
           ) {
-            console.log("Replacing existing hazard:", hazardData.title);
+            console.log(
+              `${
+                hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+              }Replacing existing hazard:`,
+              hazardData.title
+            );
             hazardsToProcess.push({
               hazardData,
               isUpdate: true,
             });
           }
         } else {
-          // No existing hazard, add as new
+          // New hazard - add to processing list
+          console.log(
+            `${
+              hasSeverityFilter
+                ? `[${hazardData.source?.id}] Creating new hazard with severity ${currentSeverityBand}:`
+                : "Creating new hazard:"
+            }`,
+            hazardData.title
+          );
           hazardsToProcess.push({
             hazardData,
             isUpdate: false,
@@ -477,6 +574,7 @@ const summarizeAndPostHazards = async ({
         try {
           // Summarize the hazard first
           const summarized = await summarizeHazard({
+            useDummy: false,
             title: hazardData.title,
             description: hazardData.description,
             locationName: hazardData.locationName,
