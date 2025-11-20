@@ -9,6 +9,19 @@ import type {
 import type { HazardSeverityWithAwsCompliant } from "../models/hazard_search_params_interface.js";
 
 /**
+ * Main hazard category identifiers
+ */
+export enum MainCategoryId {
+  securityAndCrime = "securityAndCrime",
+  healthAndAir = "healthAndAir",
+  weatherAndEnvironment = "weatherAndEnvironment",
+  trafficAndTransport = "trafficAndTransport",
+  utilitiesAndInfrastructure = "utilitiesAndInfrastructure",
+  communityInfo = "communityInfo",
+  other = "other",
+}
+
+/**
  * Check if any hazard categories exist in the database
  */
 export const hasExistingCategories = async (): Promise<boolean> => {
@@ -49,7 +62,7 @@ export const populateInitialCategories = async () => {
   try {
     const categories: Prisma.HazardCategoryCreateInput[] = [
       {
-        id: "securityAndCrime",
+        id: MainCategoryId.securityAndCrime,
         name: "Security & Crime",
         description: "Crime, Civil Unrest, Terror Threat",
         keywords: [],
@@ -155,7 +168,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "healthAndAir",
+        id: MainCategoryId.healthAndAir,
         name: "Health & Air",
         description: "Health-related emergencies and air quality issues",
         keywords: [
@@ -309,7 +322,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "weatherAndEnvironment",
+        id: MainCategoryId.weatherAndEnvironment,
         name: "Weather & Environment",
         description: "Weather and environmental hazards",
         keywords: ["marine wind"],
@@ -640,7 +653,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "trafficAndTransport",
+        id: MainCategoryId.trafficAndTransport,
         name: "Traffic & Transport",
         description: "Traffic and transport disruptions",
         keywords: [],
@@ -1002,7 +1015,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "utilitiesAndInfrastructure",
+        id: MainCategoryId.utilitiesAndInfrastructure,
         name: "Utilities & Infrastructure",
         description: "Infrastructure failures and service disruptions",
         keywords: [],
@@ -1303,7 +1316,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "communityInfo",
+        id: MainCategoryId.communityInfo,
         name: "Community/Info",
         description: "Community Events and Information Notices",
         keywords: [
@@ -1369,7 +1382,7 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "other",
+        id: MainCategoryId.other,
         name: "Other",
         description: "Miscellaneous Hazards Not Classified Elsewhere",
         keywords: ["assist other agency"],

@@ -33,6 +33,7 @@ import {
   getFireStatusFromDescription,
 } from "./ingestion.category.util.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
+import { MainCategoryId } from "../services/hazard_category.service.js";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
@@ -173,7 +174,11 @@ export function parseBoMWarningsToHazards({
     const id = item.identifier && `bom-${item.identifier}`;
 
     const { severity, severityBand, category, fireStatus, isAwsCompliant } =
-      getHazardAttributesFromDescription(description, availableCategories);
+      getHazardAttributesFromDescription(
+        description,
+        availableCategories,
+        MainCategoryId.weatherAndEnvironment
+      );
 
     const hazard: HazardDataWithRelations = {
       id,
@@ -1745,7 +1750,8 @@ export const convertHazardDataWithRelationsToCreateInput = (
  */
 export const getHazardAttributesFromDescription = (
   description: string,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[],
+  fallbackCategoryId?: string
 ): {
   severity: HazardSeverity;
   severityBand: HazardSeverityBand;
@@ -1754,7 +1760,11 @@ export const getHazardAttributesFromDescription = (
   isAwsCompliant: boolean;
 } => {
   const severity = getSeverityFromDescription(description);
-  const category = getCategoryFromDescription(description, availableCategories);
+  const category = getCategoryFromDescription(
+    description,
+    availableCategories,
+    fallbackCategoryId
+  );
   const fireStatus = getFireStatusFromDescription(description);
   const isAwsCompliant =
     awsCompliantSeverities.includes(severity) &&
