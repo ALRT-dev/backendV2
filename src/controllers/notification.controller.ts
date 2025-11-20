@@ -2,7 +2,6 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { getHazardsApplyingFiltersRaw } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import type {
   GetNotificationsFeedQuery,
   PushNotificationTokenInput,

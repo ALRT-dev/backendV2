@@ -978,7 +978,6 @@ export const getCategoriesApplyingFilters = async ({
 }) => {
   const hazardsWhereClause = buildHazardsWhereClause({
     searchString: hazardSearchString,
-    severityFilter: hazardSeverities,
     reviewStatus: hazardReviewStatus,
     reportedById: hazardReportedById,
     northeastLat: hazardNortheastLat,
