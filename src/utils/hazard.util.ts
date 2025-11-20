@@ -148,30 +148,79 @@ export const buildHazardsWhereClause = (
   if (subscriptions && subscriptions.length > 0) {
     andConditions.push({
       OR: subscriptions.map((subscription) => ({
-        AND: [
+        OR: [
+          // Check point-based hazards (latitude/longitude)
           {
-            latitude: {
-              gte: Math.min(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-              lte: Math.max(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-            },
+            AND: [
+              { latitude: { not: null } },
+              { longitude: { not: null } },
+              {
+                latitude: {
+                  gte: Math.min(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                  lte: Math.max(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                },
+              },
+              {
+                longitude: {
+                  gte: Math.min(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                  lte: Math.max(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                },
+              },
+            ],
           },
+          // Check bounding box hazards (intersection with subscription box)
           {
-            longitude: {
-              gte: Math.min(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-              lte: Math.max(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-            },
+            AND: [
+              { northeastLat: { not: null } },
+              { northeastLng: { not: null } },
+              { southwestLat: { not: null } },
+              { southwestLng: { not: null } },
+              // Bounding box intersection logic
+              {
+                northeastLat: {
+                  gte: Math.min(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                },
+              },
+              {
+                northeastLng: {
+                  gte: Math.min(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                },
+              },
+              {
+                southwestLat: {
+                  lte: Math.max(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                },
+              },
+              {
+                southwestLng: {
+                  lte: Math.max(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                },
+              },
+            ],
           },
         ],
       })),
@@ -181,14 +230,40 @@ export const buildHazardsWhereClause = (
   // Filter hazards that fall within geographic bounds if provided
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
     andConditions.push({
-      latitude: {
-        gte: southwestLat,
-        lte: northeastLat,
-      },
-      longitude: {
-        gte: southwestLng,
-        lte: northeastLng,
-      },
+      OR: [
+        // Check point-based hazards
+        {
+          AND: [
+            { latitude: { not: null } },
+            { longitude: { not: null } },
+            {
+              latitude: {
+                gte: southwestLat,
+                lte: northeastLat,
+              },
+            },
+            {
+              longitude: {
+                gte: southwestLng,
+                lte: northeastLng,
+              },
+            },
+          ],
+        },
+        // Check bounding box hazards (intersection)
+        {
+          AND: [
+            { northeastLat: { not: null } },
+            { northeastLng: { not: null } },
+            { southwestLat: { not: null } },
+            { southwestLng: { not: null } },
+            { northeastLat: { gte: southwestLat } },
+            { northeastLng: { gte: southwestLng } },
+            { southwestLat: { lte: northeastLat } },
+            { southwestLng: { lte: northeastLng } },
+          ],
+        },
+      ],
     });
   }
 
@@ -395,22 +470,33 @@ export const buildHazardsWhereClauseRaw = (
 
       // Add subscription conditions first - optimize for spatial index usage
       subscriptions.forEach(() => {
-        const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
+        // Check both point-based and bounding box hazards
+        const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
           paramIndex + 1
         } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
           paramIndex + 3
         })`;
-        allConditions.push(condition);
+        const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
+          paramIndex + 2
+        } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
+          paramIndex + 3
+        })`;
+        allConditions.push(`(${pointCondition} OR ${boxCondition})`);
         paramIndex += 4;
       });
 
       // Add regular bounds condition - optimize for spatial index usage
-      const regularBounds = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
+      const regularPointBounds = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
         paramIndex + 1
       } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
         paramIndex + 3
       })`;
-      allConditions.push(regularBounds);
+      const regularBoxBounds = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
+        paramIndex + 2
+      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
+        paramIndex + 3
+      })`;
+      allConditions.push(`(${regularPointBounds} OR ${regularBoxBounds})`);
       paramIndex += 4;
 
       whereConditions.push(`(${allConditions.join(" OR ")})`);
@@ -434,13 +520,17 @@ export const buildHazardsWhereClauseRaw = (
       );
     } else {
       // Only regular bounds, no subscriptions - optimize for spatial index usage
-      whereConditions.push(
-        `(h.latitude >= $${paramIndex} AND h.latitude <= $${
-          paramIndex + 1
-        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-          paramIndex + 3
-        })`
-      );
+      const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
+        paramIndex + 1
+      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+        paramIndex + 3
+      })`;
+      const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
+        paramIndex + 2
+      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
+        paramIndex + 3
+      })`;
+      whereConditions.push(`(${pointCondition} OR ${boxCondition})`);
       queryParams.push(
         Math.min(southwestLat, northeastLat),
         Math.max(southwestLat, northeastLat),
@@ -452,13 +542,18 @@ export const buildHazardsWhereClauseRaw = (
   } else if (subscriptions && subscriptions.length > 0) {
     // Only subscription bounds, no regular bounds - optimize for spatial index usage
     const subscriptionConditions = subscriptions.map(() => {
-      const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
+      const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
         paramIndex + 1
       } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
         paramIndex + 3
       })`;
+      const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
+        paramIndex + 2
+      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
+        paramIndex + 3
+      })`;
       paramIndex += 4;
-      return condition;
+      return `(${pointCondition} OR ${boxCondition})`;
     });
     whereConditions.push(`(${subscriptionConditions.join(" OR ")})`);
 

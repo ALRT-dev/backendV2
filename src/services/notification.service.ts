@@ -33,25 +33,61 @@ const getUserPushNotificationTokens = async (
 
 /**
  * A function to get user push notification tokens subscribed to a hazard location and severity.
+ * Supports both point-based and bounding-box based hazard locations.
+ * Uses bounding box intersection to match hazards with subscriptions.
  */
 const getUserPushNotificationTokensSubscribedToHazard = async (
   hazard: Hazard
 ): Promise<string[]> => {
   try {
-    const { latitude, longitude, reportedById, severity } = hazard;
-    if (!latitude || !longitude) {
+    const {
+      latitude,
+      longitude,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+      reportedById,
+      severity,
+    } = hazard;
+
+    // Determine the hazard's bounding box
+    let hazardNortheastLat: number;
+    let hazardNortheastLng: number;
+    let hazardSouthwestLat: number;
+    let hazardSouthwestLng: number;
+
+    if (northeastLat && northeastLng && southwestLat && southwestLng) {
+      // Use explicit bounding box if provided (for general/broad locations)
+      hazardNortheastLat = northeastLat;
+      hazardNortheastLng = northeastLng;
+      hazardSouthwestLat = southwestLat;
+      hazardSouthwestLng = southwestLng;
+    } else if (latitude && longitude) {
+      // For point-based hazards, use the exact point
+      hazardNortheastLat = latitude;
+      hazardNortheastLng = longitude;
+      hazardSouthwestLat = latitude;
+      hazardSouthwestLng = longitude;
+    } else {
       console.log(
-        "Hazard does not have valid coordinates to send notifications"
+        "Hazard does not have valid coordinates or bounding box to send notifications"
       );
       return [];
     }
 
+    // Find subscriptions where the hazard location falls within the subscription's bounding box
+    // For point hazards: check if the point is inside the subscription box
+    // For area hazards: check if any part of the hazard area overlaps with the subscription box
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
-        northeastLat: { gte: latitude },
-        northeastLng: { gte: longitude },
-        southwestLat: { lte: latitude },
-        southwestLng: { lte: longitude },
+        // Check if hazard falls within subscription's bounding box
+        AND: [
+          { northeastLat: { gte: hazardSouthwestLat } }, // subscription's north is at or above hazard's south
+          { northeastLng: { gte: hazardSouthwestLng } }, // subscription's east is at or right of hazard's west
+          { southwestLat: { lte: hazardNortheastLat } }, // subscription's south is at or below hazard's north
+          { southwestLng: { lte: hazardNortheastLng } }, // subscription's west is at or left of hazard's east
+        ],
 
         // don't notify the user who reported the hazard
         ...(reportedById && { userId: { not: reportedById } }),

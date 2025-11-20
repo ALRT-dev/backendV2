@@ -114,6 +114,12 @@ model Hazard {
   locationName String? // Human-readable location name or address
   geoLocation  String? // PostGIS geometry as string (WKT or WKB)
 
+  // Bounding box for hazard coverage area (for broader/general locations)
+  northeastLat Float? // Northeast corner latitude
+  northeastLng Float? // Northeast corner longitude
+  southwestLat Float? // Southwest corner latitude
+  southwestLng Float? // Southwest corner longitude
+
   categoryId   String
   sourceId     String?
   reportedById String?

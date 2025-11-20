@@ -982,7 +982,16 @@ export function parseSmartravellerToHazards({
 // In-memory cache for geocoding results to reduce API calls
 const geocodingCache = new Map<
   string,
-  { lat: number; lng: number; address: string; timestamp: number }
+  {
+    lat: number;
+    lng: number;
+    address: string;
+    timestamp: number;
+    northeastLat?: number | null;
+    northeastLng?: number | null;
+    southwestLat?: number | null;
+    southwestLng?: number | null;
+  }
 >();
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -1070,6 +1079,15 @@ export const populateHazardWithGeocoding = async (
         if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
           hazard.latitude = cached.lat;
           hazard.longitude = cached.lng;
+          if (
+            cached.northeastLat !== undefined &&
+            cached.northeastLat !== null
+          ) {
+            hazard.northeastLat = cached.northeastLat;
+            hazard.northeastLng = cached.northeastLng ?? null;
+            hazard.southwestLat = cached.southwestLat ?? null;
+            hazard.southwestLng = cached.southwestLng ?? null;
+          }
           console.log(`Using cached coordinates for: ${hazard.locationName}`);
         } else {
           const result: GeocodeResult | undefined = await rateLimitedGeocode(
@@ -1079,12 +1097,34 @@ export const populateHazardWithGeocoding = async (
             hazard.latitude = result.geometry.location.lat;
             hazard.longitude = result.geometry.location.lng;
 
-            // Cache the result
+            // Add bounds if available
+            if (result.geometry.bounds) {
+              hazard.northeastLat = result.geometry.bounds.northeast.lat;
+              hazard.northeastLng = result.geometry.bounds.northeast.lng;
+              hazard.southwestLat = result.geometry.bounds.southwest.lat;
+              hazard.southwestLng = result.geometry.bounds.southwest.lng;
+            } else if (result.geometry.viewport) {
+              // Fallback to viewport if bounds not available
+              hazard.northeastLat = result.geometry.viewport.northeast.lat;
+              hazard.northeastLng = result.geometry.viewport.northeast.lng;
+              hazard.southwestLat = result.geometry.viewport.southwest.lat;
+              hazard.southwestLng = result.geometry.viewport.southwest.lng;
+            }
+
+            console.log("GEocoding result bounds:", result.geometry.bounds);
+
+            // Cache the result including bounds
             geocodingCache.set(cacheKey, {
               lat: result.geometry.location.lat,
               lng: result.geometry.location.lng,
               address: hazard.locationName,
               timestamp: Date.now(),
+              ...(hazard.northeastLat !== undefined && {
+                northeastLat: hazard.northeastLat,
+                northeastLng: hazard.northeastLng,
+                southwestLat: hazard.southwestLat,
+                southwestLng: hazard.southwestLng,
+              }),
             });
             console.log(`Geocoded coordinates for: ${hazard.locationName}`);
           } else {
@@ -1095,6 +1135,8 @@ export const populateHazardWithGeocoding = async (
         }
       }
     }
+
+    console.log("Hazard after geocoding coordinates:", hazard);
 
     // Case 2: Missing location name but have coordinates
     if (hazard.latitude && hazard.longitude && !hazard.locationName) {

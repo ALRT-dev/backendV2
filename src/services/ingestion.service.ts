@@ -318,8 +318,7 @@ export const syncHazardsFromDifferentSources = async ({
     ).then((results) => results.flat());
 
     console.log(
-      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`,
-      allHazardData
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
     );
 
     if (allHazardData.length === 0) {
