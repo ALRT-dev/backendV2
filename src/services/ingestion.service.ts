@@ -245,19 +245,19 @@ export const syncHazardsFromDifferentSources = async ({
             return [];
           }
 
-          const poorAirQualityCategory = availableCategories.find(
-            (cat) => cat.id === "poorAirQuality"
+          const airQualityAlertCategory = availableCategories.find(
+            (cat) => cat.id === "airQualityAlert"
           );
-          if (!poorAirQualityCategory) {
+          if (!airQualityAlertCategory) {
             console.log(
-              "Poor Air Quality category not found, skipping WAQI hazards."
+              "Air Quality Alert category not found, skipping WAQI hazards."
             );
             return [];
           }
 
           return parseWAQIToHazards({
             data: responseData.data,
-            category: poorAirQualityCategory,
+            category: airQualityAlertCategory,
           });
         },
       },

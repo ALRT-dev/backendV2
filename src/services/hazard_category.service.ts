@@ -190,10 +190,10 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "poorAirQuality" },
+              where: { id: "airQualityAlert" },
               create: {
-                id: "poorAirQuality",
-                name: "Poor Air Quality",
+                id: "airQualityAlert",
+                name: "Air Quality Alert",
                 description: "Air pollution and quality concerns",
                 keywords: [
                   "poor air quality",
