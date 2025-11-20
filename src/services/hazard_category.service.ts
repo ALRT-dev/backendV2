@@ -49,8 +49,8 @@ export const populateInitialCategories = async () => {
   try {
     const categories: Prisma.HazardCategoryCreateInput[] = [
       {
-        id: "safetyAndSecurity",
-        name: "Safety & Security",
+        id: "securityAndCrime",
+        name: "Security & Crime",
         description: "Crime, Civil Unrest, Terror Threat",
         keywords: [],
         color: "#FC9493",
@@ -155,9 +155,9 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "healthAndEmergency",
-        name: "Health & Medical",
-        description: "Health emergencies and medical incidents",
+        id: "healthAndAir",
+        name: "Health & Air",
+        description: "Health-related emergencies and air quality issues",
         keywords: [
           "medical emergency",
           "health emergency",
@@ -174,6 +174,135 @@ export const populateInitialCategories = async () => {
                 name: "Ambulance Response",
                 description: "Emergency medical services dispatched",
                 keywords: ["ambulance response"],
+              },
+            },
+            {
+              where: { id: "poorAirQuality" },
+              create: {
+                id: "poorAirQuality",
+                name: "Poor Air Quality",
+                description: "Air pollution and quality concerns",
+                keywords: [
+                  "poor air quality",
+                  "airquality",
+                  "air quality",
+                  "air quality alert",
+                  "air quality health alert",
+                  "air pollution",
+                  "smog",
+                  "haze",
+                  "air quality health alert",
+                  "hazardous smoke",
+                  "high pollution day",
+                ],
+              },
+            },
+            {
+              where: { id: "smoke" },
+              create: {
+                id: "smoke",
+                name: "Smoke",
+                description: "Smoke from fires affecting air quality",
+                keywords: ["smoke", "smoke health warning", "smoke haze"],
+              },
+            },
+            {
+              where: { id: "asthmaAlert" },
+              create: {
+                id: "asthmaAlert",
+                name: "Asthma Alert",
+                description: "Asthma-related health alerts",
+                keywords: ["asthma", "asthma alert", "thunderstorm asthma"],
+              },
+            },
+            {
+              where: { id: "publicHealthAlert" },
+              create: {
+                id: "publicHealthAlert",
+                name: "Public Health Alert",
+                description: "Alerts related to public health concerns",
+                keywords: ["public health alert", "health alert"],
+              },
+            },
+            {
+              where: { id: "diseaseOutbreak" },
+              create: {
+                id: "diseaseOutbreak",
+                name: "Disease Outbreak",
+                description: "Outbreaks of contagious diseases",
+                keywords: [
+                  "diseaseoutbreak",
+                  "disease outbreak",
+                  "contagious disease",
+                ],
+              },
+            },
+            {
+              where: { id: "outbreak" },
+              create: {
+                id: "outbreak",
+                name: "Outbreak",
+                description: "General disease outbreaks",
+                keywords: ["outbreak"],
+              },
+            },
+            {
+              where: { id: "infection" },
+              create: {
+                id: "infection",
+                name: "Infection",
+                description: "Infectious disease incidents",
+                keywords: ["infection"],
+              },
+            },
+            {
+              where: { id: "virus" },
+              create: {
+                id: "virus",
+                name: "Virus",
+                description: "Viral infection incidents",
+                keywords: ["virus", "viral infection"],
+              },
+            },
+            {
+              where: { id: "pandemic" },
+              create: {
+                id: "pandemic",
+                name: "Pandemic",
+                description: "Widespread infectious disease outbreaks",
+                keywords: ["pandemic"],
+              },
+            },
+            {
+              where: { id: "heatHealthAlert" },
+              create: {
+                id: "heatHealthAlert",
+                name: "Heat Health Alert",
+                description: "Health alerts related to extreme heat",
+                keywords: ["heat health alert"],
+              },
+            },
+            {
+              where: { id: "heatStress" },
+              create: {
+                id: "heatStress",
+                name: "Heat Stress",
+                description: "Incidents of heat stress",
+                keywords: ["heat stress"],
+              },
+            },
+            {
+              where: { id: "uvAlert" },
+              create: {
+                id: "uvAlert",
+                name: "UV Alert",
+                description: "Alerts related to ultraviolet radiation",
+                keywords: [
+                  "uv index",
+                  "ultraviolet index",
+                  "uv warning",
+                  "uv alert",
+                ],
               },
             },
           ],
@@ -260,10 +389,9 @@ export const populateInitialCategories = async () => {
                 description: "Active storm events including thunderstorms",
                 keywords: [
                   "storm",
+                  "thunderstorm",
                   "severe weather warning",
                   "severe thunderstorm warning",
-                  "heavy rain",
-                  "large hail",
                 ],
               },
             },
@@ -292,6 +420,8 @@ export const populateInitialCategories = async () => {
                 name: "Extreme Heat",
                 description: "Extreme heat events and heatwaves",
                 keywords: [
+                  "heatwave",
+                  "heat wave",
                   "extreme heat",
                   "extreme heatwave",
                   "extreme heatwave warning",
@@ -306,7 +436,7 @@ export const populateInitialCategories = async () => {
                 id: "damagingWinds",
                 name: "Damaging Winds",
                 description: "High wind events causing damage",
-                keywords: [],
+                keywords: ["damaging wind", "damaging winds", "damagingwind"],
               },
             },
             {
@@ -380,12 +510,12 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "smoke" },
+              where: { id: "coastalHazard" },
               create: {
-                id: "smoke",
-                name: "Smoke",
-                description: "Smoke from fires affecting air quality",
-                keywords: ["smoke"],
+                id: "coastalHazard",
+                name: "Coastal Hazard",
+                description: "Coastal hazards including erosion and inundation",
+                keywords: ["coastalhazard", "coastal hazard"],
               },
             },
             {
@@ -403,35 +533,93 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "uvIndex" },
+              where: { id: "fireWeather" },
               create: {
-                id: "uvIndex",
-                name: "UV Index",
-                description: "Ultraviolet index and related health warnings",
-                keywords: [
-                  "uv index",
-                  "ultraviolet index",
-                  "uv warning",
-                  "uv alert",
-                ],
+                id: "fireWeather",
+                name: "Fire Weather",
+                description: "Conditions conducive to fire outbreaks",
+                keywords: ["fire weather", "fireweather"],
               },
             },
             {
-              where: { id: "poorAirQuality" },
+              where: { id: "riverRise" },
               create: {
-                id: "poorAirQuality",
-                name: "Poor Air Quality",
-                description: "Air pollution and quality concerns",
-                keywords: [
-                  "poor air quality",
-                  "air quality alert",
-                  "air pollution",
-                  "smog",
-                  "haze",
-                  "air quality health alert",
-                  "hazardous smoke",
-                  "high pollution day",
-                ],
+                id: "riverRise",
+                name: "River Rise",
+                description: "Rising river levels and potential flooding",
+                keywords: ["river rise"],
+              },
+            },
+            {
+              where: { id: "heavyRain" },
+              create: {
+                id: "heavyRain",
+                name: "Heavy Rain",
+                description: "Incidents involving heavy rainfall",
+                keywords: ["heavy rain"],
+              },
+            },
+            {
+              where: { id: "largeHail" },
+              create: {
+                id: "largeHail",
+                name: "Large Hail",
+                description: "Incidents involving large hail",
+                keywords: ["large hail", "largehail"],
+              },
+            },
+            {
+              where: { id: "hailStorm" },
+              create: {
+                id: "hailStorm",
+                name: "Hail Storm",
+                description: "Incidents involving hail storms",
+                keywords: ["hail storm", "hailstorm"],
+              },
+            },
+            {
+              where: { id: "landSlip" },
+              create: {
+                id: "landSlip",
+                name: "Land Slip",
+                description: "Incidents involving land slips",
+                keywords: ["land slip"],
+              },
+            },
+            {
+              where: { id: "hazardousSurf" },
+              create: {
+                id: "hazardousSurf",
+                name: "Hazardous Surf",
+                description: "Hazardous surf conditions",
+                keywords: ["hazardous surf", "rough surf"],
+              },
+            },
+            {
+              where: { id: "dustStorm" },
+              create: {
+                id: "dustStorm",
+                name: "Dust Storm",
+                description: "Dust storms and related hazards",
+                keywords: ["dust storm", "duststorm"],
+              },
+            },
+            {
+              where: { id: "smokePlume" },
+              create: {
+                id: "smokePlume",
+                name: "Smoke Plume",
+                description: "Smoke plumes from fires affecting air quality",
+                keywords: ["smoke plume", "smokeplume"],
+              },
+            },
+            {
+              where: { id: "ashfall" },
+              create: {
+                id: "ashfall",
+                name: "Ashfall",
+                description: "Ash fall from volcanic activity",
+                keywords: ["ash fall", "ashfall"],
               },
             },
             {
@@ -452,18 +640,18 @@ export const populateInitialCategories = async () => {
         },
       },
       {
-        id: "transportAndTravel",
-        name: "Transport & Travel",
-        description: "Transportation and travel disruptions",
+        id: "trafficAndTransport",
+        name: "Traffic & Transport",
+        description: "Traffic and transport disruptions",
         keywords: [],
         color: "#86DF9D",
         subCategories: {
           connectOrCreate: [
             {
-              where: { id: "carCrash" },
+              where: { id: "crash" },
               create: {
-                id: "carCrash",
-                name: "Car Crash",
+                id: "crash",
+                name: "Crash",
                 description: "Vehicle accidents and collisions",
                 keywords: [
                   "car crash",
@@ -472,8 +660,18 @@ export const populateInitialCategories = async () => {
                   "mva",
                   "serious crash",
                   "major traffic incident",
+                  "multi-vehicle",
                   "multi-vehicle crash",
                 ],
+              },
+            },
+            {
+              where: { id: "accident" },
+              create: {
+                id: "accident",
+                name: "Accident",
+                description: "General accidents and incidents",
+                keywords: ["accident", "collision"],
               },
             },
             {
@@ -536,14 +734,39 @@ export const populateInitialCategories = async () => {
               },
             },
             {
+              where: { id: "changedTrafficConditions" },
+              create: {
+                id: "changedTrafficConditions",
+                name: "Changed Traffic Conditions",
+                description:
+                  "Altered traffic conditions due to various factors",
+                keywords: ["changed traffic conditions"],
+              },
+            },
+            {
+              where: { id: "speedReduction" },
+              create: {
+                id: "speedReduction",
+                name: "Speed Reduction",
+                description: "Reduction in speed due to various factors",
+                keywords: [
+                  "speed reduction",
+                  "speedreduction",
+                  "reduced speed",
+                  "reducedspeed",
+                ],
+              },
+            },
+            {
               where: { id: "roadWork" },
               create: {
                 id: "roadWork",
                 name: "Road Work",
                 description: "Road construction and maintenance work",
                 keywords: [
+                  "roadwork",
                   "road work",
-                  "changed traffic conditions",
+                  "road works",
                   "road closure",
                   "road upgrade",
                   "road closed",
@@ -554,16 +777,86 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "busBreakdown" },
+              where: { id: "roadDamage" },
               create: {
-                id: "busBreakdown",
-                name: "Bus Breakdown",
-                description: "Bus breakdowns and service disruptions",
+                id: "roadDamage",
+                name: "Road Damage",
+                description: "Damage to roads affecting travel",
+                keywords: ["road damage", "pothole", "road hazard"],
+              },
+            },
+            {
+              where: { id: "maintenance" },
+              create: {
+                id: "maintenance",
+                name: "Maintenance",
+                description: "Vehicle maintenance issues affecting travel",
+                keywords: ["maintenance"],
+              },
+            },
+            {
+              where: { id: "laneClosure" },
+              create: {
+                id: "laneClosure",
+                name: "Lane Closure",
+                description: "Closure of traffic lanes affecting travel",
                 keywords: [
-                  "bus breakdown",
-                  "bus out of service",
-                  "bus stalled",
+                  "laneclosure",
+                  "lane closure",
+                  "lanesclosed",
+                  "lanes closed",
                 ],
+              },
+            },
+            {
+              where: { id: "breakdown" },
+              create: {
+                id: "breakdown",
+                name: "Breakdown",
+                description: "Vehicle breakdowns affecting traffic",
+                keywords: [
+                  "breakdown",
+                  "bus breakdown",
+                  "car breakdown",
+                  "truck breakdown",
+                  "vehicle breakdown",
+                ],
+              },
+            },
+            {
+              where: { id: "generalHazard" },
+              create: {
+                id: "generalHazard",
+                name: "General Hazard",
+                description: "General hazards affecting safety",
+                keywords: ["generalhazard", "general hazard"],
+              },
+            },
+            {
+              where: { id: "obstruction" },
+              create: {
+                id: "obstruction",
+                name: "Obstruction",
+                description: "Obstructions affecting travel",
+                keywords: ["obstruction", "road obstruction"],
+              },
+            },
+            {
+              where: { id: "debrisOnRoad" },
+              create: {
+                id: "debrisOnRoad",
+                name: "Debris on Road",
+                description: "Debris affecting travel on roads",
+                keywords: ["debris on road", "road debris"],
+              },
+            },
+            {
+              where: { id: "spillOnRoad" },
+              create: {
+                id: "spillOnRoad",
+                name: "Spill on Road",
+                description: "Hazardous spills affecting travel on roads",
+                keywords: ["spill on road", "road spill"],
               },
             },
             {
@@ -580,20 +873,137 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "roadDamage" },
+              where: { id: "railDisruption" },
               create: {
-                id: "roadDamage",
-                name: "Road Damage",
-                description: "Damage to roads affecting travel",
-                keywords: ["road damage", "pothole", "road hazard"],
+                id: "railDisruption",
+                name: "Rail Disruption",
+                description: "Disruptions to rail services",
+                keywords: ["rail disruption", "raildisruption"],
+              },
+            },
+            {
+              where: { id: "trainDisruption" },
+              create: {
+                id: "trainDisruption",
+                name: "Train Disruption",
+                description: "Disruptions to train services",
+                keywords: ["train disruption", "traindisruption"],
+              },
+            },
+            {
+              where: { id: "tramDisruption" },
+              create: {
+                id: "tramDisruption",
+                name: "Tram Disruption",
+                description: "Disruptions to tram services",
+                keywords: ["tram disruption", "tramdisruption"],
+              },
+            },
+            {
+              where: { id: "ferryDisruption" },
+              create: {
+                id: "ferryDisruption",
+                name: "Ferry Disruption",
+                description: "Disruptions to ferry services",
+                keywords: ["ferry disruption", "ferrydisruption"],
+              },
+            },
+            {
+              where: { id: "railDelay" },
+              create: {
+                id: "railDelay",
+                name: "Rail Delay",
+                description: "Delays to rail services",
+                keywords: ["rail delay", "raildelay"],
+              },
+            },
+            {
+              where: { id: "trainDelay" },
+              create: {
+                id: "trainDelay",
+                name: "Train Delay",
+                description: "Delays to train services",
+                keywords: ["train delay", "traindelay"],
+              },
+            },
+            {
+              where: { id: "ferryDelay" },
+              create: {
+                id: "ferryDelay",
+                name: "Ferry Delay",
+                description: "Delays to ferry services",
+                keywords: ["ferry delay", "ferrydelay"],
+              },
+            },
+            {
+              where: { id: "ferryCancellation" },
+              create: {
+                id: "ferryCancellation",
+                name: "Ferry Cancellation",
+                description: "Cancellations of ferry services",
+                keywords: ["ferry cancellation", "ferrycancellation"],
+              },
+            },
+            {
+              where: { id: "busReplacement" },
+              create: {
+                id: "busReplacement",
+                name: "Bus Replacement",
+                description: "Bus replacement services for disrupted routes",
+                keywords: ["bus replacement", "busreplacement"],
+              },
+            },
+            {
+              where: { id: "detour" },
+              create: {
+                id: "detour",
+                name: "Detour",
+                description: "Traffic detours and alternate routes",
+                keywords: ["detour"],
+              },
+            },
+            {
+              where: { id: "trafficCongestion" },
+              create: {
+                id: "trafficCongestion",
+                name: "Traffic Congestion",
+                description: "Heavy traffic and congestion",
+                keywords: ["traffic congestion", "trafficcongestion"],
+              },
+            },
+            {
+              where: { id: "flightDelay" },
+              create: {
+                id: "flightDelay",
+                name: "Flight Delay",
+                description: "Delays to flight services",
+                keywords: ["flight delay", "flightdelay"],
+              },
+            },
+            {
+              where: { id: "airportClosure" },
+              create: {
+                id: "airportClosure",
+                name: "Airport Closure",
+                description: "Temporary or permanent closure of airports",
+                keywords: ["airport closure", "airportclosure"],
+              },
+            },
+            {
+              where: { id: "taxiwayClosure" },
+              create: {
+                id: "taxiwayClosure",
+                name: "Taxiway Closure",
+                description: "Closure of airport taxiways",
+                keywords: ["taxiway closure", "taxiwayclosure"],
               },
             },
           ],
         },
       },
       {
-        id: "infrastructureAndServices",
-        name: "Infrastructure & Services",
+        id: "utilitiesAndInfrastructure",
+        name: "Utilities & Infrastructure",
         description: "Infrastructure failures and service disruptions",
         keywords: [],
         color: "#FFE47A",
@@ -694,13 +1104,208 @@ export const populateInitialCategories = async () => {
                 ],
               },
             },
+            {
+              where: { id: "powerInterruption" },
+              create: {
+                id: "powerInterruption",
+                name: "Power Interruption",
+                description: "Interruptions to electrical power",
+                keywords: ["power interruption", "powerinterruption"],
+              },
+            },
+            {
+              where: { id: "lossOfPower" },
+              create: {
+                id: "lossOfPower",
+                name: "Loss of Power",
+                description: "Loss of electrical power",
+                keywords: ["loss of power", "lossofpower"],
+              },
+            },
+            {
+              where: { id: "brownout" },
+              create: {
+                id: "brownout",
+                name: "Brownout",
+                description: "Reduction in electrical power",
+                keywords: ["brownout", "power brownout"],
+              },
+            },
+            {
+              where: { id: "waterSupplyInterruption" },
+              create: {
+                id: "waterSupplyInterruption",
+                name: "Water Supply Interruption",
+                description: "Interruptions to water supply",
+                keywords: [
+                  "water supply interruption",
+                  "watersupplyinterruption",
+                ],
+              },
+            },
+            {
+              where: { id: "boilWaterNotice" },
+              create: {
+                id: "boilWaterNotice",
+                name: "Boil Water Notice",
+                description: "Notice to boil water before use",
+                keywords: ["boil water notice", "boilwaternotice"],
+              },
+            },
+            {
+              where: { id: "boilWaterAlert" },
+              create: {
+                id: "boilWaterAlert",
+                name: "Boil Water Alert",
+                description: "Alert to boil water before use",
+                keywords: ["boil water alert", "boilwateralert"],
+              },
+            },
+            {
+              where: { id: "gasIncident" },
+              create: {
+                id: "gasIncident",
+                name: "Gas Incident",
+                description: "Incidents involving gas",
+                keywords: ["gas incident", "gasincident"],
+              },
+            },
+            {
+              where: { id: "telecommunicationsOutage" },
+              create: {
+                id: "telecommunicationsOutage",
+                name: "Telecommunications Outage",
+                description: "Outage of telecommunications services",
+                keywords: [
+                  "telecommunications outage",
+                  "telecommunicationsoutage",
+                ],
+              },
+            },
+            {
+              where: { id: "phoneOutage" },
+              create: {
+                id: "phoneOutage",
+                name: "Phone Outage",
+                description: "Outage of phone services",
+                keywords: ["phone outage", "phoneoutage"],
+              },
+            },
+            {
+              where: { id: "mobileOutage" },
+              create: {
+                id: "mobileOutage",
+                name: "Mobile Outage",
+                description: "Outage of mobile services",
+                keywords: ["mobile outage", "mobileoutage"],
+              },
+            },
+            {
+              where: { id: "networkOutage" },
+              create: {
+                id: "networkOutage",
+                name: "Network Outage",
+                description: "Outage of network services",
+                keywords: ["network outage", "networkoutage"],
+              },
+            },
+            {
+              where: { id: "serviceDisruption" },
+              create: {
+                id: "serviceDisruption",
+                name: "Service Disruption",
+                description: "Disruption to services",
+                keywords: ["service disruption", "servicedisruption"],
+              },
+            },
+            {
+              where: { id: "damSafety" },
+              create: {
+                id: "damSafety",
+                name: "Dam Safety",
+                description: "Safety issues related to dams",
+                keywords: ["dam safety", "damsafety"],
+              },
+            },
+            {
+              where: { id: "damSpill" },
+              create: {
+                id: "damSpill",
+                name: "Dam Spill",
+                description: "Spill events at dams",
+                keywords: ["dam spill", "damspill"],
+              },
+            },
+            {
+              where: { id: "damOverflow" },
+              create: {
+                id: "damOverflow",
+                name: "Dam Overflow",
+                description: "Overflow events at dams",
+                keywords: ["dam overflow", "damoverflow"],
+              },
+            },
+            {
+              where: { id: "damDischarge" },
+              create: {
+                id: "damDischarge",
+                name: "Dam Discharge",
+                description: "Discharge events at dams",
+                keywords: ["dam discharge", "damdischarge"],
+              },
+            },
+            {
+              where: { id: "structuralDamage" },
+              create: {
+                id: "structuralDamage",
+                name: "Structural Damage",
+                description: "Damage to structures",
+                keywords: ["structural damage", "structuraldamage"],
+              },
+            },
+            {
+              where: { id: "buildingDamage" },
+              create: {
+                id: "buildingDamage",
+                name: "Building Damage",
+                description: "Damage to buildings",
+                keywords: ["building damage", "buildingdamage"],
+              },
+            },
+            {
+              where: { id: "infrastructureFailure" },
+              create: {
+                id: "infrastructureFailure",
+                name: "Infrastructure Failure",
+                description: "Failure of infrastructure",
+                keywords: ["infrastructure failure", "infrastructurefailure"],
+              },
+            },
+            {
+              where: { id: "pipeBurst" },
+              create: {
+                id: "pipeBurst",
+                name: "Pipe Burst",
+                description: "Burst pipes",
+                keywords: ["pipe burst", "pipeburst"],
+              },
+            },
+            {
+              where: { id: "sewerOverflow" },
+              create: {
+                id: "sewerOverflow",
+                name: "Sewer Overflow",
+                description: "Overflow of sewers",
+                keywords: ["sewer overflow", "seweroverflow"],
+              },
+            },
           ],
         },
       },
       {
-        id: "crowdsAndEvents",
-        name: "Crowds & Events",
-        description: "Large gatherings and crowd-related incidents",
+        id: "communityInfo",
+        name: "Community/Info",
+        description: "Community Events and Information Notices",
         keywords: [
           "special event",
           "crowd gathering",
@@ -837,7 +1442,6 @@ export const populateInitialCategories = async () => {
                   "animal disease",
                   "livestock disease",
                   "wildlife disease",
-                  "disease outbreak",
                   "avian flu",
                   "foot and mouth disease",
                   "biosecurity alert",

@@ -263,7 +263,7 @@ export const syncHazardsFromDifferentSources = async ({
             (cat: HazardCategory) => cat.id === "pollen"
           );
           const uvCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === "uvIndex"
+            (cat: HazardCategory) => cat.id === "uvAlert"
           );
           if (!pollenCategory || !uvCategory) {
             console.log(
