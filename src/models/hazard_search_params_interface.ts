@@ -15,7 +15,11 @@ export type HazardSeverityWithAwsCompliant = {
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
-  severityFilter?: HazardSeverityWithAwsCompliant | undefined;
+  awsEmergency?: boolean | undefined;
+  awsWatchAndAct?: boolean | undefined;
+  awsAdvice?: boolean | undefined;
+  officialNonAws?: boolean | undefined;
+  userReported?: boolean | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 

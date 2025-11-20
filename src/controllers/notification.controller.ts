@@ -9,7 +9,6 @@ import type {
 } from "../validators/notification.validator.js";
 import { parseBoolean } from "../utils/parse.util.js";
 import { enrichHazardsWithPresignedUrls } from "../services/s3.service.js";
-import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -21,7 +20,11 @@ export const getNotificationsFeed = async (
     const {
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency,
+      awsWatchAndAct,
+      awsAdvice,
+      officialNonAws,
+      userReported,
       reviewStatus,
       showExpired,
       sortSettings,
@@ -47,7 +50,11 @@ export const getNotificationsFeed = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency: parseBoolean(awsEmergency),
+      awsWatchAndAct: parseBoolean(awsWatchAndAct),
+      awsAdvice: parseBoolean(awsAdvice),
+      officialNonAws: parseBoolean(officialNonAws),
+      userReported: parseBoolean(userReported),
       reviewStatus,
       userId,
       page: Number(page),

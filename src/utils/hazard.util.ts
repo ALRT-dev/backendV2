@@ -26,7 +26,11 @@ export const buildHazardsWhereClause = (
   const {
     searchString,
     categoryIds,
-    severityFilter,
+    awsEmergency,
+    awsWatchAndAct,
+    awsAdvice,
+    officialNonAws,
+    userReported,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -98,36 +102,49 @@ export const buildHazardsWhereClause = (
     }
   }
 
-  // Apply severities filter if provided
-  if (severityFilter && typeof severityFilter === "object") {
-    const severityConditions: Prisma.HazardWhereInput[] = [];
+  // Apply new filter conditions
+  const filterConditions: Prisma.HazardWhereInput[] = [];
 
-    // Extract AWS and non-AWS severities from the new structure
-    const awsSeverities = parseArray(severityFilter.aws);
-    const nonAwsSeverities = parseArray(severityFilter.nonAws);
+  // AWS Emergency: isAwsCompliant = true AND severity = emergency
+  if (awsEmergency) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.emergency }],
+    });
+  }
 
-    // Add conditions for AWS compliant hazards
-    if (awsSeverities.length > 0) {
-      severityConditions.push({
-        AND: [{ severity: { in: awsSeverities } }, { isAwsCompliant: true }],
-      });
-    }
+  // AWS Watch and Act: isAwsCompliant = true AND severity = watchAndAct
+  if (awsWatchAndAct) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.watchAndAct }],
+    });
+  }
 
-    // Add conditions for non-AWS compliant hazards
-    if (nonAwsSeverities.length > 0) {
-      severityConditions.push({
-        AND: [
-          { severity: { in: nonAwsSeverities } },
-          { isAwsCompliant: false },
-        ],
-      });
-    }
+  // AWS Advice: isAwsCompliant = true AND severity = advice
+  if (awsAdvice) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.advice }],
+    });
+  }
 
-    if (severityConditions.length > 0) {
-      andConditions.push({
-        OR: severityConditions,
-      });
-    }
+  // Official Non-AWS: isAwsCompliant = false AND sourceId != null
+  if (officialNonAws) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: false }, { sourceId: { not: null } }],
+    });
+  }
+
+  // User Reported: reportedById != null
+  if (userReported) {
+    filterConditions.push({
+      reportedById: { not: null },
+    });
+  }
+
+  // If any filter conditions exist, add them as OR conditions
+  if (filterConditions.length > 0) {
+    andConditions.push({
+      OR: filterConditions,
+    });
   }
 
   // Apply reportedById filter if provided
@@ -356,7 +373,11 @@ export const buildHazardsWhereClauseRaw = (
   const {
     searchString,
     categoryIds,
-    severityFilter,
+    awsEmergency,
+    awsWatchAndAct,
+    awsAdvice,
+    officialNonAws,
+    userReported,
     reportedById,
     reviewStatus,
     northeastLat,
@@ -410,39 +431,51 @@ export const buildHazardsWhereClauseRaw = (
     queryParams.push(...categoryArray, ...categoryArray);
   }
 
-  // Apply severities filter if provided
-  if (severityFilter && typeof severityFilter === "object") {
-    const severityConditions: string[] = [];
+  // Apply new filter conditions
+  const filterConditions: string[] = [];
 
-    // Extract AWS and non-AWS severities from the new structure
-    const awsSeverities = parseArray(severityFilter.aws);
-    const nonAwsSeverities = parseArray(severityFilter.nonAws);
+  // AWS Emergency: isAwsCompliant = true AND severity = emergency
+  if (awsEmergency) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.emergency);
+    paramIndex++;
+  }
 
-    // Add conditions for AWS compliant hazards
-    if (awsSeverities.length > 0) {
-      const awsCompliantPlaceholders = awsSeverities
-        .map(() => `$${paramIndex++}::"HazardSeverity"`)
-        .join(",");
-      severityConditions.push(
-        `(h.severity IN (${awsCompliantPlaceholders}) AND h."isAwsCompliant" = true)`
-      );
-      queryParams.push(...awsSeverities);
-    }
+  // AWS Watch and Act: isAwsCompliant = true AND severity = watchAndAct
+  if (awsWatchAndAct) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.watchAndAct);
+    paramIndex++;
+  }
 
-    // Add conditions for non-AWS compliant hazards
-    if (nonAwsSeverities.length > 0) {
-      const nonAwsCompliantPlaceholders = nonAwsSeverities
-        .map(() => `$${paramIndex++}::"HazardSeverity"`)
-        .join(",");
-      severityConditions.push(
-        `(h.severity IN (${nonAwsCompliantPlaceholders}) AND h."isAwsCompliant" = false)`
-      );
-      queryParams.push(...nonAwsSeverities);
-    }
+  // AWS Advice: isAwsCompliant = true AND severity = advice
+  if (awsAdvice) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.advice);
+    paramIndex++;
+  }
 
-    if (severityConditions.length > 0) {
-      whereConditions.push(`(${severityConditions.join(" OR ")})`);
-    }
+  // Official Non-AWS: isAwsCompliant = false AND sourceId != null
+  if (officialNonAws) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = false AND h."sourceId" IS NOT NULL)`
+    );
+  }
+
+  // User Reported: reportedById != null
+  if (userReported) {
+    filterConditions.push(`h."reportedById" IS NOT NULL`);
+  }
+
+  // If any filter conditions exist, add them as OR conditions
+  if (filterConditions.length > 0) {
+    whereConditions.push(`(${filterConditions.join(" OR ")})`);
   }
 
   // Apply reporter filter if provided

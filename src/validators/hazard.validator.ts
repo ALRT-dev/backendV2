@@ -124,20 +124,15 @@ export const getHazardsQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
-  severityFilter: z
-    .object({
-      aws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-      nonAws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-    })
-    .optional(),
+  awsEmergency: z.enum(["true", "false"]).default("true").optional(),
+
+  awsWatchAndAct: z.enum(["true", "false"]).default("true").optional(),
+
+  awsAdvice: z.enum(["true", "false"]).default("true").optional(),
+
+  officialNonAws: z.enum(["true", "false"]).default("true").optional(),
+
+  userReported: z.enum(["true", "false"]).default("true").optional(),
 
   reportedById: z.string().uuid().optional(),
 

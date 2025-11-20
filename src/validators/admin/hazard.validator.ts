@@ -6,19 +6,29 @@ export const getHazardsForAdminQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
-  severityFilter: z
-    .object({
-      aws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-      nonAws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-    })
+  awsEmergency: z
+    .string()
+    .regex(/^(true|false)$/, "awsEmergency must be 'true' or 'false'")
+    .optional(),
+
+  awsWatchAndAct: z
+    .string()
+    .regex(/^(true|false)$/, "awsWatchAndAct must be 'true' or 'false'")
+    .optional(),
+
+  awsAdvice: z
+    .string()
+    .regex(/^(true|false)$/, "awsAdvice must be 'true' or 'false'")
+    .optional(),
+
+  officialNonAws: z
+    .string()
+    .regex(/^(true|false)$/, "officialNonAws must be 'true' or 'false'")
+    .optional(),
+
+  userReported: z
+    .string()
+    .regex(/^(true|false)$/, "userReported must be 'true' or 'false'")
     .optional(),
 
   reportedById: z.string().uuid().optional(),
