@@ -456,37 +456,34 @@ export function parseUVIndexAndPollenToHazards({
     const { latitude, longitude, timezone, current } = item;
     const locationId = `${latitude.toFixed(1)}_${longitude.toFixed(1)}`;
 
-    // Create UV Index hazard if UV index is significant (> 2)
-    if (current.uv_index != null && current.uv_index > 2) {
-      const uvSeverityBand = getSeverityBandFromUVIndex(current.uv_index);
-      const uvLevel = getUVLevel(current.uv_index);
+    const uvSeverityBand = getSeverityBandFromUVIndex(current.uv_index);
+    const uvLevel = getUVLevel(current.uv_index);
 
-      const uvTitle = `UV Index Alert - ${uvLevel}`;
-      const uvDescriptionParts: string[] = [
-        `UV Index: ${current.uv_index.toFixed(2)}`,
-        `Level: ${uvLevel}`,
-        `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-      ];
+    const uvTitle = `UV Index Alert - ${uvLevel}`;
+    const uvDescriptionParts: string[] = [
+      `UV Index: ${current.uv_index.toFixed(2)}`,
+      `Level: ${uvLevel}`,
+      `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+    ];
 
-      if (timezone) {
-        uvDescriptionParts.push(`Timezone: ${timezone}`);
-      }
-
-      uvDescriptionParts.push(`Last Updated: ${current.time}`);
-
-      const uvHazard: HazardDataWithRelations = {
-        id: `uv-${locationId}`,
-        title: uvTitle,
-        description: uvDescriptionParts.join("\n"),
-        latitude,
-        longitude,
-        category: uvCategory,
-        severityBand: uvSeverityBand,
-        occurredAt: parseValidDate(current.time),
-      };
-
-      hazards.push(uvHazard);
+    if (timezone) {
+      uvDescriptionParts.push(`Timezone: ${timezone}`);
     }
+
+    uvDescriptionParts.push(`Last Updated: ${current.time}`);
+
+    const uvHazard: HazardDataWithRelations = {
+      id: `uv-${locationId}`,
+      title: uvTitle,
+      description: uvDescriptionParts.join("\n"),
+      latitude,
+      longitude,
+      category: uvCategory,
+      severityBand: uvSeverityBand,
+      occurredAt: parseValidDate(current.time),
+    };
+
+    hazards.push(uvHazard);
 
     // Create pollen hazards for each type with significant levels
     const pollenTypes = [
@@ -497,40 +494,37 @@ export function parseUVIndexAndPollenToHazards({
     ];
 
     pollenTypes.forEach((pollenType) => {
-      const pollenValue = current[pollenType.key];
+      const pollenValue = current[pollenType.key] || 0;
 
-      // Only create hazard if pollen count is significant (> 30)
-      if (pollenValue != null && pollenValue > 30) {
-        const pollenSeverityBand = getSeverityBandFromPollenCount(pollenValue);
-        const pollenLevel = getPollenLevel(pollenValue);
+      const pollenSeverityBand = getSeverityBandFromPollenCount(pollenValue);
+      const pollenLevel = getPollenLevel(pollenValue);
 
-        const pollenTitle = `${pollenType.name} Pollen Alert - ${pollenLevel}`;
-        const pollenDescriptionParts: string[] = [
-          `Pollen Type: ${pollenType.name}`,
-          `Count: ${pollenValue.toFixed(1)} grains/m³`,
-          `Level: ${pollenLevel}`,
-          `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
-        ];
+      const pollenTitle = `${pollenType.name} Pollen Alert - ${pollenLevel}`;
+      const pollenDescriptionParts: string[] = [
+        `Pollen Type: ${pollenType.name}`,
+        `Count: ${pollenValue.toFixed(1)} grains/m³`,
+        `Level: ${pollenLevel}`,
+        `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+      ];
 
-        if (timezone) {
-          pollenDescriptionParts.push(`Timezone: ${timezone}`);
-        }
-
-        pollenDescriptionParts.push(`Last Updated: ${current.time}`);
-
-        const pollenHazard: HazardDataWithRelations = {
-          id: `pollen-${pollenType.key.replace("_pollen", "")}-${locationId}`,
-          title: pollenTitle,
-          description: pollenDescriptionParts.join("\n"),
-          latitude,
-          longitude,
-          category: pollenCategory,
-          severityBand: pollenSeverityBand,
-          occurredAt: parseValidDate(current.time),
-        };
-
-        hazards.push(pollenHazard);
+      if (timezone) {
+        pollenDescriptionParts.push(`Timezone: ${timezone}`);
       }
+
+      pollenDescriptionParts.push(`Last Updated: ${current.time}`);
+
+      const pollenHazard: HazardDataWithRelations = {
+        id: `pollen-${pollenType.key.replace("_pollen", "")}-${locationId}`,
+        title: pollenTitle,
+        description: pollenDescriptionParts.join("\n"),
+        latitude,
+        longitude,
+        category: pollenCategory,
+        severityBand: pollenSeverityBand,
+        occurredAt: parseValidDate(current.time),
+      };
+
+      hazards.push(pollenHazard);
     });
   });
 

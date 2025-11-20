@@ -127,13 +127,6 @@ export const syncHazardsFromDifferentSources = async ({
         name: "NSW Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
         apiUrl: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
-        severityBandFilter: {
-          minimumSeverityBands: [
-            HazardSeverityBand.monitor,
-            HazardSeverityBand.action,
-            HazardSeverityBand.critical,
-          ],
-        },
         parseFunction: (responseData: any) =>
           parseGeoJsonToHazards({
             data: responseData,
@@ -239,6 +232,13 @@ export const syncHazardsFromDifferentSources = async ({
         name: "World Air Quality",
         url: "https://www.waqi.info",
         apiUrl: `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`,
+        severityBandFilter: {
+          minimumSeverityBands: [
+            HazardSeverityBand.monitor,
+            HazardSeverityBand.action,
+            HazardSeverityBand.critical,
+          ],
+        },
         parseFunction: (responseData: any) => {
           if (!responseData.data || responseData.data.length === 0) {
             console.log("No WAQI data found for Australia.");
@@ -277,6 +277,13 @@ export const syncHazardsFromDifferentSources = async ({
           });
           return `${apiUrl}?${params.toString()}`;
         }),
+        severityBandFilter: {
+          minimumSeverityBands: [
+            HazardSeverityBand.monitor,
+            HazardSeverityBand.action,
+            HazardSeverityBand.critical,
+          ],
+        },
         parseFunction: (responseData: any) => {
           const pollenCategory = availableCategories.find(
             (cat: HazardCategory) => cat.id === "pollen"
