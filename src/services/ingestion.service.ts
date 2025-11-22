@@ -60,6 +60,7 @@ interface ExternalSource {
   id: ExternalSourceId;
   name: string;
   url: string;
+  imageUrl?: string;
 
   apiUrl?: string | undefined;
   apiUrls?: string[] | undefined;
@@ -126,6 +127,8 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.rfs,
         name: "NSW Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
+        imageUrl:
+          "https://www.rfs.nsw.gov.au/__data/assets/image/0016/961/rfs-logo-main.png?v=0.3.3",
         apiUrl: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
         parseFunction: (responseData: any) =>
           parseGeoJsonToHazards({
@@ -139,6 +142,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.bom,
         name: "BoM",
         url: "https://www.bom.gov.au",
+        imageUrl: "",
         apiUrl:
           "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20",
         parseFunction: (responseData: any) =>
@@ -151,6 +155,8 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",
         url: "https://www.transport.nsw.gov.au",
+        imageUrl:
+          "https://www.transport.nsw.gov.au/themes/tfnsw_corp_theme/source/tfnsw/components/header/images/logo-TfNSW.png",
         apiUrls: [
           "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
           "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
@@ -171,6 +177,8 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.actEs,
         name: "ACT Emergency Services",
         url: "https://www.act.gov.au",
+        imageUrl:
+          "https://www.act.gov.au/__data/assets/image/0019/2541430/ACTGov_inline_black.png",
         apiUrl: "https://esa.act.gov.au/feeds/currentincidents.xml",
         parseFunction: () =>
           parseRSSFeedToHazards({
@@ -183,6 +191,8 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.cfs,
         name: "CFS",
         url: "https://www.cfs.sa.gov.au",
+        imageUrl:
+          "https://www.cfs.sa.gov.au/custom/templates_images/CFS_State_Badge.svg",
         apiUrl:
           "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json",
         parseFunction: (responseData: any) =>
@@ -195,6 +205,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.viceFire,
         name: "Vice Fire Services",
         url: "https://www.vicefire.com",
+        imageUrl: "",
         apiUrl: "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS",
         parseFunction: () =>
           parseRSSFeedToHazards({
@@ -207,6 +218,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.qldFire,
         name: "QLD Fire Department",
         url: "https://www.qld.gov.au",
+        imageUrl: "",
         apiUrl:
           "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml",
         parseFunction: () =>
@@ -220,6 +232,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.ntFireAndRescue,
         name: "NT Fire and Rescue",
         url: "https://www.nt.gov.au",
+        imageUrl: "https://nt.gov.au/_design/css/main.css/ntg-logo-mono.svg",
         apiUrl: "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json",
         parseFunction: (responseData: any) =>
           parseNTFireAndRescueToHazards({
@@ -231,6 +244,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.waqi,
         name: "World Air Quality",
         url: "https://www.waqi.info",
+        imageUrl: "https://www.waqi.info/images/logo.png",
         apiUrl: `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`,
         severityBandFilter: {
           minimumSeverityBands: [
@@ -265,6 +279,7 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.openMeteo,
         name: "Open-Meteo",
         url: "https://open-meteo.com",
+        imageUrl: "",
         apiUrls: australiaLocations.map((location) => {
           const apiUrl =
             "https://air-quality-api.open-meteo.com/v1/air-quality";
@@ -309,6 +324,8 @@ export const syncHazardsFromDifferentSources = async ({
         id: ExternalSourceId.smartraveller,
         name: "Smartraveller",
         url: "https://www.smartraveller.gov.au",
+        imageUrl:
+          "https://www.smartraveller.gov.au/themes/custom/smart_traveller/logo-main-st.png",
         apiUrl: "https://www.smartraveller.gov.au/destinations-export",
         parseFunction: (responseData: any) =>
           parseSmartravellerToHazards({
@@ -713,6 +730,7 @@ const fetchHazardsFromSource = async <T = any>(
     id,
     name,
     url,
+    imageUrl,
     apiUrl,
     apiUrls,
     fetchOptions,
@@ -736,6 +754,7 @@ const fetchHazardsFromSource = async <T = any>(
       id: id,
       name: name,
       url: url,
+      ...(imageUrl && { imageUrl }),
     };
 
     // Ensure the source exists before creating hazards

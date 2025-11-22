@@ -193,6 +193,7 @@ model HazardSource {
   id        String   @id @default(uuid())
   name      String
   url       String   @unique
+  imageUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   hazards   Hazard[]
