@@ -27,11 +27,6 @@ export const config = {
   // Database
   database: {
     url: getRequiredEnv("DATABASE_URL"),
-    user: getRequiredEnv("POSTGRES_USER"),
-    password: getRequiredEnv("POSTGRES_PASSWORD"),
-    host: getRequiredEnv("POSTGRES_HOST"),
-    port: parseInt(getRequiredEnv("POSTGRES_PORT"), 10),
-    name: getRequiredEnv("POSTGRES_DATABASE"),
   },
 
   // JWT

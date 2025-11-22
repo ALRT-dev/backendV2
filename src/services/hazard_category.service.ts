@@ -780,11 +780,8 @@ export const populateInitialCategories = async () => {
                   "roadwork",
                   "road work",
                   "road works",
-                  "road closure",
                   "road upgrade",
-                  "road closed",
                   "local access only",
-                  "bridge closed",
                   "landslip on road",
                 ],
               },
@@ -796,6 +793,21 @@ export const populateInitialCategories = async () => {
                 name: "Road Damage",
                 description: "Damage to roads affecting travel",
                 keywords: ["road damage", "pothole", "road hazard"],
+              },
+            },
+            {
+              where: { id: "roadClosure" },
+              create: {
+                id: "roadClosure",
+                name: "Road Closure",
+                description: "Closure of roads affecting travel",
+                keywords: [
+                  "roadclosure",
+                  "road closure",
+                  "roadclosed",
+                  "road closed",
+                  "roads closed",
+                ],
               },
             },
             {
@@ -882,6 +894,19 @@ export const populateInitialCategories = async () => {
                   "traffic signal failure",
                   "traffic light failure",
                   "signal outage",
+                  "traffic lights blacked out",
+                ],
+              },
+            },
+            {
+              where: { id: "trafficLightFlashingYellow" },
+              create: {
+                id: "trafficLightFlashingYellow",
+                name: "Traffic Light Flashing Yellow",
+                description: "Traffic lights flashing yellow",
+                keywords: [
+                  "traffic light flashing yellow",
+                  "traffic lights flashing yellow",
                 ],
               },
             },

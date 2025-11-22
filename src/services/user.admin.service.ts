@@ -112,6 +112,7 @@ export const activateSuperAdmin = async () => {
       "---------------------------------------> Super admin account activated successfully!"
     );
   } catch (error) {
+    console.error("Error activating super admin:", error);
     throw new HttpError(500, "Failed to activate super admin");
   }
 };

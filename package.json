@@ -6,12 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:prod": "NODE_ENV=prod tsx watch src/index.ts",
     "build": "tsc",
     "start": "NODE_ENV=prod node dist/index.js",
     "prisma:migrate:dev": "dotenv -e .env.dev -- npx prisma migrate dev",
     "prisma:migrate:reset": "dotenv -e .env.dev -- npx prisma migrate reset",
     "prisma:migrate:status": "dotenv -e .env.dev -- npx prisma migrate status",
     "prisma:migrate:resolve": "dotenv -e .env.dev -- npx prisma migrate resolve",
+    "prisma:migrate:deploy": "dotenv -e .env.dev -- npx prisma migrate deploy",
     "prisma:generate": "dotenv -e .env.dev -- npx prisma generate",
     "super-admin:create": "dotenv -e .env.dev -- tsx src/scripts/create-super-admin.ts"
   },

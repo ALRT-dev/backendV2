@@ -34,6 +34,7 @@ import {
 } from "./ingestion.category.util.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 import { MainCategoryId } from "../services/hazard_category.service.js";
+import { ExternalSourceId } from "../services/ingestion.service.js";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
@@ -94,7 +95,7 @@ export function parseGeoJsonToHazards({
         properties?.title || properties?.displayName || "Untitled Hazard";
 
       const description =
-        idPrefix === "nsw-transport"
+        idPrefix === ExternalSourceId.nswTransport
           ? extractNSWTrafficDescription(properties)
           : cleanDescription(
               properties?.description || properties?.otherAdvice || title
@@ -108,8 +109,36 @@ export function parseGeoJsonToHazards({
 
       const link = properties?.webLinks?.[0]?.linkURL;
 
+      const mainCategory =
+        properties?.mainCategory && properties?.mainCategory !== "null"
+          ? properties.mainCategory
+          : null;
+      const subCategory =
+        properties?.subCategoryA && properties?.subCategoryA !== "null"
+          ? properties.subCategoryA
+          : null;
+
       const { severity, severityBand, category, fireStatus, isAwsCompliant } =
         getHazardAttributesFromDescription(description, availableCategories);
+
+      let finalCategory = category;
+      // If mainCategory or subCategory is provided, try to refine the category from them
+      if (mainCategory || subCategory) {
+        const mainSubCatDesc = `${mainCategory}${
+          subCategory ? ` - ${subCategory}` : ""
+        }`;
+        console.log(
+          "---> Refining category based on main/sub category:",
+          mainSubCatDesc
+        );
+        const obtainedCategory = getCategoryFromDescription(
+          mainSubCatDesc,
+          availableCategories
+        );
+        if (obtainedCategory && obtainedCategory.id !== MainCategoryId.other) {
+          finalCategory = obtainedCategory;
+        }
+      }
 
       const hazard: HazardDataWithRelations = {
         ...(hazardId && { id: hazardId }),
@@ -117,8 +146,8 @@ export function parseGeoJsonToHazards({
         description,
         severity,
         severityBand,
-        category,
-        ...(category.isFireRelated && {
+        category: finalCategory,
+        ...(finalCategory.isFireRelated && {
           fireStatus: fireStatus || FireStatus.active,
         }),
         isAwsCompliant,

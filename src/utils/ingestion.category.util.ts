@@ -76,8 +76,9 @@ const mainCategoriesLookupOrder: string[] = [
 /**
  * Determine hazard category based on description keywords.
  *
- * First, it prioritizes AWS compliant categories, then child categories,
- * and finally parent categories, using direct keyword matching before normal matching.
+ * Performs direct keyword matching first across AWS, parent, and child categories,
+ * keeping track of all matches. Then applies priority rules to select the best match.
+ * If no direct matches found, repeats the process with normal keyword matching.
  *
  * @param description - The hazard description text.
  * @param availableCategories - List of available hazard categories with their keywords.
@@ -140,117 +141,169 @@ export const getCategoryFromDescription = (
     return lowerKeywords.some((keyword) => description.includes(keyword));
   };
 
-  // 1. Check AWS categories with direct keyword matching first
-  console.log("---> 🧠 Checking AWS categories with direct keyword matching");
-  for (const category of awsCategories) {
-    if (hasDirectMatch(category.keywords, desc, descWords)) {
-      console.log(
-        `----> ✅ Direct match found in AWS category: ${category.id}\n`
-      );
-      return category;
-    }
-  }
-  console.log("---> ❌ No direct match found in AWS categories");
+  // Helper function to find matches and apply priority rules
+  const findCategoryWithPriority = (
+    matchType: "direct" | "normal"
+  ): HazardCategory | null => {
+    const isDirectMatch = matchType === "direct";
 
-  // 2. Check AWS categories with normal keyword matching
-  console.log("---> 🧠 Checking AWS categories with normal keyword matching");
-  for (const category of awsCategories) {
-    if (hasNormalMatch(category.keywords, desc)) {
-      console.log(
-        `----> ✅ Normal match found in AWS category: ${category.id}\n`
-      );
-      return category;
-    }
-  }
-  console.log("---> ❌ No normal match found in AWS categories");
-
-  // 3. Check child categories with direct keyword matching (in main category order)
-  console.log("---> 🧠 Checking child categories with direct keyword matching");
-  for (const mainCategoryId of mainCategoriesLookupOrder) {
     console.log(
-      `----> Checking child categories for main category: ${mainCategoryId}`
+      `---> 🧠 Starting ${matchType} keyword matching across all categories`
     );
-    const childrenOfMain = childCategories.filter(
-      (cat) => cat.parent?.id === mainCategoryId
-    );
-    for (const category of childrenOfMain) {
-      if (hasDirectMatch(category.keywords, desc, descWords)) {
-        console.log(
-          `----> ✅ Direct match found in child category: ${category.id}\n`
-        );
-        return category;
+
+    const awsMatches: HazardCategory[] = [];
+    const parentMatches: HazardCategory[] = [];
+    const childMatches: HazardCategory[] = [];
+
+    // 1. Check AWS categories for matches
+    console.log(`----> Checking AWS categories`);
+    for (const category of awsCategories) {
+      const matches = isDirectMatch
+        ? hasDirectMatch(category.keywords, desc, descWords)
+        : hasNormalMatch(category.keywords, desc);
+
+      if (matches) {
+        console.log(`------> ✅ Match found in AWS category: ${category.id}`);
+        awsMatches.push(category);
       }
     }
-  }
-  console.log("---> ❌ No direct match found in child categories");
 
-  // 4. Check parent categories with direct keyword matching (in main category order)
-  console.log(
-    "---> 🧠 Checking parent categories with direct keyword matching"
-  );
-  for (const mainCategoryId of mainCategoriesLookupOrder) {
-    console.log(
-      `----> Checking parent category for main category: ${mainCategoryId}`
-    );
-    const parentCategory = parentCategories.find(
-      (cat) => cat.id === mainCategoryId
-    );
-    if (
-      parentCategory &&
-      hasDirectMatch(parentCategory.keywords, desc, descWords)
-    ) {
-      console.log(
-        `----> ✅ Direct match found in parent category: ${parentCategory.id}\n`
-      );
-      return parentCategory;
-    }
-  }
-  console.log("---> ❌ No direct match found in parent categories");
+    // 2. Check child categories for matches
+    console.log(`----> Checking child categories`);
+    for (const category of childCategories) {
+      const matches = isDirectMatch
+        ? hasDirectMatch(category.keywords, desc, descWords)
+        : hasNormalMatch(category.keywords, desc);
 
-  // 5. Check child categories with normal keyword matching (in main category order)
-  console.log("---> 🧠 Checking child categories with normal keyword matching");
-  for (const mainCategoryId of mainCategoriesLookupOrder) {
-    console.log(
-      `----> Checking child categories for main category: ${mainCategoryId}`
-    );
-    const childrenOfMain = childCategories.filter(
-      (cat) => cat.parent?.id === mainCategoryId
-    );
-    for (const category of childrenOfMain) {
-      if (hasNormalMatch(category.keywords, desc)) {
-        console.log(
-          `----> ✅ Normal match found in child category: ${category.id}\n`
-        );
-        return category;
+      if (matches) {
+        console.log(`------> ✅ Match found in child category: ${category.id}`);
+        childMatches.push(category);
       }
     }
-  }
-  console.log("---> ❌ No normal match found in child categories");
 
-  // 6. Check parent categories with normal keyword matching (in main category order)
-  console.log(
-    "---> 🧠 Checking parent categories with normal keyword matching"
-  );
-  for (const mainCategoryId of mainCategoriesLookupOrder) {
-    console.log(
-      `----> Checking parent category for main category: ${mainCategoryId}`
-    );
-    const parentCategory = parentCategories.find(
-      (cat) => cat.id === mainCategoryId
-    );
-    if (parentCategory && hasNormalMatch(parentCategory.keywords, desc)) {
-      console.log(
-        `----> ✅ Normal match found in parent category: ${parentCategory.id}\n`
-      );
-      return parentCategory;
+    // 3. Check parent categories for matches
+    console.log(`----> Checking parent categories`);
+    for (const category of parentCategories) {
+      const matches = isDirectMatch
+        ? hasDirectMatch(category.keywords, desc, descWords)
+        : hasNormalMatch(category.keywords, desc);
+
+      if (matches) {
+        console.log(
+          `------> ✅ Match found in parent category: ${category.id}`
+        );
+        parentMatches.push(category);
+      }
     }
-  }
-  console.log("---> ❌ No normal match found in parent categories");
 
-  // 7. No match found, check child categories for fallback category
+    // Count total matches
+    const totalMatches =
+      awsMatches.length + parentMatches.length + childMatches.length;
+
+    console.log(
+      `---> 📊 Total ${matchType} matches: ${totalMatches} (AWS: ${awsMatches.length}, Parent: ${parentMatches.length}, Child: ${childMatches.length})`
+    );
+
+    // If no matches found, return null
+    if (totalMatches === 0) {
+      console.log(`---> ❌ No ${matchType} matches found\n`);
+      return null;
+    }
+
+    // If only one match found, return it
+    if (totalMatches === 1) {
+      const singleMatch = awsMatches[0] || parentMatches[0] || childMatches[0];
+      console.log(
+        `---> ✅ Single ${matchType} match found: ${singleMatch!.id}\n`
+      );
+      return singleMatch!;
+    }
+
+    // Multiple matches found, apply priority rules
+    console.log(`---> 🎯 Multiple matches found, applying priority rules`);
+
+    // Priority 1: Return AWS category if there is one
+    if (awsMatches.length > 0 && awsMatches[0]) {
+      const awsMatch = awsMatches[0];
+      console.log(
+        `----> ✅ Returning AWS category (highest priority): ${awsMatch.id}\n`
+      );
+      return awsMatch;
+    }
+
+    // Priority 2: Return child category using mainCategoriesLookupOrder
+    if (childMatches.length > 0) {
+      console.log(
+        `----> 🔍 Multiple child matches found, using mainCategoriesLookupOrder`
+      );
+      for (const mainCategoryId of mainCategoriesLookupOrder) {
+        const matchingChild = childMatches.find(
+          (cat) => cat.parentId === mainCategoryId
+        );
+        if (matchingChild) {
+          console.log(
+            `----> ✅ Returning child category (by priority): ${matchingChild.id}\n`
+          );
+          return matchingChild;
+        }
+      }
+      // If no match found by priority order, return first child match
+      if (childMatches[0]) {
+        const firstChild = childMatches[0];
+        console.log(
+          `----> ✅ Returning first child category: ${firstChild.id}\n`
+        );
+        return firstChild;
+      }
+    }
+
+    // Priority 3: Return parent category using mainCategoriesLookupOrder
+    if (parentMatches.length > 0) {
+      console.log(
+        `----> 🔍 Multiple parent matches found, using mainCategoriesLookupOrder`
+      );
+      for (const mainCategoryId of mainCategoriesLookupOrder) {
+        const matchingParent = parentMatches.find(
+          (cat) => cat.id === mainCategoryId
+        );
+        if (matchingParent) {
+          console.log(
+            `----> ✅ Returning parent category (by priority): ${matchingParent.id}\n`
+          );
+          return matchingParent;
+        }
+      }
+      // If no match found by priority order, return first parent match
+      if (parentMatches[0]) {
+        const firstParent = parentMatches[0];
+        console.log(
+          `----> ✅ Returning first parent category: ${firstParent.id}\n`
+        );
+        return firstParent;
+      }
+    }
+
+    return null;
+  };
+
+  // Try direct keyword matching first
+  const directMatch = findCategoryWithPriority("direct");
+  if (directMatch) {
+    return directMatch;
+  }
+
+  // If no direct match, try normal keyword matching
+  const normalMatch = findCategoryWithPriority("normal");
+  if (normalMatch) {
+    return normalMatch;
+  }
+
+  // No matches found at all, use fallback
   console.log(
-    `---> 🧠 Checking child categories for fallback category: ${fallbackCategoryId}`
+    `---> 🔍 No matches found, looking for fallback category: ${fallbackCategoryId}`
   );
+
+  // Check child categories for fallback category
   const fallbackCategory = childCategories.find(
     (cat) => cat.id === fallbackCategoryId
   );
@@ -258,12 +311,8 @@ export const getCategoryFromDescription = (
     console.log(`----> ✅ Fallback category found: ${fallbackCategory.id}\n`);
     return fallbackCategory;
   }
-  console.log("---> ❌ No fallback category found in child categories");
 
-  // 8. No match found, check parent categories for fallback category
-  console.log(
-    `---> 🧠 Checking parent categories for fallback category: ${fallbackCategoryId}`
-  );
+  // Check parent categories for fallback category
   const fallbackCategoryParent = parentCategories.find(
     (cat) => cat.id === fallbackCategoryId
   );
@@ -273,11 +322,10 @@ export const getCategoryFromDescription = (
     );
     return fallbackCategoryParent;
   }
-  console.log("---> ❌ No fallback category found in parent categories");
 
-  // 9. Final fallback to "other" category
+  // Final fallback to "other" category
   console.log(
-    "---> ✅ No match found in any category, defaulting to 'other' category\n"
+    "---> ✅ No fallback category found, defaulting to 'other' category\n"
   );
   return parentCategories.find((cat) => cat.id === "other")!;
 };
