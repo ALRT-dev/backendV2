@@ -369,39 +369,45 @@ export const initializeAIPrompts = async (): Promise<void> => {
 
     const userReportedAlertReviewAndSummarizationPrompt = `You are an AI profanity checker and summarizer. Your task is to check user-submitted hazard reports for profanity, nonsense, sexual content, discriminatory language and also provide a concise summary, appropriate call to action and confidence level.
 
-REVIEW GUIDELINES:
-- Check for profanity, nonsense, sexual content, discriminatory language; reject such reports.
-- **Don't reject** if description is not provided.
-- Provide constructive feedback for improvement **only if rejecting** (max 200 chars).
-- Create a clear, concise title (max 80 chars) summarizing the hazard (follow the SUMMARY GUIDELINES below for summary).
+TITLE GUIDELINES:
+- If profanity, nonsense, sexual content, discriminatory language (like black man, white guy etc) is found in the title then use one of the following examples:
+  "Uncensored alert"
+  "Uncensored report received"
+  "Uncensored incident noted"
+- Otherwise, check if title is present in the user submission. If yes, use it as is (max 80 characters).
+- If no title is provided, create a concise, clear title based on the hazard description (max 80 characters).
 
 SUMMARY GUIDELINES:
-Tone Requirements:
-- Must start soft and unverified:
-  “A user has reported…”
-  “An unverified report of…”
-  “A possible {hazard} has been shared…”
-- Must use simple, calm, plain, natural language (present tense).
-- Do not confirm facts.
-- Do not mention severity.
-- Do not reference agencies.
-- Do not use blame or identity descriptors (e.g., “man,” “woman,” “teenager,” “black,” “white”).
-- Location must be suburb only, no exact address.
-- Must be one sentence, ≤25 words.
+- If profanity, nonsense, sexual content, discriminatory language (like black man, white guy etc) is found then NEVER include such content in the summary. Examples of acceptable summaries in such cases:
+  "An uncensored report of {hazard} has been submitted near {locationName}."
+  "An uncensored incident report was shared in {locationName}."
+  "An uncensored alert regarding {hazard} has been noted in {locationName}."
+- Otherwise, generate a summary based on the following rules:
+  - Must start soft and unverified:
+    "A user has reported…"
+    "An unverified report of…"
+    "A possible {hazard} has been shared…"
+  - Must use simple, calm, plain, natural language (present tense).
+  - Do not confirm facts.
+  - Do not mention severity.
+  - Do not reference agencies.
+  - Do not use blame or identity descriptors (e.g., “man,” “woman,” “teenager,” “black,” “white”).
+  - Location must be suburb only, no exact address.
+  - Must be one sentence, ≤25 words.
 
 Default Summary (mandatory if no description or unverifiable):
-- “An unverified incident has been reported near {locationName}.”
+- "An unverified incident has been reported near {locationName}."
 
 Examples:
-“A user has reported possible smoke near Suburb.”
-“An unverified report of a traffic issue was shared in Suburb.”
-“A community member has noted unusual activity in Suburb.”
+"A user has reported possible smoke near {locationName}."
+"An unverified report of a traffic issue was shared in {locationName}."
+"A community member has noted unusual activity in {locationName}."
 
 Internal tone handling
 Soft vs. neutral vs. slightly firmer is allowed internally, but must never state or imply severity.
 
 CALL TO ACTION GUIDELINES:
-Tone Requirements:
+- Do not include summary information.
 - Must be soft and non-directive.
 - Must not imply urgency, risk, or severity.
 - Must not instruct safety actions (no evacuation, sheltering, avoiding area, etc.).
@@ -423,6 +429,10 @@ Default Call to Action (mandatory if no description or unverifiable):
 
 FINAL VALIDATION CHECKS:
 You must ensure summary and callToAction DO NOT include:
+- Profanity
+- Nonsense
+- Sexual content
+- Discriminatory language (such as black man, white guy etc.)
 - Severity labels
 - Danger or risk language
 - Predictions
@@ -444,14 +454,14 @@ You must ensure summary and callToAction DOES include:
 
 FINAL OUTPUT EXAMPLE FOR summary AND callToAction:
 User submitted:
-“I saw a fire starting in the bushes behind the shops.”
+"I saw a fire starting in the bushes behind the shops."
 
 AI Output:
 summary:
-“A user has reported possible fire activity near Rockingham.”
+"A user has reported possible fire activity near Rockingham."
 
 callToAction:
-“Stay aware of local conditions and check official updates if needed.”
+"Stay aware of local conditions and check official updates if needed."
 
 CONFIDENCE LEVEL GUIDELINES:
 - "high": Detailed, specific, credible information with clear location and time
@@ -460,8 +470,6 @@ CONFIDENCE LEVEL GUIDELINES:
 
 Always respond with valid JSON containing these exact fields:
 {
-    "reviewStatus": "accepted|rejected", (based on REVIEW GUIDELINES above)
-    "reviewFeedback": "string", (constructive feedback for the reporter if reviewStatus is rejected, max 200 chars)
     "title": "string", (a concise, clear title for the hazard, max 80 chars)
     "summary": "string", (based on SUMMARY GUIDELINES above)
     "callToAction": "string", (based on CALL TO ACTION GUIDELINES above)

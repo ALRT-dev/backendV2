@@ -1,8 +1,8 @@
 export interface AIReviewResponse {
   reviewStatus: "accepted" | "rejected";
-  reviewFeedback: string;
+  reviewFeedback?: string;
   title: string;
   summary: string;
-  confidence: "high" | "medium" | "low";
   callToAction: string;
+  confidence: "high" | "medium" | "low";
 }

@@ -5,6 +5,7 @@ import {
   type Hazard,
   type HazardCategory,
   HazardSeverityBand,
+  HazardReviewStatus,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -458,8 +459,20 @@ export const reviewHazard = async ({
   }
 
   try {
-    const aiReview = JSON.parse(content) as AIReviewResponse;
-    return aiReview;
+    const aiReview = JSON.parse(content) as {
+      title: string;
+      summary: string;
+      callToAction: string;
+      confidence: "high" | "medium" | "low";
+    };
+
+    return {
+      reviewStatus: HazardReviewStatus.accepted,
+      title: aiReview.title,
+      summary: aiReview.summary,
+      callToAction: aiReview.callToAction,
+      confidence: aiReview.confidence,
+    };
   } catch (parseError) {
     console.error("Failed to parse AI review response:", parseError);
     throw new HttpError(500, "AI review failed: Invalid response format");
