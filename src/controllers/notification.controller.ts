@@ -8,6 +8,7 @@ import type {
 } from "../validators/notification.validator.js";
 import { parseBoolean } from "../utils/parse.util.js";
 import { enrichHazardsWithPresignedUrls } from "../services/s3.service.js";
+import { getUserLocationSubscriptions } from "../services/location_subscription.service.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -31,8 +32,8 @@ export const getNotificationsFeed = async (
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
 
-    const subscriptions = await prisma.locationSubscription.findMany({
-      where: { userId: userId! },
+    const subscriptions = await getUserLocationSubscriptions({
+      userId: userId!,
     });
 
     if (subscriptions.length === 0) {

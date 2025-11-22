@@ -278,18 +278,22 @@ model UserDevice {
 }
 
 model UserPushNotificationSetting {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  settingType String // e.g., "hazard_severity", "location_updates", "system_notifications"
-  settingKey  String // e.g., "info", "advice", "watchAndAct", "emergency" for hazard_severity
-  isEnabled   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, settingType, settingKey])
+  awsEmergency          Boolean  @default(true)
+  awsWatchAndAct        Boolean  @default(true)
+  awsAdvice             Boolean  @default(true)
+  officialNonAws        Boolean  @default(true)
+  userReported          Boolean  @default(true)
+  subscribedCategoryIds String[] @default([]) // List of hazard category IDs the user is subscribed to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
   @@index([userId])
-  @@index([settingType])
 }
 
 model Admin {

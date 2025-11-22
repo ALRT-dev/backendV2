@@ -13,12 +13,6 @@ export const updateUserSchema = z.object({
     .max(180, "Longitude must be between -180 and 180")
     .optional(),
   locationName: z.string().optional(),
-  subscriptionRadiusKm: z
-    .number()
-    .min(1, "Radius must be at least 1 km")
-    .max(50, "Radius cannot exceed 50 km")
-    .optional()
-    .default(10),
 });
 
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
@@ -50,19 +44,18 @@ export const subscribeLocationSchema = z.object({
 
 export type SubscribeLocationInput = z.infer<typeof subscribeLocationSchema>;
 
-const notificationSettingUpdateSchema = z.object({
-  settingType: z.string().min(1, "Setting type is required"),
-  settingKey: z.string().min(1, "Setting key is required"),
-  isEnabled: z.boolean(),
-});
-export type NotificationSettingUpdate = z.infer<
-  typeof notificationSettingUpdateSchema
->;
-
 export const updateNotificationSettingsSchema = z.object({
-  updates: z
-    .array(notificationSettingUpdateSchema)
-    .min(1, "At least one update is required"),
+  awsEmergency: z.boolean(),
+
+  awsWatchAndAct: z.boolean(),
+
+  awsAdvice: z.boolean(),
+
+  officialNonAws: z.boolean(),
+
+  userReported: z.boolean(),
+
+  subscribedCategoryIds: z.array(z.string()),
 });
 
 export type UpdateNotificationSettingsInput = z.infer<

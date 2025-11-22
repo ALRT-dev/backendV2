@@ -2,11 +2,11 @@ import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import {
   getUserById,
-  upsertUserOwnLocationSubscription,
+  getUserPushNotificationSettings,
+  updateUserPushNotificationSettings,
 } from "../services/user.service.js";
 import prisma from "../utils/prisma_client.util.js";
 import type {
-  NotificationSettingUpdate,
   SubscribeLocationInput,
   UpdateNotificationSettingsInput,
   UpdateUserInput,
@@ -16,6 +16,12 @@ import {
   extractS3KeyFromUrl,
   uploadFileToS3,
 } from "../services/s3.service.js";
+import {
+  createUserLocationSubscription,
+  deleteUserLocationSubscription,
+  getSingleUserLocationSubscriptionById,
+  getUserLocationSubscriptions,
+} from "../services/location_subscription.service.js";
 
 /// Controller to handle fetching the profile of the authenticated user.
 export const getUserProfile = async (
@@ -52,13 +58,8 @@ export const updateUserProfile = async (
       throw new HttpError(400, "Unauthenticated user");
     }
 
-    const {
-      name,
-      latitude,
-      longitude,
-      locationName,
-      subscriptionRadiusKm,
-    }: UpdateUserInput = req.body;
+    const { name, latitude, longitude, locationName }: UpdateUserInput =
+      req.body;
 
     if (!name && !latitude && !longitude && !locationName) {
       throw new HttpError(
@@ -77,17 +78,6 @@ export const updateUserProfile = async (
         ...(locationName && { locationName }),
       },
     });
-
-    // If latitude and longitude are being updated, create/update user's own location subscription
-    if (latitude && longitude) {
-      await upsertUserOwnLocationSubscription({
-        userId,
-        latitude,
-        longitude,
-        ...(locationName && { locationName }),
-        radiusKm: subscriptionRadiusKm || 10, // Use provided radius or default to 10km
-      });
-    }
 
     const updatedUser = await getUserById(userId);
     if (!updatedUser) {
@@ -187,20 +177,14 @@ export const subscribeToLocation = async (
       name,
     }: SubscribeLocationInput = req.body;
 
-    const subscription = await prisma.locationSubscription.create({
-      data: {
-        userId,
-        northeastLat,
-        northeastLng,
-        southwestLat,
-        southwestLng,
-        ...(address && { address }),
-        ...(name && { name }),
-      },
-      omit: {
-        userId: true,
-        geoRegion: true,
-      },
+    const subscription = await createUserLocationSubscription({
+      userId: userId!,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+      address,
+      name,
     });
 
     res.status(201).json(subscription);
@@ -226,17 +210,16 @@ export const unsubscribeFromLocation = async (
       throw new HttpError(400, "Subscription ID is required");
     }
 
-    const subscription = await prisma.locationSubscription.findUnique({
-      where: { id: subscriptionId },
+    const subscription = await getSingleUserLocationSubscriptionById({
+      userId,
+      subscriptionId,
     });
 
     if (!subscription || subscription.userId !== userId) {
       throw new HttpError(404, "Subscription not found");
     }
 
-    await prisma.locationSubscription.delete({
-      where: { id: subscriptionId },
-    });
+    await deleteUserLocationSubscription(subscriptionId);
 
     res.status(200).json({ message: "Unsubscribed successfully" });
   } catch (error) {
@@ -256,17 +239,7 @@ export const getUserSubscriptions = async (
       throw new HttpError(400, "User ID not found");
     }
 
-    const subscriptions = await prisma.locationSubscription.findMany({
-      where: { userId },
-      omit: {
-        userId: true,
-        geoRegion: true,
-      },
-      orderBy: [
-        { isOwnLocation: "desc" }, // Own location subscription first
-        { createdAt: "desc" },
-      ],
-    });
+    const subscriptions = await getUserLocationSubscriptions({ userId });
 
     res.status(200).json(subscriptions);
   } catch (error) {
@@ -275,7 +248,7 @@ export const getUserSubscriptions = async (
 };
 
 /// Controller to get user push notification settings
-export const getUserPushNotificationSettings = async (
+export const getUserPushNotificationSettingsController = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -286,28 +259,16 @@ export const getUserPushNotificationSettings = async (
       throw new HttpError(400, "Unauthenticated user");
     }
 
-    const settings = await prisma.userPushNotificationSetting.findMany({
-      where: { userId },
-      orderBy: [{ settingType: "asc" }, { settingKey: "asc" }],
-    });
+    const settings = await getUserPushNotificationSettings(userId);
 
-    // Group settings by type for organized response
-    const groupedSettings = settings.reduce((acc, setting) => {
-      if (!acc[setting.settingType]) {
-        acc[setting.settingType] = {};
-      }
-      acc[setting.settingType]![setting.settingKey] = setting.isEnabled;
-      return acc;
-    }, {} as Record<string, Record<string, any>>);
-
-    res.status(200).json(groupedSettings);
+    res.status(200).json(settings);
   } catch (error) {
     next(error);
   }
 };
 
 /// Controller to update user notification settings
-export const updateUserNotificationSettings = async (
+export const updateUserNotificationSettingsController = async (
   req: Request,
   res: Response,
   next: NextFunction
@@ -318,43 +279,14 @@ export const updateUserNotificationSettings = async (
       throw new HttpError(400, "Unauthenticated user");
     }
 
-    const { updates }: UpdateNotificationSettingsInput = req.body;
+    const settingsToUpdate: UpdateNotificationSettingsInput = req.body;
 
-    // Update settings
-    const updatedSettings = await Promise.all(
-      updates.map((update: NotificationSettingUpdate) =>
-        prisma.userPushNotificationSetting.upsert({
-          where: {
-            userId_settingType_settingKey: {
-              userId,
-              settingType: update.settingType,
-              settingKey: update.settingKey,
-            },
-          },
-          update: {
-            isEnabled: update.isEnabled,
-            updatedAt: new Date(),
-          },
-          create: {
-            userId,
-            settingType: update.settingType,
-            settingKey: update.settingKey,
-            isEnabled: update.isEnabled,
-          },
-        })
-      )
+    const settings = await updateUserPushNotificationSettings(
+      userId,
+      settingsToUpdate
     );
 
-    // Group updated settings by type
-    const groupedSettings = updatedSettings.reduce((acc, setting) => {
-      if (!acc[setting.settingType]) {
-        acc[setting.settingType] = {};
-      }
-      acc[setting.settingType]![setting.settingKey] = setting.isEnabled;
-      return acc;
-    }, {} as Record<string, Record<string, any>>);
-
-    res.status(200).json(groupedSettings);
+    res.status(200).json(settings);
   } catch (error) {
     next(error);
   }

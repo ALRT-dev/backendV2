@@ -1,8 +1,10 @@
-import { HazardSeverity } from "@prisma/client";
 import { PushNotificationPreference } from "../enums/notification_preference_types.js";
 import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
-import { upsertUserOwnLocationSubscription } from "./user.service.js";
+import { updateUserPushNotificationSettings } from "./user.service.js";
+import type { PushNotificationSettings } from "../models/push_notification_settings_interface.js";
+import { upsertUserOwnLocationSubscription } from "./location_subscription.service.js";
+import { getAllMainHazardCategoryIds } from "./hazard_category.service.js";
 
 /**
  * Sets the user's location information during onboarding
@@ -74,37 +76,26 @@ export const setPushNotificationPreference = async ({
   userId: string;
   pushNotificationPreference: PushNotificationPreference;
 }): Promise<void> => {
-  const allSeverities = Object.values(HazardSeverity);
+  const enableCrowdSourced =
+    pushNotificationPreference === PushNotificationPreference.userReported ||
+    pushNotificationPreference === PushNotificationPreference.all;
 
-  await Promise.all(
-    allSeverities.map((severity) =>
-      Object.values(PushNotificationPreference).map(async (preference) => {
-        return prisma.userPushNotificationSetting.upsert({
-          where: {
-            userId_settingType_settingKey: {
-              userId,
-              settingType: `${preference}_severity`,
-              settingKey: severity,
-            },
-          },
-          update: {
-            isEnabled:
-              pushNotificationPreference === preference ||
-              pushNotificationPreference === PushNotificationPreference.all,
-            updatedAt: new Date(),
-          },
-          create: {
-            userId,
-            settingType: `${preference}_severity`,
-            settingKey: severity,
-            isEnabled:
-              pushNotificationPreference === preference ||
-              pushNotificationPreference === PushNotificationPreference.all,
-          },
-        });
-      })
-    )
-  );
+  const enableOfficial =
+    pushNotificationPreference === PushNotificationPreference.official ||
+    pushNotificationPreference === PushNotificationPreference.all;
+
+  const mainCategoryIds = await getAllMainHazardCategoryIds();
+
+  const settings: PushNotificationSettings = {
+    awsEmergency: enableOfficial,
+    awsWatchAndAct: enableOfficial,
+    awsAdvice: enableOfficial,
+    officialNonAws: enableOfficial,
+    userReported: enableCrowdSourced,
+    subscribedCategoryIds: mainCategoryIds,
+  };
+
+  await updateUserPushNotificationSettings(userId, settings);
 };
 
 /**

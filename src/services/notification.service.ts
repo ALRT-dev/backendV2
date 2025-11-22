@@ -1,4 +1,4 @@
-import { type Hazard } from "@prisma/client";
+import { HazardSeverity, type Hazard } from "@prisma/client";
 import { firebaseAdmin } from "../utils/firebase_admin_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
@@ -32,7 +32,7 @@ const getUserPushNotificationTokens = async (
 };
 
 /**
- * A function to get user push notification tokens subscribed to a hazard location and severity.
+ * A function to get user push notification tokens subscribed to a hazard location and type.
  * Supports both point-based and bounding-box based hazard locations.
  * Uses bounding box intersection to match hazards with subscriptions.
  */
@@ -48,8 +48,13 @@ const getUserPushNotificationTokensSubscribedToHazard = async (
       southwestLat,
       southwestLng,
       reportedById,
+      isAwsCompliant,
       severity,
+      categoryId,
     } = hazard;
+
+    const isUserReported = reportedById !== null;
+    const isOfficialNonAws = !isAwsCompliant && !isUserReported;
 
     // Determine the hazard's bounding box
     let hazardNortheastLat: number;
@@ -76,46 +81,66 @@ const getUserPushNotificationTokensSubscribedToHazard = async (
       return [];
     }
 
+    // Determine which notification setting field applies to this hazard
+    let notificationFilter:
+      | { awsEmergency: true }
+      | { awsWatchAndAct: true }
+      | { awsAdvice: true }
+      | { officialNonAws: true }
+      | { userReported: true };
+
+    if (isUserReported) {
+      notificationFilter = { userReported: true };
+    } else if (isOfficialNonAws) {
+      notificationFilter = { officialNonAws: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.emergency) {
+      notificationFilter = { awsEmergency: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.watchAndAct) {
+      notificationFilter = { awsWatchAndAct: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.advice) {
+      notificationFilter = { awsAdvice: true };
+    } else {
+      // Fallback for AWS info/unknown - use awsAdvice
+      notificationFilter = { awsAdvice: true };
+    }
+
+    // Get the hazard's parent category ID if it exists (for subcategories)
+    let parentCategoryId: string | null = null;
+    if (categoryId) {
+      const category = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+        select: { parentId: true },
+      });
+      parentCategoryId = category?.parentId || null;
+    }
+
+    // Determine which category ID to check against subscribedCategoryIds
+    // If the hazard has a parent category, use that; otherwise use the category itself
+    const categoryIdToCheck = parentCategoryId || categoryId;
+
     // Find subscriptions where the hazard location falls within the subscription's bounding box
     // For point hazards: check if the point is inside the subscription box
     // For area hazards: check if any part of the hazard area overlaps with the subscription box
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
         // Check if hazard falls within subscription's bounding box
-        AND: [
-          { northeastLat: { gte: hazardSouthwestLat } }, // subscription's north is at or above hazard's south
-          { northeastLng: { gte: hazardSouthwestLng } }, // subscription's east is at or right of hazard's west
-          { southwestLat: { lte: hazardNortheastLat } }, // subscription's south is at or below hazard's north
-          { southwestLng: { lte: hazardNortheastLng } }, // subscription's west is at or left of hazard's east
-        ],
+        northeastLat: { gte: hazardSouthwestLat }, // subscription's north is at or above hazard's south
+        northeastLng: { gte: hazardSouthwestLng }, // subscription's east is at or right of hazard's west
+        southwestLat: { lte: hazardNortheastLat }, // subscription's south is at or below hazard's north
+        southwestLng: { lte: hazardNortheastLng }, // subscription's west is at or left of hazard's east
 
         // don't notify the user who reported the hazard
         ...(reportedById && { userId: { not: reportedById } }),
 
-        // Only get subscriptions for users who have notifications enabled for this severity
-        // OR users who don't have any explicit setting (default to enabled)
+        // Only get subscriptions for users who have notifications enabled for this hazard type
+        // AND have at least one category subscribed (subscribedCategoryIds not empty)
         user: {
-          OR: [
-            // Users who don't have any setting for this severity (default to enabled)
-            {
-              pushNotificationSettings: {
-                none: {
-                  settingType: "severity",
-                  settingKey: severity,
-                },
-              },
+          pushNotificationSettings: {
+            some: {
+              ...notificationFilter,
+              subscribedCategoryIds: { has: categoryIdToCheck },
             },
-            // Users who have the setting enabled
-            {
-              pushNotificationSettings: {
-                some: {
-                  settingType: "severity",
-                  settingKey: severity,
-                  isEnabled: true,
-                },
-              },
-            },
-          ],
+          },
         },
       },
       select: {

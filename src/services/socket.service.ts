@@ -1,7 +1,7 @@
 import type { Hazard } from "@prisma/client";
 import { getSocketClient } from "../utils/socket_client.util.js";
-import prisma from "../utils/prisma_client.util.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import { getUserIdsForLocationSubscriptionBounds } from "./location_subscription.service.js";
 
 /**
  * Sends a socket event to multiple users identified by their user IDs.
@@ -43,32 +43,53 @@ export const sendSocketEventAboutHazardToSubscribers = async ({
   excludeUserIds?: string[];
 }) => {
   try {
-    const { latitude, longitude } = hazard;
-    if (!latitude || !longitude) {
+    const {
+      latitude,
+      longitude,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+    } = hazard;
+
+    // Determine the hazard's bounding box
+    let hazardNortheastLat: number;
+    let hazardNortheastLng: number;
+    let hazardSouthwestLat: number;
+    let hazardSouthwestLng: number;
+
+    if (northeastLat && northeastLng && southwestLat && southwestLng) {
+      // Use explicit bounding box if provided (for general/broad locations)
+      hazardNortheastLat = northeastLat;
+      hazardNortheastLng = northeastLng;
+      hazardSouthwestLat = southwestLat;
+      hazardSouthwestLng = southwestLng;
+    } else if (latitude && longitude) {
+      // For point-based hazards, use the exact point
+      hazardNortheastLat = latitude;
+      hazardNortheastLng = longitude;
+      hazardSouthwestLat = latitude;
+      hazardSouthwestLng = longitude;
+    } else {
       console.log(
-        "Hazard does not have valid coordinates to send notifications"
+        "Hazard does not have valid coordinates or bounding box to send notifications"
       );
-      return;
+      return [];
     }
 
-    const subscriptions = await prisma.locationSubscription.findMany({
-      where: {
-        northeastLat: { gte: latitude },
-        northeastLng: { gte: longitude },
-        southwestLat: { lte: latitude },
-        southwestLng: { lte: longitude },
-      },
-      select: {
-        userId: true,
-      },
+    const userIds = await getUserIdsForLocationSubscriptionBounds({
+      northeastLat: hazardNortheastLat,
+      northeastLng: hazardNortheastLng,
+      southwestLat: hazardSouthwestLat,
+      southwestLng: hazardSouthwestLng,
     });
 
-    const userIds = subscriptions
-      .map((sub) => sub.userId)
-      .filter((id) => !excludeUserIds?.includes(id));
+    const filteredUserIds = userIds.filter(
+      (id) => !excludeUserIds?.includes(id)
+    );
 
     sendSocketEventToUsers({
-      userIds: userIds,
+      userIds: filteredUserIds,
       event: socketEvent,
       data: hazard,
     });

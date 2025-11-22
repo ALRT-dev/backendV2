@@ -4,8 +4,8 @@ import {
   getUserSubscriptions,
   subscribeToLocation,
   unsubscribeFromLocation,
-  getUserPushNotificationSettings,
-  updateUserNotificationSettings,
+  getUserPushNotificationSettingsController,
+  updateUserNotificationSettingsController,
   updateUserProfile,
   updateUserProfilePicture,
 } from "../controllers/user.controller.js";
@@ -49,13 +49,13 @@ userRouter.get("/location-subscriptions", requireAuth, getUserSubscriptions);
 userRouter.get(
   "/push-notification-settings",
   requireAuth,
-  getUserPushNotificationSettings
+  getUserPushNotificationSettingsController
 );
 userRouter.put(
   "/push-notification-settings",
   requireAuth,
   validate(updateNotificationSettingsSchema),
-  updateUserNotificationSettings
+  updateUserNotificationSettingsController
 );
 
 export default userRouter;

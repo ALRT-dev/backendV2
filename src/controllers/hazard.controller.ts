@@ -7,13 +7,11 @@ import {
   HazardVoteType,
   MediaType,
   type Hazard,
-  type LocationSubscription,
 } from "@prisma/client";
 import {
   getHazardsApplyingFiltersRaw,
   reviewHazard,
 } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import {
   sendPushNotificationAboutNewHazard,
   sendPushNotificationToUser,
@@ -51,9 +49,8 @@ import {
   enrichHazardWithPresignedUrls,
 } from "../services/s3.service.js";
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
-import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
-import { syncHazardsFromDifferentSources } from "../services/ingestion.service.js";
 import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
+import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -159,15 +156,12 @@ export const getHazardsWithSubscriptionId = async (
     const userLat = user?.latitude || undefined;
     const userLng = user?.longitude || undefined;
 
-    const subscriptionPromise = prisma.locationSubscription.findFirst({
-      where: {
-        northeastLat: Number(northeastLat),
-        northeastLng: Number(northeastLng),
-        southwestLat: Number(southwestLat),
-        southwestLng: Number(southwestLng),
-        userId: userId!,
-      },
-      select: { id: true },
+    const subscriptionPromise = getSingleUserLocationSubscriptionByBounds({
+      userId: userId!,
+      northeastLat: Number(northeastLat),
+      northeastLng: Number(northeastLng),
+      southwestLat: Number(southwestLat),
+      southwestLng: Number(southwestLng),
     });
 
     const hazardsPromise = getHazardsApplyingFiltersRaw({
@@ -249,88 +243,6 @@ export const getHazardById = async (
     ]);
 
     res.status(200).json(hazardWithPresignedUrls[0]);
-  } catch (error) {
-    next(error);
-  }
-};
-
-/// Controller to handle fetching available hazard category and severity filters.
-export const getHazardFilters = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const {
-      searchString,
-      reportedById,
-      reviewStatus,
-      northeastLat,
-      northeastLng,
-      southwestLat,
-      southwestLng,
-      showExpired,
-      includeSubscribed: includeSubscribedRaw,
-    }: GetHazardFiltersQuery = req.query;
-    const { userId } = res;
-
-    const includeSubscribed = parseBoolean(includeSubscribedRaw);
-    let subscriptions: LocationSubscription[] = [];
-    if (includeSubscribed) {
-      subscriptions = await prisma.locationSubscription.findMany({
-        where: { userId: userId! },
-      });
-    }
-
-    const categoriesPromise = getCategoriesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const severitiesAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      isHazardAwsCompliant: true,
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const severitiesNonAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      isHazardAwsCompliant: false,
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const [categories, severitiesAws, severitiesNonAws] = await Promise.all([
-      categoriesPromise,
-      severitiesAwsPromise,
-      severitiesNonAwsPromise,
-    ]);
-
-    res.status(200).json({
-      categoryFilters: categories,
-      severityFiltersAws: severitiesAws,
-      severityFiltersNonAws: severitiesNonAws,
-    });
   } catch (error) {
     next(error);
   }

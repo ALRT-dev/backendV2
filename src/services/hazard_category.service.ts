@@ -1553,7 +1553,7 @@ export const forcePopulateCategories = async (): Promise<void> => {
 };
 
 /**
- * Get all sub-categories from the database.
+ * Get all sub-categories along with their parent categories from the database.
  */
 export const getAllSubHazardCategories = async () => {
   const subCategories = await prisma.hazardCategory.findMany({
@@ -1565,6 +1565,22 @@ export const getAllSubHazardCategories = async () => {
     },
   });
   return subCategories;
+};
+
+/**
+ * Get all parent category IDs from the database.
+ */
+export const getAllMainHazardCategoryIds = async (): Promise<string[]> => {
+  const parentCategories = await prisma.hazardCategory.findMany({
+    where: {
+      parentId: null,
+    },
+    select: {
+      id: true,
+    },
+  });
+  const categoryIds = parentCategories.map((category) => category.id);
+  return [...new Set(categoryIds)];
 };
 
 /**
