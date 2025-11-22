@@ -8,7 +8,6 @@ import type {
   SortSetting,
 } from "../models/hazard_search_params_interface.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
-import { parseArray } from "./parse.util.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -667,18 +666,17 @@ export const buildHazardsOrderByClauseRaw = (
     for (const setting of sortSettings) {
       // Handle severity sorting
       if (
-        setting.severity &&
-        (setting.severity === "asc" || setting.severity === "desc")
+        setting.severityBand &&
+        (setting.severityBand === "asc" || setting.severityBand === "desc")
       ) {
-        const direction = setting.severity.toUpperCase();
+        const direction = setting.severityBand.toUpperCase();
         orderByClauses.push(`
-            CASE h.severity
-              WHEN 'unknown' THEN 1
-              WHEN 'info' THEN 2
-              WHEN 'advice' THEN 3
-              WHEN 'watchAndAct' THEN 4
-              WHEN 'emergency' THEN 5
-              ELSE 6
+            CASE h."severityBand"
+              WHEN 'info' THEN 1
+              WHEN 'monitor' THEN 2
+              WHEN 'action' THEN 3
+              WHEN 'critical' THEN 4
+              ELSE 5
             END ${direction}`);
       }
 
@@ -724,10 +722,10 @@ export const buildHazardsOrderByClauseRaw = (
   } else {
     // Default sorting when no sortSettings are provided
     orderByClauses.push(`
-      CASE h.severity
-        WHEN 'emergency' THEN 1
-        WHEN 'watchAndAct' THEN 2
-        WHEN 'advice' THEN 3
+      CASE h."severityBand"
+        WHEN 'critical' THEN 1
+        WHEN 'action' THEN 2
+        WHEN 'monitor' THEN 3
         WHEN 'info' THEN 4
         ELSE 5
       END ASC`);

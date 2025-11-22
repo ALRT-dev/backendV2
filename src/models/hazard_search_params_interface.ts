@@ -1,7 +1,7 @@
 import type { HazardReviewStatus, HazardSeverity } from "@prisma/client";
 
 export interface SortSetting {
-  severity?: "asc" | "desc" | undefined;
+  severityBand?: "asc" | "desc" | undefined;
   distance?: "asc" | "desc" | undefined;
   createdAt?: "asc" | "desc" | undefined;
   confidenceScore?: "asc" | "desc" | undefined;

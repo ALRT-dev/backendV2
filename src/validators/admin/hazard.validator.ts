@@ -67,7 +67,7 @@ export const getHazardsForAdminQuerySchema = z.object({
   sortSettings: z
     .array(
       z.object({
-        severity: z.enum(["asc", "desc"]).optional(),
+        severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),
