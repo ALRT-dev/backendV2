@@ -493,109 +493,68 @@ export const buildHazardsWhereClauseRaw = (
     paramIndex++;
   }
 
-  // Apply geographic bounds filter if provided - OPTIMIZED for better index usage
+  // Apply geographic bounds filter if provided - Using PostGIS for dramatic performance improvement
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    // If we also have subscriptions, combine with OR
-    if (subscriptions && subscriptions.length > 0) {
-      // Build subscription conditions and regular bounds condition with OR
-      const allConditions = [];
+    const minLat = Math.min(southwestLat, northeastLat);
+    const maxLat = Math.max(southwestLat, northeastLat);
+    const minLng = Math.min(southwestLng, northeastLng);
+    const maxLng = Math.max(southwestLng, northeastLng);
 
-      // Add subscription conditions first - optimize for spatial index usage
-      subscriptions.forEach(() => {
-        // Check both point-based and bounding box hazards
-        const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
-          paramIndex + 1
-        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-          paramIndex + 3
-        })`;
-        const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
-          paramIndex + 2
-        } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
-          paramIndex + 3
-        })`;
-        allConditions.push(`(${pointCondition} OR ${boxCondition})`);
-        paramIndex += 4;
-      });
+    // Create bounding box polygon using PostGIS
+    const boundsCondition = `(
+      (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+       ST_Intersects(
+         ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+      paramIndex + 2
+    }, $${paramIndex + 3}, 4326),
+         ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+       ))
+      OR
+      (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
+       h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
+       h."northeastLat" >= $${paramIndex} AND h."southwestLat" <= $${
+      paramIndex + 3
+    } AND
+       h."northeastLng" >= $${paramIndex + 1} AND h."southwestLng" <= $${
+      paramIndex + 2
+    })
+    )`;
 
-      // Add regular bounds condition - optimize for spatial index usage
-      const regularPointBounds = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
-        paramIndex + 1
-      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-        paramIndex + 3
-      })`;
-      const regularBoxBounds = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
-        paramIndex + 2
-      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
-        paramIndex + 3
-      })`;
-      allConditions.push(`(${regularPointBounds} OR ${regularBoxBounds})`);
-      paramIndex += 4;
-
-      whereConditions.push(`(${allConditions.join(" OR ")})`);
-
-      // Add subscription parameters first (to match the parameter order)
-      subscriptions.forEach((sub) => {
-        queryParams.push(
-          Math.min(sub.southwestLat, sub.northeastLat),
-          Math.max(sub.southwestLat, sub.northeastLat),
-          Math.min(sub.southwestLng, sub.northeastLng),
-          Math.max(sub.southwestLng, sub.northeastLng)
-        );
-      });
-
-      // Add regular bounds parameters
-      queryParams.push(
-        Math.min(southwestLat, northeastLat),
-        Math.max(southwestLat, northeastLat),
-        Math.min(southwestLng, northeastLng),
-        Math.max(southwestLng, northeastLng)
-      );
-    } else {
-      // Only regular bounds, no subscriptions - optimize for spatial index usage
-      const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
-        paramIndex + 1
-      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-        paramIndex + 3
-      })`;
-      const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
-        paramIndex + 2
-      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
-        paramIndex + 3
-      })`;
-      whereConditions.push(`(${pointCondition} OR ${boxCondition})`);
-      queryParams.push(
-        Math.min(southwestLat, northeastLat),
-        Math.max(southwestLat, northeastLat),
-        Math.min(southwestLng, northeastLng),
-        Math.max(southwestLng, northeastLng)
-      );
-      paramIndex += 4;
-    }
+    whereConditions.push(boundsCondition);
+    queryParams.push(minLng, minLat, maxLng, maxLat);
+    paramIndex += 4;
   } else if (subscriptions && subscriptions.length > 0) {
-    // Only subscription bounds, no regular bounds - optimize for spatial index usage
+    // Apply subscription bounds using PostGIS
     const subscriptionConditions = subscriptions.map(() => {
-      const pointCondition = `(h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND h.latitude >= $${paramIndex} AND h.latitude <= $${
-        paramIndex + 1
-      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-        paramIndex + 3
-      })`;
-      const boxCondition = `(h."northeastLat" IS NOT NULL AND h."northeastLng" IS NOT NULL AND h."southwestLat" IS NOT NULL AND h."southwestLng" IS NOT NULL AND h."northeastLat" >= $${paramIndex} AND h."northeastLng" >= $${
+      const condition = `(
+        (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+         ST_Intersects(
+           ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
         paramIndex + 2
-      } AND h."southwestLat" <= $${paramIndex + 1} AND h."southwestLng" <= $${
+      }, $${paramIndex + 3}, 4326),
+           ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+         ))
+        OR
+        (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
+         h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
+         h."northeastLat" >= $${paramIndex} AND h."southwestLat" <= $${
         paramIndex + 3
-      })`;
+      } AND
+         h."northeastLng" >= $${paramIndex + 1} AND h."southwestLng" <= $${
+        paramIndex + 2
+      })
+      )`;
       paramIndex += 4;
-      return `(${pointCondition} OR ${boxCondition})`;
+      return condition;
     });
     whereConditions.push(`(${subscriptionConditions.join(" OR ")})`);
 
     subscriptions.forEach((sub) => {
-      queryParams.push(
-        Math.min(sub.southwestLat, sub.northeastLat),
-        Math.max(sub.southwestLat, sub.northeastLat),
-        Math.min(sub.southwestLng, sub.northeastLng),
-        Math.max(sub.southwestLng, sub.northeastLng)
-      );
+      const minLat = Math.min(sub.southwestLat, sub.northeastLat);
+      const maxLat = Math.max(sub.southwestLat, sub.northeastLat);
+      const minLng = Math.min(sub.southwestLng, sub.northeastLng);
+      const maxLng = Math.max(sub.southwestLng, sub.northeastLng);
+      queryParams.push(minLng, minLat, maxLng, maxLat);
     });
   }
 
@@ -691,10 +650,13 @@ export const buildHazardsOrderByClauseRaw = (
         orderByClauses.push(`
           CASE 
             WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-              (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-          currentParamIndex + 1
-        })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-            ELSE 999999
+              ST_Distance(
+                ST_SetSRID(ST_MakePoint($${
+                  currentParamIndex + 1
+                }, $${currentParamIndex}), 4326)::geography,
+                ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+              )
+            ELSE 99999999
           END ${direction}`);
         queryParams.push(userLat, userLng);
         currentParamIndex += 2;
@@ -730,15 +692,18 @@ export const buildHazardsOrderByClauseRaw = (
         ELSE 5
       END ASC`);
 
-    // Add distance ordering if user location is provided
+    // Add distance ordering if user location is provided - Using PostGIS for optimal performance
     if (userLat && userLng) {
       orderByClauses.push(`
         CASE 
           WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-            (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-        currentParamIndex + 1
-      })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-          ELSE 999999
+            ST_Distance(
+              ST_SetSRID(ST_MakePoint($${
+                currentParamIndex + 1
+              }, $${currentParamIndex}), 4326)::geography,
+              ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+            )
+          ELSE 99999999
         END ASC`);
       queryParams.push(userLat, userLng);
       currentParamIndex += 2;

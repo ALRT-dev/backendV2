@@ -162,12 +162,18 @@ model Hazard {
   @@index([reviewStatus]) // Review status filtering
   @@index([reportedById]) // Reporter filtering
   @@index([isAwsCompliant]) // AWS compliance filtering
+  @@index([sourceId]) // Official source filtering
   @@index([severity, isAwsCompliant]) // Combined severity + AWS filtering
   @@index([categoryId, severity]) // Combined category + severity filtering
   @@index([expiresAt, reviewStatus]) // Combined expiry + review filtering
   @@index([latitude, longitude, severity]) // Geographic + severity filtering
   @@index([createdAt, confidenceScore]) // Combined sorting index
   @@index([severity, createdAt]) // Severity + temporal sorting
+  @@index([severityBand, createdAt, confidenceScore]) // Optimized for default map view sorting
+  @@index([reviewStatus, expiresAt, severityBand]) // Optimized for active hazard queries
+  @@index([isAwsCompliant, severity, expiresAt]) // AWS compliance with severity and expiry
+  @@index([categoryId, expiresAt, severityBand]) // Category filtering with active hazards
+  @@index([reportedById, expiresAt]) // User-reported active hazards
 }
 
 model HazardVote {
