@@ -377,7 +377,12 @@ export const populateInitialCategories = async () => {
                 name: "Other Fire",
                 description: "Unclassified fire incidents",
                 isFireRelated: true,
-                keywords: ["fire alarm", "false alarm"],
+                keywords: [
+                  "fire alarm",
+                  "false alarm",
+                  "rubbish fire",
+                  "rubbishfire",
+                ],
               },
             },
             {
