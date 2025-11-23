@@ -32,7 +32,6 @@ import {
 } from "../services/confidence_score.service.js";
 import type {
   CreateHazardInput,
-  GetHazardFiltersQuery,
   GetHazardsQuery,
   UpdateHazardInput,
   VoteHazardInput,
@@ -51,6 +50,7 @@ import {
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
 import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
 import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
+import { checkMediasForProblems } from "../services/image_video_detection.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -275,13 +275,26 @@ export const createHazard = async (
       throw new HttpError(400, "Invalid Category ID");
     }
 
-    console.log("File upload - req.files:", req.files);
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+
+    // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
+    const mediaModerationResult = await checkMediasForProblems(
+      uploadedFiles || []
+    );
+    const mediaModerationFeedback =
+      mediaModerationResult.isRejected &&
+      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
+        "\n- "
+      )}\nPlease adjust your media and try again.`;
 
     // Upload media files to S3 if provided <----------------------------------------------------------------------------------
-    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
     let mediaUploadResults: MediaUploadResult[] = [];
 
-    if (uploadedFiles && uploadedFiles.length > 0) {
+    if (
+      uploadedFiles &&
+      uploadedFiles.length > 0 &&
+      !mediaModerationResult.isRejected
+    ) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           uploadedFiles,
@@ -374,8 +387,10 @@ export const createHazard = async (
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus,
-          reviewFeedback,
+          reviewStatus: mediaModerationResult.isRejected
+            ? HazardReviewStatus.rejected
+            : reviewStatus,
+          reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),
@@ -566,11 +581,26 @@ export const updateHazard = async (
       category = foundCategory;
     }
 
-    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
-    let mediaUploadResults: MediaUploadResult[] = [];
 
-    if (uploadedFiles && uploadedFiles.length > 0) {
+    // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
+    const mediaModerationResult = await checkMediasForProblems(
+      uploadedFiles || []
+    );
+    const mediaModerationFeedback =
+      mediaModerationResult.isRejected &&
+      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
+        "\n- "
+      )}\nPlease adjust your media and try again.`;
+
+    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
+
+    let mediaUploadResults: MediaUploadResult[] = [];
+    if (
+      uploadedFiles &&
+      uploadedFiles.length > 0 &&
+      !mediaModerationResult.isRejected
+    ) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           uploadedFiles,
@@ -631,8 +661,10 @@ export const updateHazard = async (
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus,
-          reviewFeedback,
+          reviewStatus: mediaModerationResult.isRejected
+            ? HazardReviewStatus.rejected
+            : reviewStatus,
+          reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),

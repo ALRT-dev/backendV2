@@ -98,4 +98,11 @@ export const config = {
   googleMapsApi: {
     apiKey: getRequiredEnv("GOOGLE_MAPS_API_KEY"),
   },
+
+  // Sightengine API
+  sightengineApi: {
+    apiUser: getRequiredEnv("SIGHTENGINE_API_USER"),
+    apiSecret: getRequiredEnv("SIGHTENGINE_API_SECRET"),
+    workflowId: getRequiredEnv("SIGHTENGINE_WORKFLOW_ID"),
+  },
 };
