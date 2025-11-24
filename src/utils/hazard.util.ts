@@ -25,6 +25,7 @@ export const buildHazardsWhereClause = (
   const {
     searchString,
     categoryIds,
+    sourceIds,
     awsEmergency,
     awsWatchAndAct,
     awsAdvice,
@@ -99,6 +100,19 @@ export const buildHazardsWhereClause = (
         },
       });
     }
+  }
+
+  // Apply sourceIds filter if provided
+  if (sourceIds) {
+    const sourceIdArray = Array.isArray(sourceIds)
+      ? sourceIds
+      : sourceIds.split(",");
+
+    andConditions.push({
+      sourceId: {
+        in: sourceIdArray,
+      },
+    });
   }
 
   // Apply new filter conditions
@@ -372,6 +386,7 @@ export const buildHazardsWhereClauseRaw = (
   const {
     searchString,
     categoryIds,
+    sourceIds,
     awsEmergency,
     awsWatchAndAct,
     awsAdvice,
@@ -428,6 +443,17 @@ export const buildHazardsWhereClauseRaw = (
 
     // Add parameters twice - once for direct match, once for parent match
     queryParams.push(...categoryArray, ...categoryArray);
+  }
+
+  // Apply sourceIds filter if provided
+  if (sourceIds) {
+    const sourceArray = Array.isArray(sourceIds) ? sourceIds : [sourceIds];
+    const sourcePlaceholders = sourceArray
+      .map(() => `$${paramIndex++}`)
+      .join(",");
+
+    whereConditions.push(`h."sourceId" IN (${sourcePlaceholders})`);
+    queryParams.push(...sourceArray);
   }
 
   // Apply new filter conditions

@@ -15,6 +15,7 @@ export type HazardSeverityWithAwsCompliant = {
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
+  sourceIds?: string | string[] | undefined;
   awsEmergency?: boolean | undefined;
   awsWatchAndAct?: boolean | undefined;
   awsAdvice?: boolean | undefined;

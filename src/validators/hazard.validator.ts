@@ -124,6 +124,8 @@ export const getHazardsQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
+  sourceIds: z.string().optional(),
+
   awsEmergency: z.enum(["true", "false"]).default("true").optional(),
 
   awsWatchAndAct: z.enum(["true", "false"]).default("true").optional(),

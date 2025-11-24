@@ -62,6 +62,7 @@ export const getHazards = async (
     const {
       searchString,
       categoryIds,
+      sourceIds,
       awsEmergency,
       awsWatchAndAct,
       awsAdvice,
@@ -90,6 +91,7 @@ export const getHazards = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
+      sourceIds,
       reportedById,
       awsEmergency: parseBoolean(awsEmergency),
       awsWatchAndAct: parseBoolean(awsWatchAndAct),
