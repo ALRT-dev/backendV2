@@ -233,21 +233,18 @@ export const getSeverityBandFromDescription = (
  * @returns The corresponding HazardSeverityBand.
  */
 export const getSeverityBandFromAQI = (aqi: number): HazardSeverityBand => {
-  if (aqi >= 0 && aqi <= 50) {
-    return HazardSeverityBand.info; // Good
+  if (aqi <= 50) {
+    return HazardSeverityBand.info;
   } else if (aqi >= 51 && aqi <= 100) {
-    return HazardSeverityBand.monitor; // Moderate
+    return HazardSeverityBand.monitor;
   } else if (aqi >= 101 && aqi <= 150) {
-    return HazardSeverityBand.action; // Unhealthy for Sensitive Groups
-  } else if (aqi >= 151 && aqi <= 200) {
-    return HazardSeverityBand.critical; // Unhealthy
-  } else if (aqi >= 201 && aqi <= 300) {
-    return HazardSeverityBand.critical; // Very Unhealthy
+    return HazardSeverityBand.action;
+  } else if (aqi >= 151 && aqi <= 300) {
+    return HazardSeverityBand.critical;
   } else if (aqi > 300) {
-    return HazardSeverityBand.critical; // Hazardous
-  } else {
-    return HazardSeverityBand.info; // Default to info for invalid AQI
+    return HazardSeverityBand.critical;
   }
+  return HazardSeverityBand.info;
 };
 
 /**

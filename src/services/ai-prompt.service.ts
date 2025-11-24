@@ -374,7 +374,7 @@ TITLE GUIDELINES:
   "Uncensored alert"
   "Uncensored report received"
   "Uncensored incident noted"
-- Otherwise, check if title is present in the user submission. If yes, use it as is (max 80 characters).
+- Otherwise, check if title is present in the user submission. If yes, use it as it is (max 80 characters).
 - If no title is provided, create a concise, clear title based on the hazard description (max 80 characters).
 
 SUMMARY GUIDELINES:
