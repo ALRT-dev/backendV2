@@ -675,6 +675,362 @@ export async function parseRSSFeedToHazards({
 }
 
 /**
+ * Converts WA DFES (Department of Fire and Emergency Services) RSS feed into Hazard objects
+ *
+ * @param url - URL of the WA DFES RSS feed
+ * @param availableCategories - Array of available hazard categories
+ * @param idPrefix - Prefix for hazard IDs (default: "wa-dfes")
+ * @returns Promise resolving to an array of HazardDataWithRelations objects
+ *
+ * @description
+ * Parses WA DFES RSS feed which contains emergency warnings, cyclone alerts, and bushfire advice.
+ * The feed includes:
+ * - Multiple warning types within a single item (Cyclone Emergency Warning, Watch and Act, Advice)
+ * - GeoRSS polygon data for affected areas
+ * - Rich HTML description with structured sections
+ * - Region information
+ * - Incident numbers
+ *
+ * @example
+ * ```typescript
+ * const url = "https://emergency.wa.gov.au/feed/all-wa.xml";
+ * const hazards = await parseWAFeedToHazards({
+ *   url,
+ *   availableCategories,
+ *   idPrefix: "wa-dfes"
+ * });
+ * ```
+ */
+export async function parseWAFeedToHazards({
+  url,
+  idPrefix = "wa-dfes",
+  availableCategories,
+}: {
+  url: string;
+  idPrefix?: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): Promise<HazardDataWithRelations[]> {
+  const parser = new Parser({
+    customFields: {
+      item: [
+        "description",
+        "content",
+        ["georss:polygon", "georssPolygon"],
+        ["georss:alertLevel", "alertLevel"],
+        ["geo:lat", "geoLat"],
+        ["geo:long", "geoLong"],
+        ["dfes:region", "dfesRegion"],
+        ["dfes:incidentNumber", "dfesIncidentNumber"],
+        ["dfes:publicationTime", "dfesPublicationTime"],
+      ],
+    },
+  });
+
+  const feed = await parser.parseURL(url);
+
+  if (!feed.items?.length) return [];
+
+  const hazards: HazardDataWithRelations[] = [];
+
+  for (const item of feed.items) {
+    // Extract multiple warnings from a single item
+    // WA DFES items can contain multiple warnings in the description
+    const warnings = extractWAWarningsFromDescription(
+      item.description || item.content || ""
+    );
+
+    // If we found structured warnings, create a hazard for each
+    if (warnings.length > 0) {
+      for (const warning of warnings) {
+        const hazard = createWAHazardFromWarning({
+          item,
+          warning,
+          idPrefix,
+          availableCategories,
+        });
+        if (hazard) {
+          hazards.push(hazard);
+        }
+      }
+    } else {
+      // Fall back to creating a single hazard from the entire item
+      const hazard = createWAHazardFromItem({
+        item,
+        idPrefix,
+        availableCategories,
+      });
+      if (hazard) {
+        hazards.push(hazard);
+      }
+    }
+  }
+
+  return hazards;
+}
+
+/**
+ * Extracts structured warning information from WA DFES HTML description
+ * @param description - HTML description from RSS item
+ * @returns Array of warning objects with id, type, and details
+ */
+function extractWAWarningsFromDescription(description: string): Array<{
+  id: string;
+  warningType: string;
+  title: string;
+  content: string;
+}> {
+  const warnings: Array<{
+    id: string;
+    warningType: string;
+    title: string;
+    content: string;
+  }> = [];
+
+  if (!description) {
+    return warnings;
+  }
+
+  // Look for warning sections in the HTML
+  // The pattern needs to match: <p id="ID" data-hazard-type="Warnings" data-warning-type="TYPE"><strong>TITLE</strong></p>
+  // Note: Attributes can be in any order, and there may be spaces around values
+  const warningPattern =
+    /<p[^>]*\bid\s*=\s*["']([^"']+)["'][^>]*\bdata-warning-type\s*=\s*["']([^"']+)["'][^>]*>\s*<strong[^>]*>\s*(.*?)\s*<\/strong>\s*<\/p>/gi;
+
+  // Alternative: Try to match even if attributes are in different order
+  const altPattern =
+    /<p[^>]*\bdata-warning-type\s*=\s*["']([^"']+)["'][^>]*\bid\s*=\s*["']([^"']+)["'][^>]*>\s*<strong[^>]*>\s*(.*?)\s*<\/strong>\s*<\/p>/gi;
+
+  let match;
+  let foundCount = 0;
+
+  // Try first pattern
+  while ((match = warningPattern.exec(description)) !== null) {
+    foundCount++;
+    const id = match[1];
+    const warningType = match[2];
+    const title = match[3]?.replace(/<[^>]+>/g, "").trim() || "";
+
+    if (id && warningType && title) {
+      // Extract content after this warning tag until the next warning or major section break
+      // Major sections include: CYCLONE DETAILS, ROAD CLOSURES, WHAT EMERGENCY SERVICES ARE DOING, KEEP UP TO DATE, END
+      const startPos = match.index + match[0].length;
+      const remainingContent = description.substring(startPos);
+
+      // Look for next warning (has id attribute) or major section heading
+      // Major sections are identified by specific all-caps titles
+      const nextSectionMatch = remainingContent.match(
+        /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i
+      );
+
+      const endPos = nextSectionMatch
+        ? startPos + nextSectionMatch.index!
+        : description.length;
+      const content = description.substring(startPos, endPos).trim();
+
+      warnings.push({
+        id,
+        warningType,
+        title,
+        content: cleanDescription(content),
+      });
+    }
+  }
+
+  // If first pattern didn't work, try alternative pattern
+  if (foundCount === 0) {
+    while ((match = altPattern.exec(description)) !== null) {
+      foundCount++;
+      const warningType = match[1];
+      const id = match[2];
+      const title = match[3]?.replace(/<[^>]+>/g, "").trim() || "";
+
+      if (id && warningType && title) {
+        const startPos = match.index + match[0].length;
+        const remainingContent = description.substring(startPos);
+
+        // Look for next warning or major section heading
+        const nextSectionMatch = remainingContent.match(
+          /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i
+        );
+
+        const endPos = nextSectionMatch
+          ? startPos + nextSectionMatch.index!
+          : description.length;
+        const content = description.substring(startPos, endPos).trim();
+
+        warnings.push({
+          id,
+          warningType,
+          title,
+          content: cleanDescription(content),
+        });
+      }
+    }
+  }
+
+  console.log(`Total warnings found: ${warnings.length}`);
+
+  return warnings;
+}
+
+/**
+ * Creates a hazard from a WA DFES warning extracted from the description
+ */
+function createWAHazardFromWarning({
+  item,
+  warning,
+  idPrefix,
+  availableCategories,
+}: {
+  item: any;
+  warning: { id: string; warningType: string; title: string; content: string };
+  idPrefix: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations | null {
+  const { geoLat, geoLong, dfesRegion, dfesIncidentNumber, guid } = item;
+
+  // Parse coordinates
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+
+  if (geoLat && geoLong) {
+    const lat = parseFloat(geoLat);
+    const lon = parseFloat(geoLong);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      latitude = lat;
+      longitude = lon;
+    }
+  }
+
+  // If no coordinates, skip this warning
+  if (!latitude || !longitude) {
+    return null;
+  }
+
+  // Build full description including warning-specific content and region info
+  const descriptionParts: string[] = [];
+  descriptionParts.push(`Warning Type: ${warning.warningType}`);
+
+  if (warning.content) {
+    descriptionParts.push(warning.content);
+  }
+
+  if (dfesRegion) {
+    descriptionParts.push(`Region: ${dfesRegion}`);
+  }
+
+  if (dfesIncidentNumber) {
+    descriptionParts.push(`Incident Number: ${dfesIncidentNumber}`);
+  }
+
+  const description = descriptionParts.join("\n");
+
+  // Generate ID from warning ID
+  const hazardId = `${idPrefix}-${warning.id}`;
+
+  const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+    getHazardAttributesFromDescription(description, availableCategories);
+
+  return {
+    id: hazardId,
+    title: warning.title,
+    description,
+    severity,
+    severityBand,
+    category,
+    ...(category.isFireRelated && {
+      fireStatus,
+    }),
+    isAwsCompliant,
+    latitude,
+    longitude,
+    locationName: dfesRegion || undefined,
+    occurredAt: parseValidDate(item.pubDate),
+  };
+}
+
+/**
+ * Creates a hazard from a WA DFES RSS item (fallback when no structured warnings found)
+ */
+function createWAHazardFromItem({
+  item,
+  idPrefix,
+  availableCategories,
+}: {
+  item: any;
+  idPrefix: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations | null {
+  const {
+    title,
+    description,
+    content,
+    geoLat,
+    geoLong,
+    dfesRegion,
+    dfesIncidentNumber,
+    guid,
+    pubDate,
+  } = item;
+
+  // Parse coordinates
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+
+  if (geoLat && geoLong) {
+    const lat = parseFloat(geoLat);
+    const lon = parseFloat(geoLong);
+    if (!isNaN(lat) && !isNaN(lon)) {
+      latitude = lat;
+      longitude = lon;
+    }
+  }
+
+  // If no coordinates, skip this item
+  if (!latitude || !longitude) {
+    return null;
+  }
+
+  const cleanedTitle = cleanRSSTitle(title || "Untitled Incident");
+  let cleanedDescription = cleanDescription(content || description || "");
+
+  // Add region info if available
+  if (dfesRegion) {
+    cleanedDescription = `Region: ${dfesRegion}\n${cleanedDescription}`;
+  }
+
+  if (dfesIncidentNumber) {
+    cleanedDescription = `Incident Number: ${dfesIncidentNumber}\n${cleanedDescription}`;
+  }
+
+  // Generate ID
+  const hazardId =
+    (dfesIncidentNumber && `${idPrefix}-${dfesIncidentNumber}`) ||
+    (guid && `${idPrefix}-${guid}`) ||
+    undefined;
+
+  const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+    getHazardAttributesFromDescription(cleanedDescription, availableCategories);
+
+  return {
+    id: hazardId,
+    title: cleanedTitle,
+    description: cleanedDescription,
+    severity,
+    severityBand,
+    category,
+    ...(category.isFireRelated && {
+      fireStatus,
+    }),
+    isAwsCompliant,
+    latitude,
+    longitude,
+    locationName: dfesRegion || undefined,
+    occurredAt: parseValidDate(pubDate),
+  };
+}
+
+/**
  * Converts CFS (Country Fire Service) incident data into an array of Hazard objects
  *
  * @param data - Array of CFS incident objects
@@ -1246,10 +1602,30 @@ function getAirQualitySeverity(category?: string): HazardSeverity {
  */
 function cleanDescription(html?: string): string {
   if (!html) return "";
-  return html
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, "")
-    .trim();
+
+  return (
+    html
+      // Convert list items to proper line breaks with bullets
+      .replace(/<li[^>]*>\s*<p>/gi, "\n• ")
+      .replace(/<li[^>]*>/gi, "\n• ")
+      .replace(/<\/li>/gi, "")
+
+      // Convert paragraph and div closings to line breaks
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<\/div>/gi, "\n")
+
+      // Convert <br> tags to line breaks
+      .replace(/<br\s*\/?>/gi, "\n")
+
+      // Remove all remaining HTML tags
+      .replace(/<[^>]+>/g, "")
+
+      // Clean up whitespace
+      .replace(/\n\s*\n+/g, "\n") // Replace multiple newlines with single newline
+      .replace(/[ \t]+/g, " ") // Replace multiple spaces/tabs with single space
+      .replace(/\n /g, "\n") // Remove spaces at start of lines
+      .trim()
+  );
 }
 
 /**

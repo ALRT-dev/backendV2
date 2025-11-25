@@ -18,6 +18,7 @@ import {
   parseUVIndexAndPollenToHazards,
   getGeocodingCacheSize,
   parseSmartravellerToHazards,
+  parseWAFeedToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -53,6 +54,7 @@ export enum ExternalSourceId {
   waqi = "waqi",
   openMeteo = "open-meteo",
   smartraveller = "smartraveller",
+  waDfes = "wa-dfes",
 }
 
 // Configuration for hazard sources
@@ -330,6 +332,19 @@ export const syncHazardsFromDifferentSources = async ({
         parseFunction: (responseData: any) =>
           parseSmartravellerToHazards({
             data: responseData,
+            availableCategories,
+          }),
+      },
+      {
+        id: ExternalSourceId.waDfes,
+        name: "DFES WA",
+        url: "https://emergency.wa.gov.au",
+        imageUrl: "",
+        apiUrl: "https://api.emergency.wa.gov.au/v1/rss/warnings",
+        parseFunction: () =>
+          parseWAFeedToHazards({
+            url: "https://api.emergency.wa.gov.au/v1/rss/warnings",
+            idPrefix: ExternalSourceId.waDfes,
             availableCategories,
           }),
       },
