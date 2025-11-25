@@ -241,6 +241,24 @@ export const updateConfiguration = async (
 };
 
 /**
+ * Upsert configuration
+ */
+export const upsertConfiguration = async (
+  data: CreateConfigurationData,
+  adminId: string
+): Promise<Configuration> => {
+  const existingConfig = await prisma.configuration.findUnique({
+    where: { key: data.key },
+  });
+
+  if (existingConfig) {
+    return updateConfiguration(existingConfig.id, data, adminId);
+  } else {
+    return createConfiguration(data, adminId);
+  }
+};
+
+/**
  * Delete a configuration
  */
 export const deleteConfiguration = async (id: string): Promise<void> => {
@@ -383,6 +401,8 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
                 DefaultAIPromptNames.officialAwsAlertSummarizationCritical
               ],
           },
+          extractLocationPromptId:
+            promptMap[DefaultAIPromptNames.extractLocationPrompt],
         },
         title: "AI Prompts Configuration",
         description:
@@ -392,7 +412,7 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
 
     // Create default configurations
     for (const configData of defaultConfigs) {
-      await createConfiguration(configData, superAdmin.id);
+      await upsertConfiguration(configData, superAdmin.id);
     }
 
     console.log(

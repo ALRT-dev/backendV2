@@ -19,6 +19,7 @@ import {
   getGeocodingCacheSize,
   parseSmartravellerToHazards,
   parseWAFeedToHazards,
+  parseBOMFeedToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -148,11 +149,10 @@ export const syncHazardsFromDifferentSources = async ({
         name: "BoM",
         url: "https://www.bom.gov.au",
         imageUrl: "",
-        apiUrl:
-          "https://data.peclet.com.au/api/explore/v2.1/catalog/datasets/bom-national-warnings-summary/records?limit=20",
-        parseFunction: (responseData: any) =>
-          parseBoMWarningsToHazards({
-            data: responseData,
+        apiUrl: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
+        parseFunction: () =>
+          parseBOMFeedToHazards({
+            url: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
             availableCategories,
           }),
       },
@@ -881,7 +881,7 @@ const fetchHazardsFromSource = async <T = any>(
  * Generates a deterministic hash for a hazard-like object.
  * Only uses stable fields (exclude timestamps, etc.)
  */
-export function generateHazardId(obj: HazardDataWithRelations): string {
+export const generateHazardId = (obj: HazardDataWithRelations): string => {
   // Create a stable copy with selected identifying fields
   const data = {
     title: obj.title,
@@ -894,4 +894,4 @@ export function generateHazardId(obj: HazardDataWithRelations): string {
   // Convert to string and hash
   const str = JSON.stringify(data);
   return crypto.createHash("sha256").update(str).digest("hex").slice(0, 16);
-}
+};

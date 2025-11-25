@@ -17,4 +17,5 @@ export interface AIPromptConfiguration {
     actionPromptId: string;
     criticalPromptId: string;
   };
+  extractLocationPromptId: string;
 }

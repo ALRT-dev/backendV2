@@ -36,6 +36,7 @@ import {
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 import { MainCategoryId } from "../services/hazard_category.service.js";
 import { ExternalSourceId } from "../services/ingestion.service.js";
+import { getLocationsFromText } from "../services/hazard.service.js";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
@@ -674,6 +675,131 @@ export async function parseRSSFeedToHazards({
     return hazard;
   });
 }
+
+/**
+ * Converts BOM (Bureau of Meteorology) RSS feed into Hazard objects
+ *
+ * @param url - URL of the BOM RSS feed
+ * @param availableCategories - Array of available hazard categories
+ * @param idPrefix - Prefix for hazard IDs (default: "bom")
+ * @returns Promise resolving to an array of HazardDataWithRelations objects
+ *
+ * @description
+ * Parses BOM RSS feed which contains weather warnings for Australian states.
+ * The feed includes various warning types such as:
+ * - Marine Wind Warnings
+ * - Heatwave Warnings
+ * - Severe Thunderstorm Warnings
+ * - Severe Weather Warnings
+ * - Fire Weather Warnings
+ *
+ * The title field contains the warning information and is used as both the title and description.
+ *
+ * @example
+ * ```typescript
+ * const url = "http://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml";
+ * const hazards = await parseBOMFeedToHazards({
+ *   url,
+ *   availableCategories,
+ *   idPrefix: "bom-nsw"
+ * });
+ * ```
+ */
+export async function parseBOMFeedToHazards({
+  url,
+  availableCategories,
+}: {
+  url: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+  idPrefix?: string;
+}): Promise<HazardDataWithRelations[]> {
+  const parser = new Parser({
+    customFields: {
+      item: ["guid"],
+    },
+  });
+
+  const feed = await parser.parseURL(url);
+
+  if (!feed.items?.length) return [];
+
+  const hazards: HazardDataWithRelations[] = [];
+
+  for (const item of feed.items) {
+    // Use title as both title and description as per requirement
+    const content = item.title
+      ?.replaceAll("\n", " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!content) continue;
+
+    const title = content
+      .replace(/\d{1,2}\/\d{1,2}:\d{2}\s+[A-Z]{3,4}$/i, "")
+      .trim();
+    const description = content;
+
+    // Extract hazard attributes from the title/description
+    const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+      getHazardAttributesFromDescription(description, availableCategories);
+
+    // For BOM data, we typically don't have coordinates in the RSS feed
+    // So we set them to null - these should be geocoded later if needed
+    const hazard: HazardDataWithRelations = {
+      title,
+      severity,
+      severityBand,
+      category,
+      ...(category.isFireRelated && {
+        fireStatus,
+      }),
+      isAwsCompliant,
+      description,
+      latitude: null,
+      longitude: null,
+      occurredAt: parseValidDate(item.pubDate),
+    };
+
+    hazards.push(hazard);
+  }
+
+  return parseBOMFeedToHazardsPhase2(hazards);
+}
+
+/**
+ * Phase 2 processing for BOM feed hazards to extract locations from descriptions
+ * and create separate hazards for each location found.
+ *
+ * @param hazards - Array of HazardDataWithRelations objects from Phase 1
+ * @returns Promise resolving to an array of HazardDataWithRelations objects with locations processed
+ */
+const parseBOMFeedToHazardsPhase2 = async (
+  hazards: HazardDataWithRelations[]
+): Promise<HazardDataWithRelations[]> => {
+  const allHazards = await Promise.all(
+    hazards.map(async (hazard) => {
+      const description = hazard.description;
+      console.log("Extracting locations from description:", description);
+      const locations = await getLocationsFromText(description);
+
+      // If no locations found, return the original hazard
+      if (!locations || locations.length === 0) {
+        return [hazard];
+      }
+
+      // Create a separate hazard for each location
+      return locations.map((locationName) => ({
+        id: `${ExternalSourceId.bom}-${locationName
+          .replaceAll(" ", "-")
+          .toLowerCase()}-${hazard.category?.id}`,
+        ...hazard,
+        locationName,
+      }));
+    })
+  );
+
+  // Flatten the array of arrays into a single array
+  return allHazards.flat();
+};
 
 /**
  * Converts WA DFES (Department of Fire and Emergency Services) RSS feed into Hazard objects

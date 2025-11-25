@@ -87,7 +87,7 @@ const retryWithBackoff = async <T>(
 /**
  * Process items in batches with rate limiting to avoid hitting OpenAI rate limits
  */
-const processBatchWithRateLimit = async <T, R>(
+export const processBatchWithRateLimit = async <T, R>(
   items: T[],
   processor: (item: T) => Promise<R>,
   batchSize: number = 5,
@@ -564,7 +564,45 @@ export const summarizeHazard = async ({
 };
 
 /**
- * Rate-limited batch processing for AI operations
- * Use this function when processing multiple hazards to avoid rate limits
+ * Extracts location names from a given text using AI.
+ *
+ * The AI analyzes the text and returns a list of region, district, area, or state names mentioned.
  */
-export { processBatchWithRateLimit };
+export const getLocationsFromText = async (text: string): Promise<string[]> => {
+  const { extractLocationPromptId } = await getAIPromptConfiguration();
+  const { content: promptContent, model } = await getPromptById(
+    extractLocationPromptId
+  );
+
+  const userContent = `Extract locations from this text: "${text}"`;
+
+  const response = await retryWithBackoff(async () => {
+    return await openai.chat.completions.create({
+      model: model,
+      messages: [
+        { role: "system", content: promptContent },
+        { role: "user", content: userContent },
+      ],
+      response_format: { type: "json_object" },
+    });
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new HttpError(500, "AI location extraction failed: Empty response");
+  }
+
+  try {
+    const aiResponse = JSON.parse(content) as { locations: string[] };
+    return aiResponse.locations;
+  } catch (parseError) {
+    console.error(
+      "Failed to parse AI location extraction response:",
+      parseError
+    );
+    throw new HttpError(
+      500,
+      "AI location extraction failed: Invalid response format"
+    );
+  }
+};
