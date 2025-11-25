@@ -38,7 +38,10 @@ import {
   type HazardForConfidenceCalculation,
 } from "./confidence_score.service.js";
 import { config } from "../utils/config.js";
-import { getAllSubHazardCategories } from "./hazard_category.service.js";
+import {
+  getAllSubHazardCategories,
+  MainCategoryId,
+} from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 
@@ -329,11 +332,33 @@ export const syncHazardsFromDifferentSources = async ({
         imageUrl:
           "https://www.smartraveller.gov.au/themes/custom/smart_traveller/logo-main-st.png",
         apiUrl: "https://www.smartraveller.gov.au/destinations-export",
-        parseFunction: (responseData: any) =>
-          parseSmartravellerToHazards({
+        parseFunction: (responseData: any) => {
+          const parentCategories =
+            availableCategories
+              ?.map((cat) => cat.parent)
+              ?.filter((cat) => cat !== null)
+              .reduce<HazardCategory[]>((acc, curr) => {
+                if (curr && !acc.find((c) => c.id === curr.id)) {
+                  acc.push(curr);
+                }
+                return acc;
+              }, []) || [];
+
+          const securityAndCrimeCategory = parentCategories.find(
+            (cat: HazardCategory) => cat.id === MainCategoryId.securityAndCrime
+          );
+          if (!securityAndCrimeCategory) {
+            console.log(
+              "Security and Crime category not found, skipping Smartraveller hazards."
+            );
+            return [];
+          }
+
+          return parseSmartravellerToHazards({
             data: responseData,
-            availableCategories,
-          }),
+            category: securityAndCrimeCategory,
+          });
+        },
       },
       {
         id: ExternalSourceId.waDfes,
@@ -653,7 +678,7 @@ const summarizeAndPostHazards = async ({
             title: summarized.title || hazardData.title,
             aiSummary: summarized.summary,
             aiConfidence: summarized.confidence,
-            callToAction: summarized.callToAction,
+            callToAction: hazardData.callToAction || summarized.callToAction,
             reviewStatus: HazardReviewStatus.accepted,
             reviewedAt: new Date(),
             confidenceScore,

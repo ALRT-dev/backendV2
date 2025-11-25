@@ -305,3 +305,27 @@ export const getSeverityBandFromPollenCount = (
     return HazardSeverityBand.info; // Default for invalid values
   }
 };
+
+/**
+ * Map Smartraveller travel advice level to hazard severity band.
+ *
+ * @param level - The Smartraveller travel advice level.
+ * @returns The corresponding HazardSeverityBand.
+ */
+export const getSeverityBandFromSmartravellerLevel = (
+  level: string
+): HazardSeverityBand => {
+  if (level.toLowerCase().includes("exercise normal safety precautions")) {
+    return HazardSeverityBand.info;
+  } else if (
+    level.toLowerCase().includes("exercise a high degree of caution")
+  ) {
+    return HazardSeverityBand.monitor;
+  } else if (level.toLowerCase().includes("reconsider your need to travel")) {
+    return HazardSeverityBand.action;
+  } else if (level.toLowerCase().includes("do not travel")) {
+    return HazardSeverityBand.critical;
+  }
+
+  return HazardSeverityBand.info;
+};

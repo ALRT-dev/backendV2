@@ -24,6 +24,7 @@ import {
   getSeverityBandFromAWSCompliantSeverity,
   getSeverityBandFromDescription,
   getSeverityBandFromPollenCount,
+  getSeverityBandFromSmartravellerLevel,
   getSeverityBandFromUVIndex,
   getSeverityFromDescription,
 } from "./ingestion.severity.util.js";
@@ -1242,7 +1243,7 @@ export function parseNTFireAndRescueToHazards({
  */
 export function parseSmartravellerToHazards({
   data,
-  availableCategories,
+  category,
 }: {
   data: Array<{
     title: string;
@@ -1256,7 +1257,7 @@ export function parseSmartravellerToHazards({
     field_seo_description?: string;
     changed?: string;
   }>;
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+  category: HazardCategory;
 }): HazardDataWithRelations[] {
   if (!Array.isArray(data) || !data.length) return [];
 
@@ -1275,59 +1276,30 @@ export function parseSmartravellerToHazards({
     descriptionParts.push(`Country: ${country}`);
     descriptionParts.push(`Travel Advice Level: ${adviceLevel}`);
 
-    if (advisory.field_region) {
-      descriptionParts.push(`Region: ${advisory.field_region}`);
-    }
-
     // Add the main advisory text
     if (advisory.field_last_update) {
       descriptionParts.push(`\n${advisory.field_last_update}`);
     }
 
-    // Add update notes if available
-    if (advisory.field_last_update_notes) {
-      descriptionParts.push(
-        `\nUpdate Notes: ${advisory.field_last_update_notes}`
-      );
-    }
-
-    // Add specific advice levels if available
-    if (
-      advisory.field_advice_levels &&
-      advisory.field_advice_levels !== advisory.field_last_update
-    ) {
-      descriptionParts.push(
-        `\nDetailed Advice: ${advisory.field_advice_levels}`
-      );
-    }
-
     const description = descriptionParts.join("\n");
 
     // Create a standardized title
-    const hazardTitle = `${country} - Travel Advisory: ${adviceLevel}`;
+    const hazardTitle =
+      advisory.field_seo_title ||
+      `${country} - Travel Advisory: ${adviceLevel}`;
 
-    // Determine severity based on advice level
-    let severity: HazardSeverity = HazardSeverity.info;
-    let severityBand: HazardSeverityBand = HazardSeverityBand.info;
+    // Determine severity band from advice level
+    const severityBand = getSeverityBandFromSmartravellerLevel(adviceLevel);
 
-    const lowerAdviceLevel = adviceLevel.toLowerCase();
-
-    if (lowerAdviceLevel.includes("do not travel")) {
-      severity = HazardSeverity.emergency;
-      severityBand = HazardSeverityBand.critical;
-    } else if (lowerAdviceLevel.includes("reconsider")) {
-      severity = HazardSeverity.watchAndAct;
-      severityBand = HazardSeverityBand.action;
-    } else if (lowerAdviceLevel.includes("exercise")) {
-      severity = HazardSeverity.advice;
-      severityBand = HazardSeverityBand.monitor;
-    }
-
-    // Get category - default to "other" or find "travel" category
-    const category = getCategoryFromDescription(
-      "travel advisory " + description,
-      availableCategories
-    );
+    const callToAction = advisory.field_last_update_notes
+      ? advisory.field_last_update_notes
+          .replace(/&nbsp;/g, " ")
+          .replace(/&[a-z]+;/gi, " ")
+          .split("\n")
+          .slice(1)
+          .join("\n")
+          .trim() || undefined
+      : undefined;
 
     // Parse the last updated date
     const occurredAt = advisory.changed
@@ -1336,12 +1308,14 @@ export function parseSmartravellerToHazards({
 
     // Create hazard with location name
     const hazard: HazardDataWithRelations = {
-      id: `smartraveller-${country.toLowerCase().replace(/\s+/g, "-")}`,
+      id: `${ExternalSourceId.smartraveller}-${country
+        .toLowerCase()
+        .replace(/\s+/g, "-")}`,
       title: hazardTitle,
       description,
-      severity,
       severityBand,
       category,
+      ...(callToAction && { callToAction }),
       isAwsCompliant: false, // Travel advisories are not AWS compliant
       locationName: country,
       ...(advisory.field_url && { link: advisory.field_url }),
