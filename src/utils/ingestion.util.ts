@@ -1354,7 +1354,7 @@ export function parseSmartravellerToHazards({
       .join("\n")
       .replace(/&[a-z]+;/gi, " ")
       .replace(/\*\*/g, "")
-      .replace(/\s+/g, " ")
+      .replace(/ +/g, " ")
       .trim();
 
     // Create a standardized title

@@ -531,3 +531,28 @@ export const getAIPromptForHazard = async ({
       ];
   return getPromptById(requiredPromptId);
 };
+
+/**
+ * Deletes all hazards associated with the specified source IDs.
+ * @param sourceIds - An array of source IDs whose hazards should be deleted.
+ * @returns The number of hazards deleted.
+ */
+export const deleteAllHazardsForSourceIds = async (
+  sourceIds: string[]
+): Promise<number> => {
+  const deleteResult = await prisma.hazard.deleteMany({
+    where: {
+      sourceId: {
+        in: sourceIds,
+      },
+    },
+  });
+
+  console.log(
+    `Deleted ${deleteResult.count} hazards for source IDs: ${sourceIds.join(
+      ", "
+    )}`
+  );
+
+  return deleteResult.count;
+};

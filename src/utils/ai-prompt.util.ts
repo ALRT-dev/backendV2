@@ -235,7 +235,7 @@ export const getAirQualityAlertCategoryPrompt = (
   const summaryExamples = getSummaryExamplesBySeverityBand(severityBand);
   const summaryExamplesText =
     summaryExamples.length > 0
-      ? `- Examples:\n    ${summaryExamples
+      ? `- STRICTLY follow the structure as in the following examples:\n    ${summaryExamples
           .map((example) => `"${example}"`)
           .join("\n    ")}`
       : "";
@@ -244,7 +244,7 @@ export const getAirQualityAlertCategoryPrompt = (
     getCallToActionExamplesBySeverityBand(severityBand);
   const callToActionExamplesText =
     callToActionExamples.length > 0
-      ? `- Examples:\n    ${callToActionExamples
+      ? `- STRICTLY follow the structure as in the following examples:\n    ${callToActionExamples
           .map((example) => `"${example}"`)
           .join("\n    ")}`
       : "";

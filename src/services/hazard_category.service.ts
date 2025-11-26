@@ -1710,3 +1710,12 @@ export const getCategoriesApplyingFilters = async ({
 
   return transformedCategories;
 };
+
+/**
+ * Delete all hazard categories from the database.
+ */
+export const deleteAllCategories = async (): Promise<number> => {
+  const deleted = await prisma.hazardCategory.deleteMany({});
+  console.log(`Deleted ${deleted.count} hazard categories`);
+  return deleted.count;
+};
