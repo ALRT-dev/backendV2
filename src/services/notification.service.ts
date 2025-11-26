@@ -118,16 +118,18 @@ const getUserPushNotificationTokensSubscribedToHazard = async (
     // If the hazard has a parent category, use that; otherwise use the category itself
     const categoryIdToCheck = parentCategoryId || categoryId;
 
-    // Find subscriptions where the hazard location falls within the subscription's bounding box
+    // Find subscriptions where the hazard location intersects with the subscription's bounding box
     // For point hazards: check if the point is inside the subscription box
     // For area hazards: check if any part of the hazard area overlaps with the subscription box
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
-        // Check if hazard falls within subscription's bounding box
-        northeastLat: { gte: hazardSouthwestLat }, // subscription's north is at or above hazard's south
-        northeastLng: { gte: hazardSouthwestLng }, // subscription's east is at or right of hazard's west
-        southwestLat: { lte: hazardNortheastLat }, // subscription's south is at or below hazard's north
-        southwestLng: { lte: hazardNortheastLng }, // subscription's west is at or left of hazard's east
+        // Bounding box intersection: subscription box overlaps with hazard box
+        // Subscription's NE (max) must be >= Hazard's SW (min)
+        // Subscription's SW (min) must be <= Hazard's NE (max)
+        northeastLat: { gte: hazardSouthwestLat }, // subscription's max lat >= hazard's min lat
+        southwestLat: { lte: hazardNortheastLat }, // subscription's min lat <= hazard's max lat
+        northeastLng: { gte: hazardSouthwestLng }, // subscription's max lng >= hazard's min lng
+        southwestLng: { lte: hazardNortheastLng }, // subscription's min lng <= hazard's max lng
 
         // don't notify the user who reported the hazard
         ...(reportedById && { userId: { not: reportedById } }),
