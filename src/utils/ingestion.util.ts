@@ -1345,7 +1345,12 @@ export function parseSmartravellerToHazards({
       descriptionParts.push(`\n${advisory.field_last_update}`);
     }
 
-    const description = descriptionParts.join("\n");
+    const description = descriptionParts
+      .join("\n")
+      .replace(/&[a-z]+;/gi, " ")
+      .replace(/\*\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
 
     // Create a standardized title
     const hazardTitle =

@@ -405,6 +405,16 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
         criticalPromptId:
           promptMap[DefaultAIPromptNames.airQualityAlertCategoryCritical] || "",
       },
+      smartravellerSourcePromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceMonitor] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceAction] || "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceCritical] || "",
+      },
       extractLocationPromptId:
         promptMap[DefaultAIPromptNames.extractLocationPrompt] || "",
     };

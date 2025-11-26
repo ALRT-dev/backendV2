@@ -269,6 +269,97 @@ export const getAirQualityAlertCategoryPrompt = (
   ${defaultOutputStructure}`;
 };
 
+/**
+ * Generates a prompt for summarizing Smartraveller source alerts.
+ * @returns {string} The prompt string.
+ */
+export const getSmartravellerSourcePrompt = (
+  severityBand: HazardSeverityBand
+): string => {
+  const getSummaryExamplesBySeverityBand = (
+    severityBand: HazardSeverityBand
+  ): string[] => {
+    switch (severityBand) {
+      case HazardSeverityBand.info:
+        return [
+          "Australian Government advises exercising normal safety precautions for [LOCATION], as reported by Smartraveller.",
+        ];
+      case HazardSeverityBand.monitor:
+        return [
+          "Australian Government advises exercising a high degree of caution in [LOCATION] due to [REASONS], as reported by Smartraveller.",
+        ];
+      case HazardSeverityBand.action:
+        return [
+          "Australian Government advises reconsidering your need to travel to [LOCATION] due to [REASONS], as reported by Smartraveller.",
+        ];
+      case HazardSeverityBand.critical:
+        return [
+          "Australian Government advises do not travel to [LOCATION] due to [REASONS], as reported by Smartraveller.",
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const getCallToActionExamplesBySeverityBand = (
+    severityBand: HazardSeverityBand
+  ): string[] => {
+    switch (severityBand) {
+      case HazardSeverityBand.info:
+        return [
+          "Exercise normal safety precautions. Stay aware of your surroundings and monitor local media for updates.",
+        ];
+      case HazardSeverityBand.monitor:
+        return [
+          "Exercise a high degree of caution. Avoid affected areas where possible and follow advice from local authorities.",
+        ];
+      case HazardSeverityBand.action:
+        return [
+          "Reconsider your need to travel. If already there, consider leaving. Register with Smartraveller and have an exit plan.",
+        ];
+      case HazardSeverityBand.critical:
+        return [
+          "Do not travel to this location. If already there, leave immediately if safe to do so. Contact DFAT on 1300 555 135.",
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const summaryExamples = getSummaryExamplesBySeverityBand(severityBand);
+  const summaryExamplesText =
+    summaryExamples.length > 0
+      ? `- STRICTLY follow the structure as in the following examples:\n    ${summaryExamples
+          .map((example) => `"${example}"`)
+          .join("\n    ")}`
+      : "";
+
+  const callToActionExamples =
+    getCallToActionExamplesBySeverityBand(severityBand);
+  const callToActionExamplesText =
+    callToActionExamples.length > 0
+      ? `- STRICTLY follow the structure as in the following examples:\n    ${callToActionExamples
+          .map((example) => `"${example}"`)
+          .join("\n    ")}`
+      : "";
+
+  return `${defaultAIPromptIntroduction}
+  
+  ${defaultSummaryGuidelines}
+  - Use Australian spellings.
+  ${summaryExamplesText}
+
+  ${defaultCallToActionGuidelines}
+  - Use Australian spellings.
+  ${callToActionExamplesText}
+    
+  ${defaultWordLimitGuidelines}
+  
+  ${defaultConfidenceLevelGuidelines}
+  
+  ${defaultOutputStructure}`;
+};
+
 const defaultAIPromptIntroduction = `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.`;
 
 const defaultSummaryGuidelines = `

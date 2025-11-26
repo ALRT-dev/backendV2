@@ -7,6 +7,7 @@ import {
   getAirQualityAlertCategoryPrompt,
   getExtractLocationPrompt,
   getOfficialAlertReviewAndSummarizationPrompt,
+  getSmartravellerSourcePrompt,
   getUserReportedAlertReviewAndSummarizationPrompt,
 } from "../utils/ai-prompt.util.js";
 
@@ -359,6 +360,11 @@ export enum DefaultAIPromptNames {
   airQualityAlertCategoryAction = "[ACTION] Air Quality Alert Category Summarization",
   airQualityAlertCategoryCritical = "[CRITICAL ] Air Quality Alert Category Summarization",
 
+  smartravellerSourceInfo = "[INFO] Smartraveller Source Alert Summarization",
+  smartravellerSourceMonitor = "[MONITOR] Smartraveller Source Alert Summarization",
+  smartravellerSourceAction = "[ACTION] Smartraveller Source Alert Summarization",
+  smartravellerSourceCritical = "[CRITICAL ] Smartraveller Source Alert Summarization",
+
   extractLocationPrompt = "Extract Location from Text",
 }
 
@@ -539,6 +545,44 @@ export const initializeAIPrompts = async (): Promise<void> => {
         description:
           "Used to interpret incoming air quality alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
         content: getAirQualityAlertCategoryPrompt(HazardSeverityBand.critical),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+
+      // Smartraveller Source Summarization Prompts
+      {
+        name: DefaultAIPromptNames.smartravellerSourceInfo,
+        description:
+          "Used to interpret incoming alerts from Smartraveller, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getSmartravellerSourcePrompt(HazardSeverityBand.info),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.smartravellerSourceMonitor,
+        description:
+          "Used to interpret incoming alerts from Smartraveller, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getSmartravellerSourcePrompt(HazardSeverityBand.monitor),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.smartravellerSourceAction,
+        description:
+          "Used to interpret incoming alerts from Smartraveller, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getSmartravellerSourcePrompt(HazardSeverityBand.action),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.smartravellerSourceCritical,
+        description:
+          "Used to interpret incoming alerts from Smartraveller, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getSmartravellerSourcePrompt(HazardSeverityBand.critical),
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },

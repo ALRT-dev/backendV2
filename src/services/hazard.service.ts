@@ -421,6 +421,7 @@ export const summarizeHazard = async ({
     isAwsCompliant,
     severityBand,
     category,
+    source,
   });
 
   const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
@@ -464,16 +465,40 @@ export const getAIPromptForHazard = async ({
   isAwsCompliant,
   severityBand,
   category,
+  source,
 }: {
   isAwsCompliant: boolean;
   severityBand: HazardSeverityBand;
   category: HazardCategory;
+  source: HazardSource;
 }): Promise<AIPrompt> => {
   const config = await getAIPromptConfiguration();
 
-  const categoryPromptKey = `${category.id}CategoryPromptId`;
+  // Check if source-specific prompt key exists in the config
+  console.log("Checking for source-specific prompt for:", source.id);
+  const sourcePromptKey = `${source.id}SourcePromptId`;
+  try {
+    if (sourcePromptKey in config) {
+      const sourcePromptId = config[sourcePromptKey as keyof typeof config];
+      if (sourcePromptId) {
+        const requiredPromptId =
+          sourcePromptId[
+            `${severityBand}PromptId` as keyof typeof sourcePromptId
+          ];
+        console.log(
+          `Found source-specific prompt for ${source.id}:`,
+          requiredPromptId
+        );
+        return getPromptById(requiredPromptId);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching source-specific prompt:", error);
+  }
 
   // Check if the category-specific prompt key exists in the config
+  const categoryPromptKey = `${category.id}CategoryPromptId`;
+  console.log("Checking for category-specific prompt for:", category.id);
   try {
     if (categoryPromptKey in config) {
       const categoryPromptId = config[categoryPromptKey as keyof typeof config];
@@ -493,10 +518,10 @@ export const getAIPromptForHazard = async ({
     console.error("Error fetching category-specific prompt:", error);
   }
 
-  console.error(
-    `No category-specific prompt found for ${category.id}, falling back to default prompts.`
-  );
   // Key doesn't exist, use default prompts
+  console.error(
+    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`
+  );
   const requiredPromptId = isAwsCompliant
     ? config.officialAwsAlertSummarizationPromptId[
         `${severityBand}PromptId` as keyof typeof config.officialAwsAlertSummarizationPromptId
