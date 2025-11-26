@@ -300,9 +300,16 @@ export const buildHazardsWhereClause = (
   // Only include hazards that haven't expired yet
   if (!showExpired) {
     andConditions.push({
-      expiresAt: {
-        gt: new Date(),
-      },
+      OR: [
+        {
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        {
+          expiresAt: null,
+        },
+      ],
     });
   }
 
@@ -586,7 +593,9 @@ export const buildHazardsWhereClauseRaw = (
 
   // Only include hazards that haven't expired yet
   if (!showExpired) {
-    whereConditions.push(`(h."expiresAt" > NOW() AT TIME ZONE 'UTC')`);
+    whereConditions.push(
+      `(h."expiresAt" > NOW() AT TIME ZONE 'UTC' OR h."expiresAt" IS NULL)`
+    );
   }
 
   // Apply isAwsCompliant filter if provided

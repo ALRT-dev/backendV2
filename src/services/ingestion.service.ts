@@ -6,7 +6,6 @@ import {
   type HazardCategory,
 } from "@prisma/client";
 import {
-  parseBoMWarningsToHazards,
   parseCFSFeedToHazards,
   parseGeoJsonToHazards,
   parseNTFireAndRescueToHazards,
@@ -672,6 +671,18 @@ const summarizeAndPostHazards = async ({
             confidenceScore = 75; // Fallback for official sources
           }
 
+          let expiresAt = hazardData.expiresAt;
+          if (!expiresAt) {
+            // If no expiry provided, set based on severity
+            expiresAt = getHazardExpiryDateFromSeverity(
+              hazardData.severity || HazardSeverity.unknown
+            );
+          }
+          if (hazardData.source?.id === ExternalSourceId.smartraveller) {
+            // No expiry for smartraveller hazards
+            expiresAt = undefined;
+          }
+
           // Prepare the hazard data with AI summary
           const finalHazardData: HazardDataWithRelations = {
             ...hazardData,
@@ -683,11 +694,7 @@ const summarizeAndPostHazards = async ({
             reviewedAt: new Date(),
             confidenceScore,
             confidenceScoreCalculatedAt: new Date(),
-            expiresAt:
-              hazardData.expiresAt ||
-              getHazardExpiryDateFromSeverity(
-                hazardData.severity || HazardSeverity.unknown
-              ),
+            ...(expiresAt && { expiresAt }),
           };
 
           // Immediately post the hazard after summarization
