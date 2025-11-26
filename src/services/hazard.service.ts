@@ -423,8 +423,6 @@ export const summarizeHazard = async ({
     category,
   });
 
-  console.log("System Prompt Content:", systemPromptContent);
-
   const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
   Inputs:
   - title: ${title}
@@ -484,7 +482,10 @@ export const getAIPromptForHazard = async ({
           categoryPromptId[
             `${severityBand}PromptId` as keyof typeof categoryPromptId
           ];
-        console.log("Found category-specific prompt:", requiredPromptId);
+        console.log(
+          `Found category-specific prompt for ${category.id}:`,
+          requiredPromptId
+        );
         return getPromptById(requiredPromptId);
       }
     }
@@ -492,7 +493,9 @@ export const getAIPromptForHazard = async ({
     console.error("Error fetching category-specific prompt:", error);
   }
 
-  console.error("Falling back to default prompts.");
+  console.error(
+    `No category-specific prompt found for ${category.id}, falling back to default prompts.`
+  );
   // Key doesn't exist, use default prompts
   const requiredPromptId = isAwsCompliant
     ? config.officialAwsAlertSummarizationPromptId[

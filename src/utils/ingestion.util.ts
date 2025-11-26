@@ -170,70 +170,6 @@ export function parseGeoJsonToHazards({
 }
 
 /**
- * Converts the BoM weather warnings JSON into an array of Hazard objects
- *
- * @param data - The BoM warnings JSON object
- * @param categoryId - The hazard category ID to associate with these warnings
- * @returns Array of Prisma HazardCreateInput objects ready for database insertion
- *
- * @example
- * ```typescript
- * const bomWarningsData = {
- *   "results": [
- *     {
- *       "warning_title": "Severe Thunderstorm Warning",
- *       "summary": "<p>Severe thunderstorms are expected...</p>",
- *       "begin_time": "2023-10-01T14:00:00+10:00",
- *       "end_time": "2023-10-01T16:00:00+10:00"
- *     }
- *   ]
- * };
- * const hazards = parseBoMWarningsToHazards(bomWarningsData, categoryId);
- * ```
- */
-export function parseBoMWarningsToHazards({
-  data,
-  availableCategories,
-}: {
-  data: any;
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
-}): HazardDataWithRelations[] {
-  if (!data?.results?.length) return [];
-
-  return data.results.map((item: any) => {
-    const description = cleanDescription(
-      item.summary || item.warning_title || ""
-    );
-    const id = item.identifier && `bom-${item.identifier}`;
-
-    const { severity, severityBand, category, fireStatus, isAwsCompliant } =
-      getHazardAttributesFromDescription(
-        description,
-        availableCategories,
-        MainCategoryId.weatherAndEnvironment
-      );
-
-    const hazard: HazardDataWithRelations = {
-      id,
-      title: item.warning_title || "Unnamed Warning",
-      description,
-      severity,
-      severityBand,
-      category,
-      ...(category.isFireRelated && {
-        fireStatus,
-      }),
-      isAwsCompliant,
-      locationName: item.location,
-      occurredAt: parseValidDate(item.begin_time),
-      expiresAt: item.end_time ? parseValidDate(item.end_time) : null,
-    };
-
-    return hazard;
-  });
-}
-
-/**
  * Converts air quality data into an array of Hazard objects
  *
  * @param data - Array of air quality objects containing site information, pollutant data, and measurements
@@ -794,7 +730,7 @@ const parseBOMFeedToHazardsPhase2 = async (
           .replaceAll(" ", "-")
           .toLowerCase()}-${hazard.category?.id}`,
         ...hazard,
-        locationName,
+        locationName: `${locationName}, Australia`,
       }));
     })
   );
@@ -1574,11 +1510,11 @@ export const populateHazardWithGeocoding = async (
             hazard.southwestLat = cached.southwestLat ?? null;
             hazard.southwestLng = cached.southwestLng ?? null;
           }
-          console.log(`Using cached coordinates for: ${hazard.locationName}`);
         } else {
           const result: GeocodeResult | undefined = await rateLimitedGeocode(
             () => convertAddressToLatLng(hazard.locationName!)
           );
+
           if (result && result.geometry && result.geometry.location) {
             hazard.latitude = result.geometry.location.lat;
             hazard.longitude = result.geometry.location.lng;
@@ -1597,8 +1533,6 @@ export const populateHazardWithGeocoding = async (
               hazard.southwestLng = result.geometry.viewport.southwest.lng;
             }
 
-            console.log("GEocoding result bounds:", result.geometry.bounds);
-
             // Cache the result including bounds
             geocodingCache.set(cacheKey, {
               lat: result.geometry.location.lat,
@@ -1612,7 +1546,6 @@ export const populateHazardWithGeocoding = async (
                 southwestLng: hazard.southwestLng,
               }),
             });
-            console.log(`Geocoded coordinates for: ${hazard.locationName}`);
           } else {
             console.warn(
               `Geocoding failed for hazard location: ${hazard.locationName}`
@@ -1629,9 +1562,6 @@ export const populateHazardWithGeocoding = async (
 
       if (cached && Date.now() - cached.timestamp < CACHE_EXPIRY_MS) {
         hazard.locationName = cached.address;
-        console.log(
-          `Using cached address for: ${hazard.latitude}, ${hazard.longitude}`
-        );
       } else {
         const address: string | undefined = await rateLimitedGeocode(() =>
           convertLatLngToAddress(hazard.latitude!, hazard.longitude!)
@@ -1646,9 +1576,6 @@ export const populateHazardWithGeocoding = async (
             address: address,
             timestamp: Date.now(),
           });
-          console.log(
-            `Reverse geocoded address for: ${hazard.latitude}, ${hazard.longitude}`
-          );
         } else {
           console.warn(
             `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
