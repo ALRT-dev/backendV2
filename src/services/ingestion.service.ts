@@ -49,16 +49,16 @@ import { HttpError } from "../models/http_error.js";
 export enum ExternalSourceId {
   rfs = "rfs",
   bom = "bom",
-  nswTransport = "nsw-transport",
-  actEs = "act-es",
+  nswTransport = "nswTransport",
+  actEs = "actEs",
   cfs = "cfs",
-  viceFire = "vice-fire",
-  qldFire = "qld-fire",
-  ntFireAndRescue = "nt-fire-and-rescue",
+  viceFire = "viceFire",
+  qldFire = "qldFire",
+  ntFireAndRescue = "ntFireAndRescue",
   waqi = "waqi",
-  openMeteo = "open-meteo",
+  openMeteo = "openMeteo",
   smartraveller = "smartraveller",
-  waDfes = "wa-dfes",
+  waDfes = "waDfes",
 }
 
 // Configuration for hazard sources
@@ -503,19 +503,23 @@ const summarizeAndPostHazards = async ({
             continue;
           }
 
-          // Update existing hazards even if they drop below minimum (to reflect the downgrade)
+          // Expire existing hazards if they drop below minimum severity
           if (
             existing &&
             !meetsMinimumSeverity &&
             currentSeverityBand !== existing.severityBand
           ) {
             console.log(
-              `[${hazardData.source?.id}] Hazard severity downgraded to ${currentSeverityBand}, updating:`,
+              `[${hazardData.source?.id}] Hazard severity downgraded to ${currentSeverityBand}, expiring:`,
               hazardData.title
             );
-            hazardsToProcess.push({
-              hazardData,
-              isUpdate: true,
+            await prisma.hazard.update({
+              where: { id: existing.id },
+              data: {
+                expiresAt: new Date(Date.now() - 1000), // Set to 1 second in the past
+                description: hazardData.description,
+                severityBand: currentSeverityBand,
+              },
             });
             continue;
           }
