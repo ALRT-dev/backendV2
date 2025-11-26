@@ -528,11 +528,6 @@ export const buildHazardsWhereClauseRaw = (
 
   // Apply geographic bounds filter if provided - Using PostGIS for dramatic performance improvement
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    const minLat = Math.min(southwestLat, northeastLat);
-    const maxLat = Math.max(southwestLat, northeastLat);
-    const minLng = Math.min(southwestLng, northeastLng);
-    const maxLng = Math.max(southwestLng, northeastLng);
-
     // Create bounding box polygon using PostGIS
     const boundsCondition = `(
       (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
@@ -545,16 +540,16 @@ export const buildHazardsWhereClauseRaw = (
       OR
       (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
        h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
-       h."northeastLat" >= $${paramIndex} AND h."southwestLat" <= $${
+       h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
       paramIndex + 3
     } AND
-       h."northeastLng" >= $${paramIndex + 1} AND h."southwestLng" <= $${
+       h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
       paramIndex + 2
     })
     )`;
 
     whereConditions.push(boundsCondition);
-    queryParams.push(minLng, minLat, maxLng, maxLat);
+    queryParams.push(southwestLng, southwestLat, northeastLng, northeastLat);
     paramIndex += 4;
   } else if (subscriptions && subscriptions.length > 0) {
     // Apply subscription bounds using PostGIS
@@ -570,10 +565,10 @@ export const buildHazardsWhereClauseRaw = (
         OR
         (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
          h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
-         h."northeastLat" >= $${paramIndex} AND h."southwestLat" <= $${
+         h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
         paramIndex + 3
       } AND
-         h."northeastLng" >= $${paramIndex + 1} AND h."southwestLng" <= $${
+         h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
         paramIndex + 2
       })
       )`;
@@ -583,11 +578,12 @@ export const buildHazardsWhereClauseRaw = (
     whereConditions.push(`(${subscriptionConditions.join(" OR ")})`);
 
     subscriptions.forEach((sub) => {
-      const minLat = Math.min(sub.southwestLat, sub.northeastLat);
-      const maxLat = Math.max(sub.southwestLat, sub.northeastLat);
-      const minLng = Math.min(sub.southwestLng, sub.northeastLng);
-      const maxLng = Math.max(sub.southwestLng, sub.northeastLng);
-      queryParams.push(minLng, minLat, maxLng, maxLat);
+      queryParams.push(
+        sub.southwestLng,
+        sub.southwestLat,
+        sub.northeastLng,
+        sub.northeastLat
+      );
     });
   }
 
