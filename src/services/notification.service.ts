@@ -2,7 +2,10 @@ import { HazardSeverity, type Hazard } from "@prisma/client";
 import { firebaseAdmin } from "../utils/firebase_admin_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
-import { getFormattedHazardSeverity } from "../utils/hazard.util.js";
+import {
+  getFormattedHazardSeverity,
+  getFormattedHazardSeverityBand,
+} from "../utils/hazard.util.js";
 
 /**
  * A function to get user push notification tokens of a specific user by their user ID.
@@ -272,14 +275,22 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
  * Returns the notification title for a new hazard based on its severity and title.
  */
 const getNotificationTitleForNewHazard = (hazard: Hazard): string => {
-  const { severity, title } = hazard;
-  return `${getFormattedHazardSeverity(severity)} | ${title}`;
+  const { severity, title, isAwsCompliant, severityBand } = hazard;
+
+  const formattedSeverity = getFormattedHazardSeverity(severity);
+  const foramttedSeverityBand = getFormattedHazardSeverityBand(severityBand);
+
+  const requiredSeverity = isAwsCompliant
+    ? formattedSeverity
+    : foramttedSeverityBand;
+
+  return `${requiredSeverity} | ${title}`;
 };
 
 /**
  * Returns the notification body for a new hazard based on its short description or description.
  */
 const getNotificationBodyForNewHazard = (hazard: Hazard): string => {
-  const { description } = hazard;
-  return description || "A new alrt has been reported.";
+  const { aiSummary, description } = hazard;
+  return aiSummary || description || "New hazard reported.";
 };

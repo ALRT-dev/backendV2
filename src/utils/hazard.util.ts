@@ -1,5 +1,6 @@
 import {
   HazardSeverity,
+  HazardSeverityBand,
   Prisma,
   type LocationSubscription,
 } from "@prisma/client";
@@ -819,6 +820,28 @@ export const getFormattedHazardSeverity = (
     case HazardSeverity.watchAndAct:
       return "Watch and Act";
     case HazardSeverity.emergency:
+      return "Critical";
+    default:
+      return "Info";
+  }
+};
+
+/**
+ * Returns a formatted string representation of the hazard severity band.
+ * @param severityBand - The hazard severity band
+ * @returns Formatted string representation of the hazard severity band
+ */
+export const getFormattedHazardSeverityBand = (
+  severityBand: HazardSeverityBand
+): string => {
+  switch (severityBand) {
+    case HazardSeverityBand.info:
+      return "Info";
+    case HazardSeverityBand.monitor:
+      return "Monitor";
+    case HazardSeverityBand.action:
+      return "Action";
+    case HazardSeverityBand.critical:
       return "Critical";
     default:
       return "Info";
