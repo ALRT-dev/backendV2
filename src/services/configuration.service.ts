@@ -347,63 +347,73 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       promptMap[prompt.name] = prompt.id;
     }
 
+    const aiPromptConfig: AIPromptConfiguration = {
+      userReportedAlertReviewAndSummarizePromptId: {
+        infoPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo
+          ] || "",
+        monitorPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationMonitor
+          ] || "",
+        actionPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationAction
+          ] || "",
+        criticalPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationCritical
+          ] || "",
+      },
+      officialAlertSummarizationPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationMonitor] ||
+          "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationAction] ||
+          "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationCritical] ||
+          "",
+      },
+      officialAwsAlertSummarizationPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationInfo] ||
+          "",
+        monitorPromptId:
+          promptMap[
+            DefaultAIPromptNames.officialAwsAlertSummarizationMonitor
+          ] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationAction] ||
+          "",
+        criticalPromptId:
+          promptMap[
+            DefaultAIPromptNames.officialAwsAlertSummarizationCritical
+          ] || "",
+      },
+      airQualityAlertCategoryPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryMonitor] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryAction] || "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryCritical] || "",
+      },
+      extractLocationPromptId:
+        promptMap[DefaultAIPromptNames.extractLocationPrompt] || "",
+    };
+
     // Define default configurations
     const defaultConfigs: CreateConfigurationData[] = [
       {
         key: ConfigurationKey.aiPrompts,
-        value: {
-          userReportedAlertReviewAndSummarizePromptId: {
-            infoPromptId:
-              promptMap[
-                DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo
-              ],
-            monitorPromptId:
-              promptMap[
-                DefaultAIPromptNames
-                  .userReportedAlertReviewAndSummarizationMonitor
-              ],
-            actionPromptId:
-              promptMap[
-                DefaultAIPromptNames
-                  .userReportedAlertReviewAndSummarizationAction
-              ],
-            criticalPromptId:
-              promptMap[
-                DefaultAIPromptNames
-                  .userReportedAlertReviewAndSummarizationCritical
-              ],
-          },
-          officialAlertSummarizationPromptId: {
-            infoPromptId:
-              promptMap[DefaultAIPromptNames.officialAlertSummarizationInfo],
-            monitorPromptId:
-              promptMap[DefaultAIPromptNames.officialAlertSummarizationMonitor],
-            actionPromptId:
-              promptMap[DefaultAIPromptNames.officialAlertSummarizationAction],
-            criticalPromptId:
-              promptMap[
-                DefaultAIPromptNames.officialAlertSummarizationCritical
-              ],
-          },
-          officialAwsAlertSummarizationPromptId: {
-            infoPromptId:
-              promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationInfo],
-            monitorPromptId:
-              promptMap[
-                DefaultAIPromptNames.officialAwsAlertSummarizationMonitor
-              ],
-            actionPromptId:
-              promptMap[
-                DefaultAIPromptNames.officialAwsAlertSummarizationAction
-              ],
-            criticalPromptId:
-              promptMap[
-                DefaultAIPromptNames.officialAwsAlertSummarizationCritical
-              ],
-          },
-          extractLocationPromptId:
-            promptMap[DefaultAIPromptNames.extractLocationPrompt],
-        },
+        value: aiPromptConfig,
         title: "AI Prompts Configuration",
         description:
           "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportedAlertReviewAndSummarizePromptId, officialAlertSummarizationPromptId, severityAndCallToActionPromptId",

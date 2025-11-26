@@ -6,6 +6,8 @@ import {
   type HazardCategory,
   HazardSeverityBand,
   HazardReviewStatus,
+  type HazardSource,
+  type AIPrompt,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import openai from "../utils/open_ai_client.util.js";
@@ -23,103 +25,7 @@ import {
 } from "../utils/hazard.util.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
-
-/**
- * Utility function to add delay between API calls
- */
-const delay = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-/**
- * Utility function to retry API calls with exponential backoff
- */
-const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> => {
-  let lastError: Error;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-
-      // If it's a rate limit error and we have retries left
-      if (error?.status === 429 && attempt < maxRetries) {
-        // Don't retry if it's a quota exceeded error (insufficient_quota)
-        if (
-          error?.code === "insufficient_quota" ||
-          error?.type === "insufficient_quota"
-        ) {
-          console.log(
-            "OpenAI quota exceeded, not retrying. Please check your billing and quota limits."
-          );
-          throw error;
-        }
-
-        const retryAfterMs =
-          error?.headers?.["retry-after-ms"] ||
-          (error?.headers?.["retry-after"]
-            ? parseInt(error.headers["retry-after"]) * 1000
-            : null);
-        const delayMs = retryAfterMs || baseDelay * Math.pow(2, attempt);
-
-        console.log(
-          `Rate limit hit, retrying in ${delayMs}ms (attempt ${attempt + 1}/${
-            maxRetries + 1
-          })`
-        );
-        await delay(delayMs);
-        continue;
-      }
-
-      // If it's not a rate limit error or we're out of retries, throw
-      throw error;
-    }
-  }
-
-  throw lastError!;
-};
-
-/**
- * Process items in batches with rate limiting to avoid hitting OpenAI rate limits
- */
-export const processBatchWithRateLimit = async <T, R>(
-  items: T[],
-  processor: (item: T) => Promise<R>,
-  batchSize: number = 5,
-  delayBetweenBatches: number = 2000
-): Promise<R[]> => {
-  const results: R[] = [];
-
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    console.log(
-      `---------------------------------------> Processing batch ${
-        Math.floor(i / batchSize) + 1
-      }/${Math.ceil(items.length / batchSize)} (${batch.length} items)`
-    );
-
-    const batchResults = await Promise.all(
-      batch.map((item) => processor(item))
-    );
-
-    results.push(...batchResults);
-
-    // Add delay between batches (except for the last batch)
-    if (i + batchSize < items.length) {
-      console.log(
-        `---------------------------------------> Waiting ${delayBetweenBatches}ms before next batch...`
-      );
-      await delay(delayBetweenBatches);
-    }
-  }
-
-  return results;
-};
+import { executePrompt } from "./open-ai.service.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -442,15 +348,10 @@ export const reviewHazard = async ({
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
-  const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: promptContent },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
+  const response = await executePrompt({
+    model: model,
+    systemPromptContent: promptContent,
+    userPromptContent: userContent,
   });
 
   const content = response.choices[0]?.message?.content;
@@ -490,8 +391,8 @@ export const summarizeHazard = async ({
   latitude,
   longitude,
   locationName,
-  categoryName,
-  sourceName,
+  category,
+  source,
   isAwsCompliant,
   severityBand,
   useDummy = false,
@@ -501,8 +402,8 @@ export const summarizeHazard = async ({
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  categoryName: string;
-  sourceName: string;
+  category: HazardCategory;
+  source: HazardSource;
   isAwsCompliant: boolean;
   severityBand: HazardSeverityBand;
   useDummy?: boolean;
@@ -516,34 +417,26 @@ export const summarizeHazard = async ({
     };
   }
 
-  const {
-    officialAlertSummarizationPromptId,
-    officialAwsAlertSummarizationPromptId,
-  } = await getAIPromptConfiguration();
-  const requiredPromptId = isAwsCompliant
-    ? officialAwsAlertSummarizationPromptId[`${severityBand}PromptId`]
-    : officialAlertSummarizationPromptId[`${severityBand}PromptId`];
-  const { content: promptContent, model } = await getPromptById(
-    requiredPromptId
-  );
+  const { model, content: systemPromptContent } = await getAIPromptForHazard({
+    isAwsCompliant,
+    severityBand,
+    category,
+  });
 
-  const userContent = `Standardize the following hazard report using the rules and templates in the system prompt:
+  console.log("System Prompt Content:", systemPromptContent);
+
+  const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
   Inputs:
   - title: ${title}
   - description: ${description}
   - location: ${locationName || ""} (${latitude}, ${longitude})
-  - category: ${categoryName}
-  - agency: ${sourceName}`;
+  - category: ${category.name}
+  - agency: ${source.name}`;
 
-  const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: promptContent },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
+  const response = await executePrompt({
+    model: model,
+    systemPromptContent: systemPromptContent,
+    userPromptContent: userPromptContent,
   });
 
   const content = response.choices[0]?.message?.content;
@@ -564,45 +457,49 @@ export const summarizeHazard = async ({
 };
 
 /**
- * Extracts location names from a given text using AI.
- *
- * The AI analyzes the text and returns a list of region, district, area, or state names mentioned.
+ * Determines the appropriate AI prompt based on whether the hazard is AWS compliant and its severity band.
+ * @param isAwsCompliant - Indicates if the hazard follows AWS compliance.
+ * @param severityBand - The severity band of the hazard.
+ * @returns The corresponding AI prompt.
  */
-export const getLocationsFromText = async (text: string): Promise<string[]> => {
-  const { extractLocationPromptId } = await getAIPromptConfiguration();
-  const { content: promptContent, model } = await getPromptById(
-    extractLocationPromptId
-  );
+export const getAIPromptForHazard = async ({
+  isAwsCompliant,
+  severityBand,
+  category,
+}: {
+  isAwsCompliant: boolean;
+  severityBand: HazardSeverityBand;
+  category: HazardCategory;
+}): Promise<AIPrompt> => {
+  const config = await getAIPromptConfiguration();
 
-  const userContent = `Extract locations from this text: "${text}"`;
+  const categoryPromptKey = `${category.id}CategoryPromptId`;
 
-  const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: promptContent },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
-  });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI location extraction failed: Empty response");
-  }
-
+  // Check if the category-specific prompt key exists in the config
   try {
-    const aiResponse = JSON.parse(content) as { locations: string[] };
-    return aiResponse.locations;
-  } catch (parseError) {
-    console.error(
-      "Failed to parse AI location extraction response:",
-      parseError
-    );
-    throw new HttpError(
-      500,
-      "AI location extraction failed: Invalid response format"
-    );
+    if (categoryPromptKey in config) {
+      const categoryPromptId = config[categoryPromptKey as keyof typeof config];
+      if (categoryPromptId) {
+        const requiredPromptId =
+          categoryPromptId[
+            `${severityBand}PromptId` as keyof typeof categoryPromptId
+          ];
+        console.log("Found category-specific prompt:", requiredPromptId);
+        return getPromptById(requiredPromptId);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching category-specific prompt:", error);
   }
+
+  console.error("Falling back to default prompts.");
+  // Key doesn't exist, use default prompts
+  const requiredPromptId = isAwsCompliant
+    ? config.officialAwsAlertSummarizationPromptId[
+        `${severityBand}PromptId` as keyof typeof config.officialAwsAlertSummarizationPromptId
+      ]
+    : config.officialAlertSummarizationPromptId[
+        `${severityBand}PromptId` as keyof typeof config.officialAlertSummarizationPromptId
+      ];
+  return getPromptById(requiredPromptId);
 };

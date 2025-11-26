@@ -21,6 +21,10 @@ export enum MainCategoryId {
   other = "other",
 }
 
+export enum SubCategoryId {
+  airQualityAlert = "airQualityAlert",
+}
+
 /**
  * Check if any hazard categories exist in the database
  */
@@ -190,9 +194,9 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "airQualityAlert" },
+              where: { id: SubCategoryId.airQualityAlert },
               create: {
-                id: "airQualityAlert",
+                id: SubCategoryId.airQualityAlert,
                 name: "Air Quality Alert",
                 description: "Air pollution and quality concerns",
                 keywords: [

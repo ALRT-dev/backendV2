@@ -2,8 +2,9 @@
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
-import { type AIPrompt, type Prisma } from "@prisma/client";
+import { HazardSeverityBand, type AIPrompt, type Prisma } from "@prisma/client";
 import {
+  getAirQualityAlertCategoryPrompt,
   getExtractLocationPrompt,
   getOfficialAlertReviewAndSummarizationPrompt,
   getUserReportedAlertReviewAndSummarizationPrompt,
@@ -353,6 +354,11 @@ export enum DefaultAIPromptNames {
   officialAwsAlertSummarizationAction = "[ACTION] Official AWS Alert Summarization",
   officialAwsAlertSummarizationCritical = "[CRITICAL ] Official AWS Alert Summarization",
 
+  airQualityAlertCategoryInfo = "[INFO] Air Quality Alert Category Summarization",
+  airQualityAlertCategoryMonitor = "[MONITOR] Air Quality Alert Category Summarization",
+  airQualityAlertCategoryAction = "[ACTION] Air Quality Alert Category Summarization",
+  airQualityAlertCategoryCritical = "[CRITICAL ] Air Quality Alert Category Summarization",
+
   extractLocationPrompt = "Extract Location from Text",
 }
 
@@ -499,6 +505,46 @@ export const initializeAIPrompts = async (): Promise<void> => {
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
       },
+
+      // Air Quality Alert Category Prompts
+      {
+        name: DefaultAIPromptNames.airQualityAlertCategoryInfo,
+        description:
+          "Used to interpret incoming air quality alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getAirQualityAlertCategoryPrompt(HazardSeverityBand.info),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.airQualityAlertCategoryMonitor,
+        description:
+          "Used to interpret incoming air quality alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getAirQualityAlertCategoryPrompt(HazardSeverityBand.monitor),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.airQualityAlertCategoryAction,
+        description:
+          "Used to interpret incoming air quality alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getAirQualityAlertCategoryPrompt(HazardSeverityBand.action),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+      {
+        name: DefaultAIPromptNames.airQualityAlertCategoryCritical,
+        description:
+          "Used to interpret incoming air quality alerts from official sources, extract key details, and produce clear, actionable summaries, including a concise title, a short description, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.",
+        content: getAirQualityAlertCategoryPrompt(HazardSeverityBand.critical),
+        variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+      },
+
+      // Extract Location Prompt
       {
         name: DefaultAIPromptNames.extractLocationPrompt,
         description:

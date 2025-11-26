@@ -1,3 +1,5 @@
+import { HazardSeverityBand } from "@prisma/client";
+
 /**
  * Generates a prompt to extract location names from text.
  * @returns {string} The prompt string.
@@ -160,61 +162,166 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
 };
 
 /**
- * Generates a prompt for reviewing and summarizing official alerts.
+ * Generates a prompt for summarizing official alerts.
  * @returns {string} The prompt string.
  */
 export const getOfficialAlertReviewAndSummarizationPrompt = (): string => {
-  return `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.
+  return `${defaultAIPromptIntroduction}
   
-  SUMMARY GUIDELINES
-  Generate “summary” using the following rules:
-  - MUST be one single sentence
-  - MUST be ≤ 25 words
-  - Calm, factual, plain language
+  ${defaultSummaryGuidelines}
+
+  ${defaultCallToActionGuidelines}
+  
+  ${defaultToneGuidelines}
+  
+  ${defaultWordLimitGuidelines}
+  
+  ${defaultConfidenceLevelGuidelines}
+  
+  ${defaultOutputStructure}`;
+};
+
+/**
+ * Generates a prompt for summarizing air quality alert categories.
+ * @returns {string} The prompt string.
+ */
+export const getAirQualityAlertCategoryPrompt = (
+  severityBand: HazardSeverityBand
+): string => {
+  const getSummaryExamplesBySeverityBand = (
+    severityBand: HazardSeverityBand
+  ): string[] => {
+    switch (severityBand) {
+      case HazardSeverityBand.info:
+        return [];
+      case HazardSeverityBand.monitor:
+        return [];
+      case HazardSeverityBand.action:
+        return [
+          "Air quality is poor near [SUBURB LOCATION] with AQI at [NUMBER], as reported by [AGENCY].",
+        ];
+      case HazardSeverityBand.critical:
+        return [
+          "Air quality is very poor near [SUBURB LOCATION] with AQI at [NUMBER], as reported by [AGENCY].",
+          "Air quality is hazardous near [SUBURB LOCATION] with AQI at [NUMBER], as reported by [AGENCY].",
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const getCallToActionExamplesBySeverityBand = (
+    severityBand: HazardSeverityBand
+  ): string[] => {
+    switch (severityBand) {
+      case HazardSeverityBand.info:
+        return [];
+      case HazardSeverityBand.monitor:
+        return [];
+      case HazardSeverityBand.action:
+        return [
+          "Limit outdoor activities if you have breathing conditions. Monitor updates from health authorities.",
+        ];
+      case HazardSeverityBand.critical:
+        return [
+          "Avoid outdoor activities. Stay indoors with windows closed. Seek medical help if breathing worsens.",
+          "Stay indoors immediately. Do not go outside. Call 000 if you have severe breathing difficulty or chest pain.",
+        ];
+      default:
+        return [];
+    }
+  };
+
+  const summaryExamples = getSummaryExamplesBySeverityBand(severityBand);
+  const summaryExamplesText =
+    summaryExamples.length > 0
+      ? `- Examples:\n    ${summaryExamples
+          .map((example) => `"${example}"`)
+          .join("\n    ")}`
+      : "";
+
+  const callToActionExamples =
+    getCallToActionExamplesBySeverityBand(severityBand);
+  const callToActionExamplesText =
+    callToActionExamples.length > 0
+      ? `- Examples:\n    ${callToActionExamples
+          .map((example) => `"${example}"`)
+          .join("\n    ")}`
+      : "";
+
+  return `${defaultAIPromptIntroduction}
+  
+  ${defaultSummaryGuidelines}
+  - Use suburb/region only, no exact addresses.
+  - Use calm, clear language (no panic words).
+  - Use Australian spellings.
+  ${summaryExamplesText}
+
+  ${defaultCallToActionGuidelines}
+  - Use Australian spellings.
+  - Always include: "Seek medical help if breathing worsens" for higher levels.
+  ${callToActionExamplesText}
+    
+  ${defaultWordLimitGuidelines}
+  
+  ${defaultConfidenceLevelGuidelines}
+  
+  ${defaultOutputStructure}`;
+};
+
+const defaultAIPromptIntroduction = `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.`;
+
+const defaultSummaryGuidelines = `
+SUMMARY GUIDELINES
+Generate “summary” using the following rules:
+  - MUST be one single sentence.
+  - MUST be ≤ 25 words.
+  - Calm, factual, plain language.
   - Only information relevant to the hazard type.
-  - Follow TONE GUIDANCE below for tone.
-  
-  CALL-TO-ACTION GUIDELINES
-  First, scan the hazard description for ANY actionable items:
-  - Direct instructions (“evacuate immediately”, “close windows”, “avoid area”)
-  - Safety recommendations (“use caution”, “keep medication nearby”)
-  - Conditional actions (“if property is under threat…”)
-  - Behaviour instructions (“residents should…”, “motorists should…”)
-  
-  If ANY exist:
-  → Extract, combine, and summarise them into one concise statement.
-  
-  If NO action exists in the description:
-  → Create your own callToAction based on:
-     - category
-     - context of the hazard
-     - TONE GUIDANCE below for tone.
-  
-  
-  MUST be ≤ 25 words.
-  
-  TONE GUIDANCE
+  - If TONE GUIDELINES is provided below, follow it strictly.`;
+
+const defaultCallToActionGuidelines = `
+CALL-TO-ACTION GUIDELINES
+Generate “callToAction” using the following rules:
+  - First, scan the hazard description for ANY actionable items:
+    → Direct instructions (“evacuate immediately”, “close windows”, “avoid area”),
+    → Safety recommendations (“use caution”, “keep medication nearby”),
+    → Conditional actions (“if property is under threat…”),
+    → Behaviour instructions (“residents should…”, “motorists should…”).
+  - If ANY exist:
+    → Extract, combine, and summarise them into one concise statement.
+  - If NO action exists in the description:
+    → Create your own callToAction based on:
+      - category
+      - context of the hazard
+      - If TONE GUIDELINES is provided below, follow it strictly.
+  - MUST be ≤ 25 words.`;
+
+const defaultWordLimitGuidelines = `
+WORD LIMITS (STRICT)
+  - summary ≤ 25 words
+  - callToAction ≤ 25 words
+  - Shorten aggressively if needed.`;
+
+const defaultToneGuidelines = `  
+TONE GUIDELINES
   - Use a calm, neutral, informational tone.
   - Do not imply danger, urgency, or action.
   - Simply acknowledge that something exists or has been reported.
-  - Keep the language soft, factual, and non-directive.
-  
-  WORD LIMITS (STRICT)
-  - summary ≤ 25 words
-  - callToAction ≤ 25 words
-  Shorten aggressively if needed.
-  
-  CONFIDENCE LEVEL GUIDELINES:
-  Generate confidence level based on the following criteria:
+  - Keep the language soft, factual, and non-directive.`;
+
+const defaultConfidenceLevelGuidelines = `
+CONFIDENCE LEVEL GUIDELINES:
+Generate "confidence" based on the following criteria:
   - "high": Detailed, specific, credible information
   - "medium": Some ambiguity or missing data
-  - "low": Vague or unreliable
-  
-  Always respond with **valid JSON** in this format:
+  - "low": Vague or unreliable`;
+
+const defaultOutputStructure = `
+Always respond with **valid JSON** in this format:
   {
     "title": "string" (≤80 chars),
     "summary": "string" (single sentence),
     "callToAction": "string", (single sentence)
     "confidence": "high|medium|low",
   }`;
-};

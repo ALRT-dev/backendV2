@@ -23,10 +23,7 @@ import {
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
-import {
-  summarizeHazard,
-  processBatchWithRateLimit,
-} from "./hazard.service.js";
+import { summarizeHazard } from "./hazard.service.js";
 import { sendPushNotificationAboutNewHazard } from "./notification.service.js";
 import { sendSocketEventAboutHazardToSubscribers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
@@ -45,6 +42,10 @@ import {
 } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
+import { executePrompt, processBatchWithRateLimit } from "./open-ai.service.js";
+import { getAIPromptConfiguration } from "./configuration.service.js";
+import { getPromptById } from "./ai-prompt.service.js";
+import { HttpError } from "../models/http_error.js";
 
 export enum ExternalSourceId {
   rfs = "rfs",
@@ -253,7 +254,6 @@ export const syncHazardsFromDifferentSources = async ({
         apiUrl: `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`,
         severityBandFilter: {
           minimumSeverityBands: [
-            HazardSeverityBand.monitor,
             HazardSeverityBand.action,
             HazardSeverityBand.critical,
           ],
@@ -645,8 +645,8 @@ const summarizeAndPostHazards = async ({
             locationName: hazardData.locationName,
             latitude: Number(hazardData.latitude),
             longitude: Number(hazardData.longitude),
-            categoryName: hazardData.category?.name || "Other",
-            sourceName: hazardData.source?.name || "Unknown",
+            category: hazardData.category!,
+            source: hazardData.source!,
             isAwsCompliant: hazardData.isAwsCompliant ?? false,
             severityBand: hazardData.severityBand || HazardSeverityBand.info,
           });
@@ -894,4 +894,43 @@ export const generateHazardId = (obj: HazardDataWithRelations): string => {
   // Convert to string and hash
   const str = JSON.stringify(data);
   return crypto.createHash("sha256").update(str).digest("hex").slice(0, 16);
+};
+
+/**
+ * Extracts location names from a given text using AI.
+ *
+ * The AI analyzes the text and returns a list of region, district, area, or state names mentioned.
+ */
+export const getLocationsFromText = async (text: string): Promise<string[]> => {
+  const { extractLocationPromptId } = await getAIPromptConfiguration();
+  const { content: promptContent, model } = await getPromptById(
+    extractLocationPromptId
+  );
+
+  const userContent = `Extract locations from this text: "${text}"`;
+
+  const response = await executePrompt({
+    model: model,
+    systemPromptContent: promptContent,
+    userPromptContent: userContent,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new HttpError(500, "AI location extraction failed: Empty response");
+  }
+
+  try {
+    const aiResponse = JSON.parse(content) as { locations: string[] };
+    return aiResponse.locations;
+  } catch (parseError) {
+    console.error(
+      "Failed to parse AI location extraction response:",
+      parseError
+    );
+    throw new HttpError(
+      500,
+      "AI location extraction failed: Invalid response format"
+    );
+  }
 };

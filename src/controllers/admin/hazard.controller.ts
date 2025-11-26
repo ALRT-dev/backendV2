@@ -16,6 +16,8 @@ import {
   HazardReviewStatus,
   HazardSeverity,
   HazardSeverityBand,
+  type HazardCategory,
+  type HazardSource,
 } from "@prisma/client";
 import {
   calculateConfidenceScore,
@@ -110,15 +112,15 @@ export const createHazardForAdmin = async (
       throw new HttpError(400, "Invalid categoryId provided");
     }
 
-    let sourceName = "Unknown";
+    let source: HazardSource;
     if (sourceId) {
-      const source = await prisma.hazardSource.findUnique({
+      const foundSource = await prisma.hazardSource.findUnique({
         where: { id: sourceId },
-        select: { name: true },
       });
-      if (source) {
-        sourceName = source.name;
+      if (!foundSource) {
+        throw new HttpError(400, "Invalid sourceId provided");
       }
+      source = foundSource;
     }
 
     const summarized = await summarizeHazard({
@@ -127,8 +129,8 @@ export const createHazardForAdmin = async (
       latitude,
       longitude,
       locationName,
-      categoryName: category.name,
-      sourceName,
+      category,
+      source: source!,
       isAwsCompliant: isAwsCompliant ?? false,
       severityBand: HazardSeverityBand.info,
     });
@@ -222,25 +224,26 @@ export const updateHazardForAdmin = async (
       throw new HttpError(404, `Hazard with id ${hazardId} not found`);
     }
 
-    let categoryName = existingHazard.category?.name || "Other";
+    let category: HazardCategory | undefined = undefined;
     if (categoryId) {
-      const category = await prisma.hazardCategory.findUnique({
+      const foundCategory = await prisma.hazardCategory.findUnique({
         where: { id: categoryId },
       });
-      if (category) {
-        categoryName = category.name;
+      if (!foundCategory) {
+        throw new HttpError(400, "Invalid categoryId provided");
       }
+      category = foundCategory;
     }
 
-    let sourceName = existingHazard.source?.name || "Unknown";
+    let source: HazardSource | undefined = undefined;
     if (sourceId) {
-      const source = await prisma.hazardSource.findUnique({
+      const foundSource = await prisma.hazardSource.findUnique({
         where: { id: sourceId },
-        select: { name: true },
       });
-      if (source) {
-        sourceName = source.name;
+      if (!foundSource) {
+        throw new HttpError(400, "Invalid sourceId provided");
       }
+      source = foundSource;
     }
 
     let summarized: AISummaryResponse = {
@@ -257,8 +260,8 @@ export const updateHazardForAdmin = async (
         latitude: latitude ?? existingHazard.latitude!,
         longitude: longitude ?? existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
-        categoryName,
-        sourceName,
+        category: category || existingHazard.category!,
+        source: source || existingHazard.source!,
         isAwsCompliant: isAwsCompliant ?? existingHazard.isAwsCompliant,
         severityBand: HazardSeverityBand.info,
       });

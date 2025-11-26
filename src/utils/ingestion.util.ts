@@ -35,8 +35,10 @@ import {
 } from "./ingestion.category.util.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
 import { MainCategoryId } from "../services/hazard_category.service.js";
-import { ExternalSourceId } from "../services/ingestion.service.js";
-import { getLocationsFromText } from "../services/hazard.service.js";
+import {
+  ExternalSourceId,
+  getLocationsFromText,
+} from "../services/ingestion.service.js";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
