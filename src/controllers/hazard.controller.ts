@@ -661,7 +661,12 @@ export const updateHazard = async (
 
     // Update hazard with new media in a transaction <----------------------------------------------------------------------------------
     const result = await prisma.$transaction(async (tx) => {
-      // Update the hazard
+      // Delete all existing votes for this hazard
+      await tx.hazardVote.deleteMany({
+        where: { hazardId: id },
+      });
+
+      // Update the hazard and reset vote counts
       const updatedHazard = await tx.hazard.update({
         where: { id },
         data: {
@@ -687,6 +692,8 @@ export const updateHazard = async (
               existingHazard.expiresAt ||
               new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
           }),
+          upvoteCount: 0,
+          downvoteCount: 0,
         },
       });
 
