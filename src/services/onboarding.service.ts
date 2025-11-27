@@ -105,6 +105,10 @@ export const setPushNotificationPreference = async ({
 export const acceptTermsOfService = async (userId: string): Promise<void> => {
   await prisma.user.update({
     where: { id: userId },
-    data: { isTOSAccepted: true, isOnboardingCompleted: true },
+    data: {
+      isTOSAccepted: true,
+      isOnboardingCompleted: true,
+      xpPoints: { increment: 50 },
+    },
   });
 };
