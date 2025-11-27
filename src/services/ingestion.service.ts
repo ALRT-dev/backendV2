@@ -145,18 +145,18 @@ export const syncHazardsFromDifferentSources = async ({
             dateFormat: "DD/MM/YYYY",
           }),
       },
-      {
-        id: ExternalSourceId.bom,
-        name: "BoM",
-        url: "https://www.bom.gov.au",
-        imageUrl: "",
-        apiUrl: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
-        parseFunction: () =>
-          parseBOMFeedToHazards({
-            url: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
-            availableCategories,
-          }),
-      },
+      // {
+      //   id: ExternalSourceId.bom,
+      //   name: "BoM",
+      //   url: "https://www.bom.gov.au",
+      //   imageUrl: "",
+      //   apiUrl: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
+      //   parseFunction: () =>
+      //     parseBOMFeedToHazards({
+      //       url: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
+      //       availableCategories,
+      //     }),
+      // },
       {
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",

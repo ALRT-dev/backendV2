@@ -1906,8 +1906,8 @@ function extractIdFromGUID(guid: string): string | null {
     return urlMatch[1];
   }
 
-  // If no URL pattern matches, return null
-  return null;
+  // If no URL pattern matches, return cleaned GUID as is
+  return cleaned;
 }
 
 /**
