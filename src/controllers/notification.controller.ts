@@ -86,6 +86,17 @@ export const sendPushNotificationToken = async (
     const { token, platform }: PushNotificationTokenInput = req.body;
     const { userId } = res;
 
+    // delete any existing entries with the same token but different user
+    await prisma.userDevice.deleteMany({
+      where: {
+        deviceToken: token,
+        NOT: {
+          userId: userId!,
+        },
+      },
+    });
+
+    // upsert the device token for the user
     const newDevice = await prisma.userDevice.upsert({
       where: {
         deviceToken: token,
