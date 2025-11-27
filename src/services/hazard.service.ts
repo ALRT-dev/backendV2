@@ -25,6 +25,7 @@ import {
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { executePrompt } from "./open-ai.service.js";
+import { MainCategoryId } from "./hazard_category.service.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -554,4 +555,99 @@ export const deleteAllHazardsForSourceIds = async (
   );
 
   return deleteResult.count;
+};
+
+/**
+ * Analyzes the hazard report details and suggests the most appropriate hazard category.
+ *
+ * @param title - The title of the hazard report.
+ * @param description - The description of the hazard report.
+ * @param availableCategories - The list of available hazard categories to choose from.
+ * @returns The suggested hazard category.
+ */
+export const getSuggestedCategory = async ({
+  title,
+  description,
+  currentCategoryId,
+  availableCategories,
+}: {
+  title: string;
+  description: string;
+  currentCategoryId?: string | null | undefined;
+  availableCategories: HazardCategory[];
+}): Promise<HazardCategory> => {
+  const systemPromptContent = `You are an expert in hazard classification. Based on the title and description of a hazard report, suggest the most appropriate hazard category from the provided list. Consider the context and details in the report to make your suggestion.
+
+  AVAILABLE CATEGORIES:
+  ${availableCategories
+    .map((cat) => `- "${cat.id}": ${cat.description}`)
+    .join("\n")}
+
+  INSTRUCTIONS:
+  ${
+    currentCategoryId &&
+    `- If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+  }
+  - Analyze the title and description carefully.
+  - Choose the category that best fits the hazard report.
+  - Only suggest one category.
+  - "${
+    MainCategoryId.communityInfo
+  }" category should only be used for non-urgent, informational announcements.
+  - "${
+    MainCategoryId.other
+  }" category should be a last resort when no other category fits.
+  - Do not suggest categories that are not in the provided list.
+
+  Always respond with **valid JSON** in this format:
+  {
+    "suggestedCategory": "${availableCategories
+      .map((cat) => cat.id)
+      .join("|")}", (MUST be only one.${
+    currentCategoryId &&
+    ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+  })
+  }`;
+
+  const userPromptContent = `Hazard Report:
+  Title: ${title}
+  Description: ${description}
+  ${currentCategoryId ? `Current Category: ${currentCategoryId}` : ""}`;
+
+  const response = await executePrompt({
+    model: "gpt-5-nano",
+    systemPromptContent,
+    userPromptContent,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new HttpError(
+      500,
+      "AI category suggestion failed: Empty response from AI"
+    );
+  }
+
+  try {
+    const aiResponse = JSON.parse(content) as {
+      suggestedCategory: string;
+    };
+
+    const category = availableCategories.find(
+      (cat) => cat.id === aiResponse.suggestedCategory
+    );
+    if (!category) {
+      throw new HttpError(
+        500,
+        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`
+      );
+    }
+
+    return category;
+  } catch (parseError) {
+    throw new HttpError(
+      500,
+      `AI category suggestion failed: Invalid response format: ${parseError}`
+    );
+  }
 };

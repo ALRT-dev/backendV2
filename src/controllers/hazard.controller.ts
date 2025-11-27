@@ -7,9 +7,11 @@ import {
   HazardVoteType,
   MediaType,
   type Hazard,
+  type HazardCategory,
 } from "@prisma/client";
 import {
   getHazardsApplyingFiltersRaw,
+  getSuggestedCategory,
   reviewHazard,
 } from "../services/hazard.service.js";
 import {
@@ -51,6 +53,8 @@ import type { MediaUploadResult } from "../models/media_upload_result_interface.
 import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
 import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
 import { checkMediasForProblems } from "../services/image_video_detection.service.js";
+import { getAllParentHazardCategories } from "./hazard_category.controller.js";
+import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/hazard_category.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -273,12 +277,31 @@ export const createHazard = async (
     } = hazardData;
     const { userId } = res;
 
-    // Validate that category exists
-    const category = await prisma.hazardCategory.findUnique({
-      where: { id: categoryId },
-    });
+    // Overwrite category using AI suggestion <----------------------------------------------------------------------------------
+    let category: HazardCategory | null = null;
+    try {
+      if (title || description) {
+        const availableCategories =
+          await getAllMainHazardCategoriesWithoutSubcategories();
+        const suggestedCategory = await getSuggestedCategory({
+          title: title || "[No Title Provided]",
+          description: description || "[No Description Provided]",
+          currentCategoryId: categoryId,
+          availableCategories,
+        });
+        category = suggestedCategory;
+      }
+    } catch (error) {
+      console.error("Error getting AI suggested category:", error);
+    }
+
     if (!category) {
-      throw new HttpError(400, "Invalid Category ID");
+      category = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+      });
+    }
+    if (!category) {
+      throw new HttpError(400, "Invalid or missing hazard category");
     }
 
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
@@ -403,7 +426,7 @@ export const createHazard = async (
           aiSummary,
           ...(aiConfidence && { aiConfidence }),
           callToAction,
-          categoryId,
+          categoryId: category.id,
           reportedById: userId,
           latitude,
           longitude,
@@ -575,16 +598,33 @@ export const updateHazard = async (
       occurredAt,
     } = hazardData;
 
-    let category = existingHazard.category;
-    if (categoryId) {
-      // Validate that category exists
-      const foundCategory = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-      if (!foundCategory) {
-        throw new HttpError(400, "Invalid Category ID");
+    const catId = categoryId || existingHazard.categoryId;
+
+    // Overwrite category using AI suggestion <----------------------------------------------------------------------------------
+    let category: HazardCategory | null = null;
+    try {
+      if (title || description) {
+        const availableCategories =
+          await getAllMainHazardCategoriesWithoutSubcategories();
+        const suggestedCategory = await getSuggestedCategory({
+          title: title || "[No Title Provided]",
+          description: description || "[No Description Provided]",
+          currentCategoryId: catId,
+          availableCategories,
+        });
+        category = suggestedCategory;
       }
-      category = foundCategory;
+    } catch (error) {
+      console.error("Error getting AI suggested category:", error);
+    }
+
+    if (!category) {
+      category = await prisma.hazardCategory.findUnique({
+        where: { id: catId },
+      });
+    }
+    if (!category) {
+      category = existingHazard.category;
     }
 
     const uploadedFiles = req.files as Express.Multer.File[] | undefined;
@@ -682,7 +722,7 @@ export const updateHazard = async (
           aiSummary,
           callToAction,
           ...(aiConfidence && { aiConfidence }),
-          ...(categoryId && { categoryId }),
+          categoryId: category.id,
           ...(latitude && { latitude }),
           ...(longitude && { longitude }),
           ...(locationName && { locationName }),

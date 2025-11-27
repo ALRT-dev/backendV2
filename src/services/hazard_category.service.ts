@@ -1602,6 +1602,18 @@ export const getAllSubHazardCategories = async () => {
 };
 
 /**
+ * Get all main categories without their sub-categories from the database.
+ */
+export const getAllMainHazardCategoriesWithoutSubcategories = async () => {
+  const mainCategories = await prisma.hazardCategory.findMany({
+    where: {
+      parentId: null,
+    },
+  });
+  return mainCategories;
+};
+
+/**
  * Get all parent category IDs from the database.
  */
 export const getAllMainHazardCategoryIds = async (): Promise<string[]> => {
