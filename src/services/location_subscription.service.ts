@@ -177,9 +177,23 @@ export const upsertUserOwnLocationSubscription = async ({
   radiusKm?: number;
 }) => {
   // Calculate bounding box for the subscription area
-  // Rough conversion: 1 degree ≈ 111 km at equator
-  const latDelta = radiusKm / 111;
-  const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180));
+  // The frontend calculates radius as distance from center to corner (diagonal)
+  // For a square bounding box, corner distance = edge distance * √2
+  // So we need to divide the radius by √2 to get the edge distance
+  const earthRadiusKm = 6371.0;
+  const edgeRadiusKm = radiusKm / Math.sqrt(2);
+
+  // Convert latitude to radians
+  const latRad = (latitude * Math.PI) / 180;
+
+  // Calculate angular distance in radians
+  const angularDistance = edgeRadiusKm / earthRadiusKm;
+
+  // Calculate latitude delta (same in all directions)
+  const latDelta = (angularDistance * 180) / Math.PI;
+
+  // Calculate longitude delta (varies with latitude)
+  const lngDelta = (angularDistance * 180) / Math.PI / Math.cos(latRad);
 
   const northeastLat = latitude + latDelta;
   const northeastLng = longitude + lngDelta;
