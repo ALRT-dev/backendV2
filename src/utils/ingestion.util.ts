@@ -2332,7 +2332,7 @@ function buildNTFireAndRescueDescription(properties: any): string {
   }
 
   if (properties["Advice to the Public"]) {
-    parts.push(`Advice: ${properties["Advice to the Public"]}`);
+    parts.push(`To the Public: ${properties["Advice to the Public"]}`);
   }
 
   // Agency and timing information
