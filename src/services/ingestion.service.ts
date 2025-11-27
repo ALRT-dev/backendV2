@@ -17,8 +17,9 @@ import {
   parseUVIndexAndPollenToHazards,
   getGeocodingCacheSize,
   parseSmartravellerToHazards,
-  parseWAFeedToHazards,
+  parseWAWarningsToHazards,
   parseBOMFeedToHazards,
+  parseWAIncidentsToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -366,9 +367,20 @@ export const syncHazardsFromDifferentSources = async ({
         imageUrl: "",
         apiUrl: "https://api.emergency.wa.gov.au/v1/rss/warnings",
         parseFunction: () =>
-          parseWAFeedToHazards({
+          parseWAWarningsToHazards({
             url: "https://api.emergency.wa.gov.au/v1/rss/warnings",
-            idPrefix: ExternalSourceId.waDfes,
+            availableCategories,
+          }),
+      },
+      {
+        id: ExternalSourceId.waDfes,
+        name: "DFES WA",
+        url: "https://emergency.wa.gov.au",
+        imageUrl: "",
+        apiUrl: "https://api.emergency.wa.gov.au/v1/rss/incidents",
+        parseFunction: () =>
+          parseWAIncidentsToHazards({
+            url: "https://api.emergency.wa.gov.au/v1/rss/incidents",
             availableCategories,
           }),
       },

@@ -759,20 +759,18 @@ const parseBOMFeedToHazardsPhase2 = async (
  * @example
  * ```typescript
  * const url = "https://emergency.wa.gov.au/feed/all-wa.xml";
- * const hazards = await parseWAFeedToHazards({
+ * const hazards = await parseWAWarningsToHazards({
  *   url,
  *   availableCategories,
  *   idPrefix: "waDfes"
  * });
  * ```
  */
-export async function parseWAFeedToHazards({
+export async function parseWAWarningsToHazards({
   url,
-  idPrefix = "waDfes",
   availableCategories,
 }: {
   url: string;
-  idPrefix?: string;
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
 }): Promise<HazardDataWithRelations[]> {
   const parser = new Parser({
@@ -810,7 +808,6 @@ export async function parseWAFeedToHazards({
         const hazard = createWAHazardFromWarning({
           item,
           warning,
-          idPrefix,
           availableCategories,
         });
         if (hazard) {
@@ -821,7 +818,6 @@ export async function parseWAFeedToHazards({
       // Fall back to creating a single hazard from the entire item
       const hazard = createWAHazardFromItem({
         item,
-        idPrefix,
         availableCategories,
       });
       if (hazard) {
@@ -831,6 +827,206 @@ export async function parseWAFeedToHazards({
   }
 
   return hazards;
+}
+
+/**
+ * Converts WA DFES (Department of Fire and Emergency Services) incident RSS feed into Hazard objects
+ *
+ * @param url - URL of the WA DFES incidents RSS feed
+ * @param availableCategories - Array of available hazard categories
+ * @param idPrefix - Prefix for hazard IDs (default: "waIncident")
+ * @returns Promise resolving to an array of HazardDataWithRelations objects
+ *
+ * @description
+ * Parses WA DFES incidents RSS feed which contains burn offs, bushfires, and other incidents.
+ * The feed includes:
+ * - Incident type (Burn Off, Bushfire, etc.)
+ * - Region information
+ * - Incident/CAD numbers
+ * - Geographic coordinates (geo:lat, geo:long)
+ * - Publication timestamps
+ *
+ * @example
+ * ```typescript
+ * const url = "https://emergency.wa.gov.au/feed/incidents-all.xml";
+ * const hazards = await parseWAIncidentsToHazards({
+ *   url,
+ *   availableCategories,
+ *   idPrefix: "waIncident"
+ * });
+ * ```
+ */
+export async function parseWAIncidentsToHazards({
+  url,
+  availableCategories,
+}: {
+  url: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): Promise<HazardDataWithRelations[]> {
+  const parser = new Parser({
+    customFields: {
+      item: [
+        "description",
+        ["geo:lat", "geoLat"],
+        ["geo:long", "geoLong"],
+        ["georss:polygon", "georssPolygon"],
+      ],
+    },
+  });
+
+  const feed = await parser.parseURL(url);
+
+  if (!feed.items?.length) return [];
+
+  const hazards: HazardDataWithRelations[] = [];
+
+  for (const item of feed.items) {
+    const { title, link, description, geoLat, geoLong, guid, pubDate } = item;
+
+    // Parse coordinates
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+
+    if (geoLat && geoLong) {
+      const lat = parseFloat(geoLat);
+      const lon = parseFloat(geoLong);
+      if (!isNaN(lat) && !isNaN(lon)) {
+        latitude = lat;
+        longitude = lon;
+      }
+    }
+
+    // Skip if no coordinates
+    if (!latitude || !longitude) {
+      continue;
+    }
+
+    // Extract incident information from description
+    const incidentInfo = extractWAIncidentInfo(description);
+
+    console.log("Extracted WA Incident Info:", incidentInfo);
+
+    // Clean the title - extract incident type and location
+    // Title format: "Incident Type (LOCATION, SHIRE, REGION, CAD-ID: NUMBER)"
+    const cleanedTitle = cleanWAIncidentTitle(title);
+
+    // Build description
+    const descriptionParts: string[] = [];
+
+    if (incidentInfo.incidentType) {
+      descriptionParts.push(`Incident Type: ${incidentInfo.incidentType}`);
+    }
+
+    if (incidentInfo.region) {
+      descriptionParts.push(`Region: ${incidentInfo.region}`);
+    }
+
+    const fullDescription = descriptionParts.join("\n");
+
+    // Generate ID from GUID or incident number
+    const hazardId =
+      (guid && `${ExternalSourceId.waDfes}-${guid}`) ||
+      (incidentInfo.incidentNumber &&
+        `${ExternalSourceId.waDfes}-${incidentInfo.incidentNumber}`);
+
+    // Determine category and severity from incident type and description
+    const { category, fireStatus, isAwsCompliant } =
+      getHazardAttributesFromDescription(
+        incidentInfo.incidentType || fullDescription,
+        availableCategories
+      );
+
+    const hazard: HazardDataWithRelations = {
+      ...(hazardId && { id: hazardId }),
+      title: cleanedTitle,
+      description: fullDescription,
+      severity: HazardSeverity.unknown,
+      severityBand: HazardSeverityBand.info,
+      category,
+      ...(category.isFireRelated && {
+        fireStatus: fireStatus || FireStatus.active,
+      }),
+      link: link || null,
+      isAwsCompliant,
+      latitude,
+      longitude,
+      locationName: incidentInfo.region || null,
+      occurredAt: parseValidDate(pubDate),
+    };
+
+    hazards.push(hazard);
+  }
+
+  return hazards;
+}
+
+/**
+ * Extracts incident information from WA DFES incident description
+ * @param description - CDATA description from RSS item
+ * @returns Object containing incidentType, region, incidentNumber, and publicationTime
+ */
+function extractWAIncidentInfo(description?: string): {
+  incidentType: string | null;
+  region: string | null;
+  incidentNumber: string | null;
+  publicationTime: string | null;
+} {
+  if (!description) {
+    return {
+      incidentType: null,
+      region: null,
+      incidentNumber: null,
+      publicationTime: null,
+    };
+  }
+
+  // Extract incident type (e.g., "Burn Off", "Bushfire")
+  const incidentTypeMatch = description.match(/^([^<]+)/);
+  const incidentType = incidentTypeMatch?.[1]?.trim() || null;
+
+  // Extract region from <region> tags
+  const regionMatch = description.match(/<region>([^<]+)<\/region>/);
+  const region = regionMatch?.[1]?.trim() || null;
+
+  // Extract incident number from <incidentNumber> tags
+  const incidentNumberMatch = description.match(
+    /<incidentNumber>([^<]+)<\/incidentNumber>/
+  );
+  const incidentNumber = incidentNumberMatch?.[1]?.trim() || null;
+
+  // Extract publication time from <publicationTime> tags
+  const publicationTimeMatch = description.match(
+    /<publicationTime>([^<]+)<\/publicationTime>/
+  );
+  const publicationTime = publicationTimeMatch?.[1]?.trim() || null;
+
+  return {
+    incidentType,
+    region,
+    incidentNumber,
+    publicationTime,
+  };
+}
+
+/**
+ * Cleans WA incident title by extracting incident type and location
+ * @param title - Raw title from RSS item
+ * @returns Cleaned title string
+ */
+function cleanWAIncidentTitle(title?: string): string {
+  if (!title) return "Untitled Incident";
+
+  // Title format: "Incident Type (LOCATION, SHIRE, REGION, CAD-ID: NUMBER)"
+  // Extract incident type and location
+  const match = title.match(/^([^(]+)\s*\(([^,]+)/);
+
+  if (match?.[1] && match?.[2]) {
+    const incidentType = match[1].trim();
+    const location = match[2].trim();
+    return `${incidentType} - ${location}`;
+  }
+
+  return title.trim();
 }
 
 /**
@@ -944,12 +1140,10 @@ function extractWAWarningsFromDescription(description: string): Array<{
 function createWAHazardFromWarning({
   item,
   warning,
-  idPrefix,
   availableCategories,
 }: {
   item: any;
   warning: { id: string; warningType: string; title: string; content: string };
-  idPrefix: string;
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
 }): HazardDataWithRelations | null {
   const { geoLat, geoLong, dfesRegion, dfesIncidentNumber, guid } = item;
@@ -986,7 +1180,9 @@ function createWAHazardFromWarning({
   const description = descriptionParts.join("\n");
 
   // Generate ID from warning ID
-  const hazardId = `${idPrefix}-${warning.id || dfesIncidentNumber}`;
+  const hazardId = `${ExternalSourceId.waDfes}-${
+    warning.id || dfesIncidentNumber
+  }`;
 
   // Generate link to DFES incident if incident number is available
   const link =
@@ -1026,11 +1222,9 @@ function createWAHazardFromWarning({
  */
 function createWAHazardFromItem({
   item,
-  idPrefix,
   availableCategories,
 }: {
   item: any;
-  idPrefix: string;
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
 }): HazardDataWithRelations | null {
   const {
@@ -1074,8 +1268,9 @@ function createWAHazardFromItem({
 
   // Generate ID
   const hazardId =
-    (dfesIncidentNumber && `${idPrefix}-${dfesIncidentNumber}`) ||
-    (guid && `${idPrefix}-${guid}`) ||
+    (dfesIncidentNumber &&
+      `${ExternalSourceId.waDfes}-${dfesIncidentNumber}`) ||
+    (guid && `${ExternalSourceId.waDfes}-${guid}`) ||
     undefined;
 
   const { severity, severityBand, category, fireStatus, isAwsCompliant } =
