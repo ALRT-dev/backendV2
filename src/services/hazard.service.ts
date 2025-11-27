@@ -10,7 +10,6 @@ import {
   type AIPrompt,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
-import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import type { AISummaryResponse } from "../models/ai_summary_response_interface.js";
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";

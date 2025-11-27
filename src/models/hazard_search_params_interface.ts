@@ -29,6 +29,8 @@ export interface HazardSearchParams {
   southwestLat?: number | undefined;
   southwestLng?: number | undefined;
 
+  ignoreHazardLatLngBounds?: boolean | undefined;
+
   userLat?: number | undefined;
   userLng?: number | undefined;
 

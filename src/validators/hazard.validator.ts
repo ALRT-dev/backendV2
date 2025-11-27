@@ -164,6 +164,14 @@ export const getHazardsQuerySchema = z.object({
     .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
     .optional(),
 
+  ignoreHazardLatLngBounds: z
+    .string()
+    .regex(
+      /^(true|false)$/,
+      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+    )
+    .optional(),
+
   showExpired: z
     .string()
     .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")

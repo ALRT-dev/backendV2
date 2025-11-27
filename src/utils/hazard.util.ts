@@ -38,6 +38,7 @@ export const buildHazardsWhereClause = (
     northeastLng,
     southwestLat,
     southwestLng,
+    ignoreHazardLatLngBounds,
     subscriptions,
     showExpired,
     isAwsCompliant,
@@ -178,8 +179,8 @@ export const buildHazardsWhereClause = (
   // Filter hazards that fall within subscription regions if provided
   if (subscriptions && subscriptions.length > 0) {
     andConditions.push({
-      OR: subscriptions.map((subscription) => ({
-        OR: [
+      OR: subscriptions.map((subscription) => {
+        const conditions: Prisma.HazardWhereInput[] = [
           // Check point-based hazards (latitude/longitude)
           {
             AND: [
@@ -211,76 +212,88 @@ export const buildHazardsWhereClause = (
               },
             ],
           },
-          // Check bounding box hazards (intersection with subscription box)
-          {
-            AND: [
-              { northeastLat: { not: null } },
-              { northeastLng: { not: null } },
-              { southwestLat: { not: null } },
-              { southwestLng: { not: null } },
-              // Bounding box intersection logic
-              {
-                northeastLat: {
-                  gte: Math.min(
-                    subscription.southwestLat,
-                    subscription.northeastLat
-                  ),
+        ];
+
+        // Only include bounding box check if ignoreHazardLatLngBounds is false
+        if (!ignoreHazardLatLngBounds) {
+          conditions.push(
+            // Check bounding box hazards (intersection with subscription box)
+            {
+              AND: [
+                { northeastLat: { not: null } },
+                { northeastLng: { not: null } },
+                { southwestLat: { not: null } },
+                { southwestLng: { not: null } },
+                // Bounding box intersection logic
+                {
+                  northeastLat: {
+                    gte: Math.min(
+                      subscription.southwestLat,
+                      subscription.northeastLat
+                    ),
+                  },
                 },
-              },
-              {
-                northeastLng: {
-                  gte: Math.min(
-                    subscription.southwestLng,
-                    subscription.northeastLng
-                  ),
+                {
+                  northeastLng: {
+                    gte: Math.min(
+                      subscription.southwestLng,
+                      subscription.northeastLng
+                    ),
+                  },
                 },
-              },
-              {
-                southwestLat: {
-                  lte: Math.max(
-                    subscription.southwestLat,
-                    subscription.northeastLat
-                  ),
+                {
+                  southwestLat: {
+                    lte: Math.max(
+                      subscription.southwestLat,
+                      subscription.northeastLat
+                    ),
+                  },
                 },
-              },
-              {
-                southwestLng: {
-                  lte: Math.max(
-                    subscription.southwestLng,
-                    subscription.northeastLng
-                  ),
+                {
+                  southwestLng: {
+                    lte: Math.max(
+                      subscription.southwestLng,
+                      subscription.northeastLng
+                    ),
+                  },
                 },
-              },
-            ],
-          },
-        ],
-      })),
+              ],
+            }
+          );
+        }
+
+        return { OR: conditions };
+      }),
     });
   }
 
   // Filter hazards that fall within geographic bounds if provided
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    andConditions.push({
-      OR: [
-        // Check point-based hazards
-        {
-          AND: [
-            { latitude: { not: null } },
-            { longitude: { not: null } },
-            {
-              latitude: {
-                gte: southwestLat,
-                lte: northeastLat,
-              },
+    const geoConditions: Prisma.HazardWhereInput[] = [
+      // Check point-based hazards
+      {
+        AND: [
+          { latitude: { not: null } },
+          { longitude: { not: null } },
+          {
+            latitude: {
+              gte: southwestLat,
+              lte: northeastLat,
             },
-            {
-              longitude: {
-                gte: southwestLng,
-                lte: northeastLng,
-              },
+          },
+          {
+            longitude: {
+              gte: southwestLng,
+              lte: northeastLng,
             },
-          ],
-        },
+          },
+        ],
+      },
+    ];
+
+    // Only include bounding box check if ignoreHazardLatLngBounds is false
+    if (!ignoreHazardLatLngBounds) {
+      geoConditions.push(
         // Check bounding box hazards (intersection)
         {
           AND: [
@@ -293,8 +306,12 @@ export const buildHazardsWhereClause = (
             { southwestLat: { lte: northeastLat } },
             { southwestLng: { lte: northeastLng } },
           ],
-        },
-      ],
+        }
+      );
+    }
+
+    andConditions.push({
+      OR: geoConditions,
     });
   }
 
@@ -406,6 +423,7 @@ export const buildHazardsWhereClauseRaw = (
     northeastLng,
     southwestLat,
     southwestLng,
+    ignoreHazardLatLngBounds,
     subscriptions,
     showExpired,
     isAwsCompliant,
@@ -530,32 +548,22 @@ export const buildHazardsWhereClauseRaw = (
   // Apply geographic bounds filter if provided - Using PostGIS for dramatic performance improvement
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
     // Create bounding box polygon using PostGIS
-    const boundsCondition = `(
-      (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
-       ST_Intersects(
-         ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
-      paramIndex + 2
-    }, $${paramIndex + 3}, 4326),
-         ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
-       ))
-      OR
-      (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
-       h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
-       h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
-      paramIndex + 3
-    } AND
-       h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
-      paramIndex + 2
-    })
-    )`;
+    let boundsCondition: string;
 
-    whereConditions.push(boundsCondition);
-    queryParams.push(southwestLng, southwestLat, northeastLng, northeastLat);
-    paramIndex += 4;
-  } else if (subscriptions && subscriptions.length > 0) {
-    // Apply subscription bounds using PostGIS
-    const subscriptionConditions = subscriptions.map(() => {
-      const condition = `(
+    if (ignoreHazardLatLngBounds) {
+      // Only check point-based hazards
+      boundsCondition = `(
+        h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+        ST_Intersects(
+          ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+        paramIndex + 2
+      }, $${paramIndex + 3}, 4326),
+          ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+        )
+      )`;
+    } else {
+      // Check both point-based and bounding box hazards
+      boundsCondition = `(
         (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
          ST_Intersects(
            ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
@@ -573,6 +581,49 @@ export const buildHazardsWhereClauseRaw = (
         paramIndex + 2
       })
       )`;
+    }
+
+    whereConditions.push(boundsCondition);
+    queryParams.push(southwestLng, southwestLat, northeastLng, northeastLat);
+    paramIndex += 4;
+  } else if (subscriptions && subscriptions.length > 0) {
+    // Apply subscription bounds using PostGIS
+    const subscriptionConditions = subscriptions.map(() => {
+      let condition: string;
+
+      if (ignoreHazardLatLngBounds) {
+        // Only check point-based hazards
+        condition = `(
+          h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+          ST_Intersects(
+            ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+          paramIndex + 2
+        }, $${paramIndex + 3}, 4326),
+            ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+          )
+        )`;
+      } else {
+        // Check both point-based and bounding box hazards
+        condition = `(
+          (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+           ST_Intersects(
+             ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+          paramIndex + 2
+        }, $${paramIndex + 3}, 4326),
+             ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+           ))
+          OR
+          (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
+           h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
+           h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
+          paramIndex + 3
+        } AND
+           h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
+          paramIndex + 2
+        })
+        )`;
+      }
+
       paramIndex += 4;
       return condition;
     });
