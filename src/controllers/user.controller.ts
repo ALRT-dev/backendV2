@@ -9,6 +9,8 @@ import prisma from "../utils/prisma_client.util.js";
 import type {
   SubscribeLocationInput,
   UpdateNotificationSettingsInput,
+  UpdateOwnLocationSubscriptionInput,
+  UpdateOwnLocationSubscriptionRadiusInput,
   UpdateUserInput,
 } from "../validators/user.validator.js";
 import {
@@ -21,6 +23,8 @@ import {
   deleteUserLocationSubscription,
   getSingleUserLocationSubscriptionById,
   getUserLocationSubscriptions,
+  updateUserOwnLocationSubscriptionRadius,
+  upsertUserOwnLocationSubscription,
 } from "../services/location_subscription.service.js";
 
 /// Controller to handle fetching the profile of the authenticated user.
@@ -47,6 +51,7 @@ export const getUserProfile = async (
   }
 };
 
+/// Controller to handle updating user's profile.
 export const updateUserProfile = async (
   req: Request,
   res: Response,
@@ -78,6 +83,16 @@ export const updateUserProfile = async (
         ...(locationName && { locationName }),
       },
     });
+
+    // If latitude and longitude are being updated, create/update user's own location subscription
+    if (latitude && longitude) {
+      await upsertUserOwnLocationSubscription({
+        userId,
+        latitude,
+        longitude,
+        ...(locationName && { locationName }),
+      });
+    }
 
     const updatedUser = await getUserById(userId);
     if (!updatedUser) {
@@ -222,6 +237,62 @@ export const unsubscribeFromLocation = async (
     await deleteUserLocationSubscription(subscriptionId);
 
     res.status(200).json({ message: "Unsubscribed successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle updating user's own location subscription.
+export const updateUserOwnLocationSubscriptionController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const {
+      latitude,
+      longitude,
+      locationName,
+    }: UpdateOwnLocationSubscriptionInput = req.body;
+
+    const newSubscription = await upsertUserOwnLocationSubscription({
+      userId,
+      latitude,
+      longitude,
+      locationName,
+    });
+
+    res.status(200).json(newSubscription);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle updating user's own location subscription radius.
+export const updateUserOwnLocationSubscriptionRadiusController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const { radiusKm }: UpdateOwnLocationSubscriptionRadiusInput = req.body;
+
+    const newSubscription = await updateUserOwnLocationSubscriptionRadius(
+      userId,
+      radiusKm
+    );
+
+    res.status(200).json(newSubscription);
   } catch (error) {
     next(error);
   }

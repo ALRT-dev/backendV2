@@ -54,7 +54,7 @@ export const setOnboardingRadius = async (
       throw new HttpError(400, "Unauthenticated user");
     }
 
-    const { radiusInKm } = req.body as SetUserRadiusInput;
+    const { radiusInKm }: SetUserRadiusInput = req.body;
 
     await setUserRadius({
       userId,

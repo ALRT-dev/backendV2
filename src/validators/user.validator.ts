@@ -44,6 +44,27 @@ export const subscribeLocationSchema = z.object({
 
 export type SubscribeLocationInput = z.infer<typeof subscribeLocationSchema>;
 
+export const updateUserOwnLocationSubscriptionSchema = z.object({
+  latitude: z.number().min(-90, "Latitude must be between -90 and 90"),
+  longitude: z.number().min(-180, "Longitude must be between -180 and 180"),
+  locationName: z.string().min(1, "Location name is required"),
+});
+
+export type UpdateOwnLocationSubscriptionInput = z.infer<
+  typeof updateUserOwnLocationSubscriptionSchema
+>;
+
+export const updateOwnLocationSubscriptionRadiusSchema = z.object({
+  radiusKm: z
+    .number()
+    .min(1, "Radius must be at least 1 km")
+    .max(100, "Radius cannot exceed 100 km"),
+});
+
+export type UpdateOwnLocationSubscriptionRadiusInput = z.infer<
+  typeof updateOwnLocationSubscriptionRadiusSchema
+>;
+
 export const updateNotificationSettingsSchema = z.object({
   awsEmergency: z.boolean(),
 

@@ -3,7 +3,7 @@ import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import { updateUserPushNotificationSettings } from "./user.service.js";
 import type { PushNotificationSettings } from "../models/push_notification_settings_interface.js";
-import { upsertUserOwnLocationSubscription } from "./location_subscription.service.js";
+import { updateUserOwnLocationSubscriptionRadius } from "./location_subscription.service.js";
 import { getAllMainHazardCategoryIds } from "./hazard_category.service.js";
 
 /**
@@ -46,22 +46,7 @@ export const setUserRadius = async ({
   userId: string;
   radiusInKm: number;
 }): Promise<void> => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { latitude: true, longitude: true, locationName: true },
-  });
-  if (!user || user.latitude === null || user.longitude === null) {
-    throw new HttpError(400, "User location must be set before setting radius");
-  }
-
-  // Create or update the user's own location subscription when setting radius
-  await upsertUserOwnLocationSubscription({
-    userId,
-    latitude: user.latitude,
-    longitude: user.longitude,
-    locationName: user.locationName || "My Location",
-    radiusKm: radiusInKm,
-  });
+  await updateUserOwnLocationSubscriptionRadius(userId, radiusInKm);
 };
 
 /**

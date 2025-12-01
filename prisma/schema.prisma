@@ -29,6 +29,8 @@ model User {
   geoLocation  String? // PostGIS geometry as string (WKT or WKB)
   locationName String? // Human-readable location name or address
 
+  ownLocationSubscriptionRadiusKm Int @default(5) // The radius in km for the user's own location subscription
+
   profilePictureUrl String? // S3 URL for user's profile picture
 
   locationSubscriptions    LocationSubscription[]

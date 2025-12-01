@@ -168,14 +168,19 @@ export const upsertUserOwnLocationSubscription = async ({
   latitude,
   longitude,
   locationName,
-  radiusKm = 10, // Default 10km radius around user's location
 }: {
   userId: string;
   latitude: number;
   longitude: number;
   locationName?: string;
-  radiusKm?: number;
 }) => {
+  // Fetch user's preferred radius for own location subscription
+  const radiusResult = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { ownLocationSubscriptionRadiusKm: true },
+  });
+  const radiusKm = radiusResult?.ownLocationSubscriptionRadiusKm ?? 5; // Default to 5km if not set
+
   // Calculate bounding box for the subscription area
   // The frontend calculates radius as distance from center to corner (diagonal)
   // For a square bounding box, corner distance = edge distance * √2
@@ -236,6 +241,35 @@ export const upsertUserOwnLocationSubscription = async ({
       },
     });
   }
+};
+
+/**
+ * Updates the user's own location subscription radius preference.
+ *
+ * @param userId - The ID of the user
+ * @param radiusKm - The new radius in kilometers
+ */
+export const updateUserOwnLocationSubscriptionRadius = async (
+  userId: string,
+  radiusKm: number
+): Promise<LocationSubscription | null> => {
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { ownLocationSubscriptionRadiusKm: radiusKm },
+    select: { latitude: true, longitude: true, locationName: true },
+  });
+
+  if (user.latitude !== null && user.longitude !== null) {
+    // Also update the existing own location subscription to reflect new radius
+    return await upsertUserOwnLocationSubscription({
+      userId,
+      latitude: user.latitude!,
+      longitude: user.longitude!,
+      locationName: user.locationName || "My Location",
+    });
+  }
+
+  return null;
 };
 
 /**
