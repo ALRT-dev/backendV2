@@ -39,6 +39,10 @@ import {
   ExternalSourceId,
   getLocationsFromText,
 } from "../services/ingestion.service.js";
+import {
+  AustralianStatesShort,
+  type AustralianStates,
+} from "../enums/australian_state_types.js";
 
 /**
  * Converts GeoJSON FeatureCollection to an array of Hazard objects
@@ -646,10 +650,11 @@ export async function parseRSSFeedToHazards({
 export async function parseBOMFeedToHazards({
   url,
   availableCategories,
+  australianState,
 }: {
   url: string;
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
-  idPrefix?: string;
+  australianState: AustralianStates;
 }): Promise<HazardDataWithRelations[]> {
   const parser = new Parser({
     customFields: {
@@ -678,7 +683,11 @@ export async function parseBOMFeedToHazards({
 
     // Extract hazard attributes from the title/description
     const { severity, severityBand, category, fireStatus, isAwsCompliant } =
-      getHazardAttributesFromDescription(description, availableCategories);
+      getHazardAttributesFromDescription(
+        description,
+        availableCategories,
+        MainCategoryId.weatherAndEnvironment
+      );
 
     // For BOM data, we typically don't have coordinates in the RSS feed
     // So we set them to null - these should be geocoded later if needed
@@ -700,7 +709,7 @@ export async function parseBOMFeedToHazards({
     hazards.push(hazard);
   }
 
-  return parseBOMFeedToHazardsPhase2(hazards);
+  return parseBOMFeedToHazardsPhase2(hazards, australianState);
 }
 
 /**
@@ -711,7 +720,8 @@ export async function parseBOMFeedToHazards({
  * @returns Promise resolving to an array of HazardDataWithRelations objects with locations processed
  */
 const parseBOMFeedToHazardsPhase2 = async (
-  hazards: HazardDataWithRelations[]
+  hazards: HazardDataWithRelations[],
+  australianState: AustralianStates
 ): Promise<HazardDataWithRelations[]> => {
   const allHazards = await Promise.all(
     hazards.map(async (hazard) => {
@@ -730,7 +740,12 @@ const parseBOMFeedToHazardsPhase2 = async (
           .replaceAll(" ", "-")
           .toLowerCase()}-${hazard.category?.id}`,
         ...hazard,
-        locationName: `${locationName}, Australia`,
+        locationName: `${locationName},${
+          australianState !== locationName &&
+          AustralianStatesShort[australianState] !== locationName
+            ? ` ${australianState},`
+            : ""
+        } Australia`,
       }));
     })
   );
@@ -903,8 +918,6 @@ export async function parseWAIncidentsToHazards({
 
     // Extract incident information from description
     const incidentInfo = extractWAIncidentInfo(description);
-
-    console.log("Extracted WA Incident Info:", incidentInfo);
 
     // Clean the title - extract incident type and location
     // Title format: "Incident Type (LOCATION, SHIRE, REGION, CAD-ID: NUMBER)"
@@ -1622,6 +1635,13 @@ const geocodingCache = new Map<
 >();
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Cache for location extraction results
+const locationExtractionCache = new Map<
+  string,
+  { locations: string[]; timestamp: number }
+>();
+const LOCATION_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
 // Rate limiting for geocoding API calls
 let lastGeocodingCall = 0;
 const GEOCODING_DELAY_MS = 100; // 100ms delay between API calls
@@ -1660,6 +1680,18 @@ export const cleanupGeocodingCache = (): void => {
 };
 
 /**
+ * Cleans up expired entries from the location extraction cache.
+ */
+export const cleanupLocationExtractionCache = (): void => {
+  const now = Date.now();
+  for (const [key, value] of locationExtractionCache.entries()) {
+    if (now - value.timestamp > LOCATION_CACHE_TTL) {
+      locationExtractionCache.delete(key);
+    }
+  }
+};
+
+/**
  * Rate-limited geocoding wrapper
  */
 const rateLimitedGeocode = async <T>(
@@ -1681,6 +1713,35 @@ const rateLimitedGeocode = async <T>(
  */
 export const getGeocodingCacheSize = (): number => {
   return geocodingCache.size;
+};
+
+/**
+ * Gets the current size of the location extraction cache.
+ */
+export const getLocationExtractionCacheSize = (): number => {
+  return locationExtractionCache.size;
+};
+
+/**
+ * Gets cached location extraction result or returns undefined if not found.
+ */
+export const getCachedLocationExtraction = (
+  cacheKey: string
+): { locations: string[]; timestamp: number } | undefined => {
+  return locationExtractionCache.get(cacheKey);
+};
+
+/**
+ * Stores location extraction result in cache.
+ */
+export const setCachedLocationExtraction = (
+  cacheKey: string,
+  locations: string[]
+): void => {
+  locationExtractionCache.set(cacheKey, {
+    locations,
+    timestamp: Date.now(),
+  });
 };
 
 /**

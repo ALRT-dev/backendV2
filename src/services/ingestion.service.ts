@@ -20,6 +20,9 @@ import {
   parseWAWarningsToHazards,
   parseBOMFeedToHazards,
   parseWAIncidentsToHazards,
+  cleanupLocationExtractionCache,
+  getCachedLocationExtraction,
+  setCachedLocationExtraction,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -46,6 +49,10 @@ import { executePrompt, processBatchWithRateLimit } from "./open-ai.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
+import {
+  AustralianStateBomAPIs,
+  AustralianStates,
+} from "../enums/australian_state_types.js";
 
 export enum ExternalSourceId {
   rfs = "rfs",
@@ -145,18 +152,19 @@ export const syncHazardsFromDifferentSources = async ({
             dateFormat: "DD/MM/YYYY",
           }),
       },
-      // {
-      //   id: ExternalSourceId.bom,
-      //   name: "BoM",
-      //   url: "https://www.bom.gov.au",
-      //   imageUrl: "",
-      //   apiUrl: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
-      //   parseFunction: () =>
-      //     parseBOMFeedToHazards({
-      //       url: "https://www.bom.gov.au/fwo/IDZ00054.warnings_nsw.xml",
-      //       availableCategories,
-      //     }),
-      // },
+      ...Object.values(AustralianStates).map((state) => ({
+        id: ExternalSourceId.bom,
+        name: "BoM",
+        url: "https://www.bom.gov.au",
+        imageUrl: "",
+        apiUrl: AustralianStateBomAPIs[state],
+        parseFunction: () =>
+          parseBOMFeedToHazards({
+            url: AustralianStateBomAPIs[state],
+            availableCategories,
+            australianState: state,
+          }),
+      })),
       {
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",
@@ -516,11 +524,15 @@ const summarizeAndPostHazards = async ({
           }
 
           // Expire existing hazards if they drop below minimum severity
-          if (
-            existing &&
-            !meetsMinimumSeverity &&
-            currentSeverityBand !== existing.severityBand
-          ) {
+          if (existing && !meetsMinimumSeverity) {
+            if (currentSeverityBand === existing.severityBand) {
+              console.log(
+                `[${hazardData.source?.id}] Skipping hazard with severity ${currentSeverityBand} (below minimum):`,
+                hazardData.title
+              );
+              continue;
+            }
+
             console.log(
               `[${hazardData.source?.id}] Hazard severity downgraded to ${currentSeverityBand}, expiring:`,
               hazardData.title
@@ -923,8 +935,21 @@ export const generateHazardId = (obj: HazardDataWithRelations): string => {
  * Extracts location names from a given text using AI.
  *
  * The AI analyzes the text and returns a list of region, district, area, or state names mentioned.
+ * Results are cached to avoid redundant API calls for the same text.
  */
 export const getLocationsFromText = async (text: string): Promise<string[]> => {
+  // Clean up expired cache entries
+  cleanupLocationExtractionCache();
+
+  // Generate cache key from text
+  const cacheKey = crypto.createHash("sha256").update(text).digest("hex");
+
+  // Check cache first
+  const cached = getCachedLocationExtraction(cacheKey);
+  if (cached) {
+    return cached.locations;
+  }
+
   const { extractLocationPromptId } = await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
     extractLocationPromptId
@@ -945,6 +970,10 @@ export const getLocationsFromText = async (text: string): Promise<string[]> => {
 
   try {
     const aiResponse = JSON.parse(content) as { locations: string[] };
+
+    // Store in cache
+    setCachedLocationExtraction(cacheKey, aiResponse.locations);
+
     return aiResponse.locations;
   } catch (parseError) {
     console.error(
