@@ -1,4 +1,4 @@
-// Run `npx prisma migrate dev` to update your database schema.
+// Run `yarn prisma:migrate:dev` to update your database schema.
 
 generator client {
   provider        = "prisma-client-js"
@@ -12,51 +12,252 @@ datasource db {
 }
 
 model User {
-  id                    String                 @id @default(uuid())
-  email                 String                 @unique
-  passwordHash          String                 @default("")
-  name                  String?
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  locationSubscriptions LocationSubscription[]
+  id           String  @id @default(uuid())
+  email        String  @unique
+  passwordHash String  @default("")
+  name         String?
+
+  isOnboardingCompleted Boolean @default(false)
+
+  isTOSAccepted Boolean @default(false)
+
+  xpPoints         Int   @default(0)
+  reliabilityScore Float @default(0.0)
+
+  latitude     Float?
+  longitude    Float?
+  geoLocation  String? // PostGIS geometry as string (WKT or WKB)
+  locationName String? // Human-readable location name or address
+
+  ownLocationSubscriptionRadiusKm Int @default(5) // The radius in km for the user's own location subscription
+
+  profilePictureUrl String? // S3 URL for user's profile picture
+
+  locationSubscriptions    LocationSubscription[]
+  devices                  UserDevice[]
+  hazardsReported          Hazard[]
+  hazardVotes              HazardVote[]
+  hazardViews              HazardView[]
+  hazardMedias             HazardMedia[]
+  pushNotificationSettings UserPushNotificationSetting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Performance indexes
+  @@index([xpPoints]) // For reputation/scoring queries
+  @@index([reliabilityScore]) // For reliability-based filtering
 }
 
 model HazardCategory {
-  id        String   @id @default(uuid())
-  name      String   @unique
-  emoji     String?
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  color       String? // Hex color code for UI representation
+  keywords    String[] // Keywords associated with this category for classification
+
+  isFireRelated Boolean @default(false) // True if this category pertains to fire hazards
+
+  parentId String? // For subcategories, this points to the parent category
+
+  hazards       Hazard[]
+  parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subCategories HazardCategory[] @relation("CategoryHierarchy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  hazards   Hazard[]
+
+  // Performance indexes
+  @@index([parentId]) // Hierarchical category queries
 }
 
 enum HazardSeverity {
+  unknown
   info
   advice
   watchAndAct
   emergency
 }
 
+enum HazardSeverityBand {
+  info
+  monitor
+  action
+  critical
+}
+
+enum AIConfidence {
+  low
+  medium
+  high
+}
+
+enum FireStatus {
+  active
+  beingControlled
+  underControl
+  closed
+}
+
 model Hazard {
-  id               String         @id @default(uuid())
-  title            String
-  shortDescription String
-  severity         HazardSeverity @default(info)
-  source           String?
-  geoLocation      String? // PostGIS geometry as string (WKT or WKB)
-  latitude         Float?
-  longitude        Float?
-  categoryId       String
-  category         HazardCategory @relation(fields: [categoryId], references: [id])
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  expiresAt        DateTime?
+  id           String             @id @default(uuid())
+  title        String
+  description  String
+  aiSummary    String?
+  aiConfidence AIConfidence?
+  severity     HazardSeverity     @default(unknown)
+  severityBand HazardSeverityBand @default(info)
+  callToAction String?
+
+  fireStatus FireStatus? // Only applies to fire-related hazards
+
+  latitude     Float?
+  longitude    Float?
+  locationName String? // Human-readable location name or address
+  geoLocation  String? // PostGIS geometry as string (WKT or WKB)
+
+  // Bounding box for hazard coverage area (for broader/general locations)
+  northeastLat Float? // Northeast corner latitude
+  northeastLng Float? // Northeast corner longitude
+  southwestLat Float? // Southwest corner latitude
+  southwestLng Float? // Southwest corner longitude
+
+  categoryId   String
+  sourceId     String?
+  reportedById String?
+
+  isAwsCompliant Boolean @default(false) // Whether the hazard complies with Australian Warnings System (AWS) standards
+
+  reviewStatus   HazardReviewStatus @default(pending)
+  reviewFeedback String?
+  reviewedAt     DateTime?
+  reviewedById   String? // user ID of the user who reviewed OR "ai" if AI-reviewed
+
+  confidenceScore             Int      @default(50)
+  confidenceScoreCalculatedAt DateTime @default(now())
+
+  upvoteCount   Int @default(0)
+  downvoteCount Int @default(0)
+  viewCount     Int @default(0)
+
+  link String? // External link for more information
+
+  occurredAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  expiresAt  DateTime?
+
+  source     HazardSource?  @relation(fields: [sourceId], references: [id])
+  category   HazardCategory @relation(fields: [categoryId], references: [id])
+  reportedBy User?          @relation(fields: [reportedById], references: [id])
+  votes      HazardVote[]
+  views      HazardView[]
+  medias     HazardMedia[]
+
+  // Performance indexes
+  @@index([latitude, longitude]) // Geographic queries
+  @@index([categoryId]) // Category filtering
+  @@index([severity]) // Severity filtering
+  @@index([createdAt]) // Temporal sorting
+  @@index([confidenceScore]) // Confidence sorting
+  @@index([expiresAt]) // Expiry filtering
+  @@index([reviewStatus]) // Review status filtering
+  @@index([reportedById]) // Reporter filtering
+  @@index([isAwsCompliant]) // AWS compliance filtering
+  @@index([sourceId]) // Official source filtering
+  @@index([severity, isAwsCompliant]) // Combined severity + AWS filtering
+  @@index([categoryId, severity]) // Combined category + severity filtering
+  @@index([expiresAt, reviewStatus]) // Combined expiry + review filtering
+  @@index([latitude, longitude, severity]) // Geographic + severity filtering
+  @@index([createdAt, confidenceScore]) // Combined sorting index
+  @@index([severity, createdAt]) // Severity + temporal sorting
+  @@index([severityBand, createdAt, confidenceScore]) // Optimized for default map view sorting
+  @@index([reviewStatus, expiresAt, severityBand]) // Optimized for active hazard queries
+  @@index([isAwsCompliant, severity, expiresAt]) // AWS compliance with severity and expiry
+  @@index([categoryId, expiresAt, severityBand]) // Category filtering with active hazards
+  @@index([reportedById, expiresAt]) // User-reported active hazards
+}
+
+model HazardVote {
+  id        String         @id @default(uuid())
+  hazardId  String
+  hazard    Hazard         @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User           @relation(fields: [userId], references: [id])
+  voteType  HazardVoteType
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([hazardId, userId])
+}
+
+model HazardSource {
+  id        String   @id @default(uuid())
+  name      String
+  url       String   @unique
+  imageUrl  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  hazards   Hazard[]
+}
+
+model HazardView {
+  id       String   @id @default(uuid())
+  hazardId String
+  userId   String
+  viewedAt DateTime @default(now())
+
+  user   User?  @relation(fields: [userId], references: [id])
+  hazard Hazard @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+
+  @@unique([hazardId, userId])
+  @@index([hazardId])
+  @@index([userId])
+}
+
+model HazardMedia {
+  id           String    @id @default(uuid())
+  hazardId     String
+  userId       String
+  url          String
+  s3Key        String? // S3 object key for easy deletion
+  type         MediaType
+  mimeType     String? // MIME type of the file
+  fileSize     Int? // File size in bytes
+  originalName String? // Original filename
+  thumbnailUrl String? // For videos, a thumbnail image URL
+  isPrimary    Boolean   @default(false) // True if this media is the primary media for the hazard
+
+  hazard Hazard @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([hazardId])
+  @@index([userId])
+}
+
+enum MediaType {
+  image
+  video
+}
+
+enum HazardVoteType {
+  upvote
+  downvote
+}
+
+enum HazardReviewStatus {
+  pending
+  accepted
+  rejected
 }
 
 model LocationSubscription {
-  id           String   @id @default(uuid())
+  id           String  @id @default(uuid())
   userId       String
-  user         User     @relation(fields: [userId], references: [id])
+  user         User    @relation(fields: [userId], references: [id])
   northeastLat Float
   northeastLng Float
   southwestLat Float
@@ -64,8 +265,112 @@ model LocationSubscription {
   name         String? // Optional name for the location
   address      String? // Optional human-readable address
   geoRegion    String? // PostGIS geometry as string (WKT or WKB)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+
+  isOwnLocation Boolean  @default(false) // True if this subscription is for the user's own location
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([userId])
+  @@index([userId, isOwnLocation])
+}
+
+model UserDevice {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  deviceToken String   @unique
+  platform    String? // e.g., "ios", "android"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserPushNotificationSetting {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  awsEmergency          Boolean  @default(true)
+  awsWatchAndAct        Boolean  @default(true)
+  awsAdvice             Boolean  @default(true)
+  officialNonAws        Boolean  @default(true)
+  userReported          Boolean  @default(true)
+  subscribedCategoryIds String[] @default([]) // List of hazard category IDs the user is subscribed to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
+  @@index([userId])
+}
+
+model Admin {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         AdminRole @default(admin)
+  isActive     Boolean   @default(true)
+
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  passwordChangedAt   DateTime  @default(now())
+
+  promptsCreated        AIPrompt[]      @relation("AIPromptCreatedBy")
+  promptsUpdated        AIPrompt[]      @relation("AIPromptUpdatedBy")
+  configurationsCreated Configuration[] @relation("ConfigurationCreatedBy")
+  configurationsUpdated Configuration[] @relation("ConfigurationUpdatedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([isActive])
+}
+
+enum AdminRole {
+  superAdmin
+  admin
+  moderator
+}
+
+model AIPrompt {
+  id          String  @id @default(uuid())
+  name        String  @unique // e.g., "review_and_summarize", "summarize", "severity_assessment"
+  description String? // Human-readable description of what this prompt does
+  content     String // The actual prompt content with placeholder variables
+  variables   Json // JSON array of variable names expected in the prompt
+  model       String // e.g., "gpt-4o-mini", "gpt-5-nano", "gpt-3.5-turbo"
+
+  createdById String
+  updatedById String?
+  createdBy   Admin   @relation("AIPromptCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Admin?  @relation("AIPromptUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+enum ConfigurationKey {
+  aiPrompts
+}
+
+model Configuration {
+  id          String           @id @default(uuid())
+  key         ConfigurationKey @unique
+  value       Json
+  title       String
+  description String?
+
+  createdById String?
+  updatedById String?
+  createdBy   Admin?  @relation("ConfigurationCreatedBy", fields: [createdById], references: [id])
+  updatedBy   Admin?  @relation("ConfigurationUpdatedBy", fields: [updatedById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

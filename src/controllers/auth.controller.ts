@@ -6,19 +6,28 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt.util.js";
-import { comparePassword, hashPassword } from "../services/auth.service.js";
-import client from "../utils/google_oauth_client.util.js";
+import {
+  comparePassword,
+  hashPassword,
+  verifyAppleToken,
+  verifyGoogleToken,
+} from "../services/auth.service.js";
+import type {
+  AppleOAuthInput,
+  GoogleOAuthInput,
+  LoginInput,
+  RefreshTokenInput,
+  RegisterInput,
+} from "../validators/auth.validator.js";
 
+/// Controller to handle user registration with email and password.
 export const registerWithEmailAndPassword = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      throw new HttpError(400, "Email and password are required");
-    }
+    const { email, password }: RegisterInput = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -56,16 +65,14 @@ export const registerWithEmailAndPassword = async (
   }
 };
 
+/// Controller to handle user login with email and password.
 export const loginWithEmailAndPassword = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      throw new HttpError(400, "Email and password are required");
-    }
+    const { email, password }: LoginInput = req.body;
 
     const existingUser = await prisma.user.findUnique({
       where: { email },
@@ -102,27 +109,16 @@ export const loginWithEmailAndPassword = async (
   }
 };
 
+/// Controller to handle user login or registration via Google OAuth.
 export const verifyGoogleOAuth = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      throw new HttpError(400, "Email is required");
-    }
+    const { idToken }: GoogleOAuthInput = req.body;
 
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: [
-        process.env.GOOGLE_OAUTH_CLIENT_ID_WEB!!,
-        process.env.GOOGLE_OAUTH_CLIENT_ID_IOS!!,
-        process.env.GOOGLE_OAUTH_CLIENT_ID_ANDROID!!,
-      ],
-    });
-
-    const payload = ticket.getPayload();
+    const payload = await verifyGoogleToken(idToken);
     if (!payload || !payload.email) {
       throw new HttpError(400, "Invalid ID token");
     }
@@ -164,16 +160,74 @@ export const verifyGoogleOAuth = async (
   }
 };
 
+/// Controller to handle user login or registration via Apple OAuth.
+export const verifyAppleOAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { identityToken, firstName, lastName }: AppleOAuthInput = req.body;
+
+    const applePayload = await verifyAppleToken(identityToken);
+
+    if (!applePayload || !applePayload.email) {
+      throw new HttpError(400, "Invalid identity token");
+    }
+
+    const email = applePayload.email;
+    let name: string | null = null;
+
+    // Apple only sends user info on first sign-in
+    if (firstName || lastName) {
+      name = [firstName, lastName].filter(Boolean).join(" ") || null;
+    }
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email, name },
+      });
+    } else if (name && !user.name) {
+      // Update name if user exists but doesn't have a name
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name },
+        select: { id: true, name: true },
+      });
+    }
+
+    const accessToken = signAccessToken({ userId: user.id });
+    if (!accessToken) {
+      throw new HttpError(500, "Error signing access token");
+    }
+
+    const refreshToken = signRefreshToken({ userId: user.id });
+    if (!refreshToken) {
+      throw new HttpError(500, "Error signing refresh token");
+    }
+
+    res.status(200).json({
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle refreshing the access token using a refresh token.
 export const refreshToken = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   try {
-    const { refreshToken: incomingRefreshToken } = req.body;
-    if (!incomingRefreshToken) {
-      throw new HttpError(400, "Refresh token is required");
-    }
+    const { refreshToken: incomingRefreshToken }: RefreshTokenInput = req.body;
 
     // Verify the refresh token
     const decoded = verifyRefreshToken(incomingRefreshToken);

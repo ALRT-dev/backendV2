@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE "public"."User" ADD COLUMN     "geoLocation" TEXT,
+ADD COLUMN     "latitude" DOUBLE PRECISION,
+ADD COLUMN     "locationName" TEXT,
+ADD COLUMN     "longitude" DOUBLE PRECISION;

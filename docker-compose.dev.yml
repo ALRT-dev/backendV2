@@ -1,0 +1,30 @@
+services:
+  app:
+    container_name: app-dev
+    build: .
+    env_file:
+      - .env.dev
+    ports:
+      - "3000:9000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && yarn start"
+
+  postgres:
+    container_name: postgres-dev
+    image: postgis/postgis:15-3.4
+    env_file:
+      - .env.dev
+    ports:
+      - "5431:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata_dev:

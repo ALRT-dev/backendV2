@@ -1,23 +1,24 @@
 import jwt from "jsonwebtoken";
+import { config } from "./config.js";
 
 export const signAccessToken = (payload: any) => {
-  return jwt.sign(payload, process.env.JWT_ACCESS_SECRET!!, {
-    expiresIn: `${Number(process.env.JWT_ACCESS_EXP_M)}m`,
+  return jwt.sign(payload, config.jwt.accessSecret, {
+    expiresIn: `${config.jwt.accessExpirationMinutes}m`,
   });
 };
 
 export const signRefreshToken = (payload: any) => {
-  return jwt.sign(payload, process.env.JWT_REFRESH_SECRET!!, {
-    expiresIn: `${Number(process.env.JWT_REFRESH_EXP_D)}d`,
+  return jwt.sign(payload, config.jwt.refreshSecret, {
+    expiresIn: `${config.jwt.refreshExpirationDays}d`,
   });
 };
 
 export const verifyAccessToken = (payload: any) => {
-  return jwt.verify(payload, process.env.JWT_ACCESS_SECRET!!);
+  return jwt.verify(payload, config.jwt.accessSecret);
 };
 
 export const verifyRefreshToken = (payload: any) => {
-  return jwt.verify(payload, process.env.JWT_REFRESH_SECRET!!);
+  return jwt.verify(payload, config.jwt.refreshSecret);
 };
 
 export const decodeToken = (payload: any) => {

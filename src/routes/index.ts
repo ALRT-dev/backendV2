@@ -2,5 +2,18 @@ import authRouter from "./auth.route.js";
 import userRouter from "./user.route.js";
 import hazardRouter from "./hazard.route.js";
 import notificationRouter from "./notification.route.js";
+import hazardCategoryRouter from "./hazard_category.route.js";
+import xpPointsRouter from "./xpPoints.route.js";
+import onboardingRouter from "./onboarding.route.js";
+import adminRouter from "./admin/index.js";
 
-export { authRouter, userRouter, hazardRouter, notificationRouter };
+export {
+  authRouter,
+  userRouter,
+  hazardRouter,
+  notificationRouter,
+  hazardCategoryRouter,
+  xpPointsRouter,
+  onboardingRouter,
+  adminRouter,
+};
