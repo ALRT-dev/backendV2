@@ -61,7 +61,11 @@ export const convertAddressToLatLng = async (
       }
     }
 
-    console.warn("No coordinates found for the given address");
+    console.warn(
+      "\n\nNo coordinates found for the given address: ",
+      address,
+      response.data
+    );
   } catch (error) {
     console.error("Error converting address to coordinates:", error);
   }

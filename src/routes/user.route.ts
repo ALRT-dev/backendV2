@@ -4,17 +4,21 @@ import {
   getUserSubscriptions,
   subscribeToLocation,
   unsubscribeFromLocation,
-  getUserPushNotificationSettings,
-  updateUserNotificationSettings,
+  getUserPushNotificationSettingsController,
+  updateUserNotificationSettingsController,
   updateUserProfile,
   updateUserProfilePicture,
+  updateUserOwnLocationSubscriptionRadiusController,
+  updateUserOwnLocationSubscriptionController,
 } from "../controllers/user.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
   subscribeLocationSchema,
+  updateOwnLocationSubscriptionRadiusSchema,
   updateNotificationSettingsSchema,
   updateUserSchema,
+  updateUserOwnLocationSubscriptionSchema,
 } from "../validators/user.validator.js";
 import {
   handleMulterError,
@@ -45,17 +49,29 @@ userRouter.delete(
   unsubscribeFromLocation
 );
 userRouter.get("/location-subscriptions", requireAuth, getUserSubscriptions);
+userRouter.put(
+  "/own-location-subscription",
+  requireAuth,
+  validate(updateUserOwnLocationSubscriptionSchema),
+  updateUserOwnLocationSubscriptionController
+);
+userRouter.put(
+  "/own-location-subscription-radius",
+  requireAuth,
+  validate(updateOwnLocationSubscriptionRadiusSchema),
+  updateUserOwnLocationSubscriptionRadiusController
+);
 
 userRouter.get(
   "/push-notification-settings",
   requireAuth,
-  getUserPushNotificationSettings
+  getUserPushNotificationSettingsController
 );
 userRouter.put(
   "/push-notification-settings",
   requireAuth,
   validate(updateNotificationSettingsSchema),
-  updateUserNotificationSettings
+  updateUserNotificationSettingsController
 );
 
 export default userRouter;

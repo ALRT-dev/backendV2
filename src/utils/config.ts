@@ -27,11 +27,6 @@ export const config = {
   // Database
   database: {
     url: getRequiredEnv("DATABASE_URL"),
-    user: getRequiredEnv("POSTGRES_USER"),
-    password: getRequiredEnv("POSTGRES_PASSWORD"),
-    host: getRequiredEnv("POSTGRES_HOST"),
-    port: parseInt(getRequiredEnv("POSTGRES_PORT"), 10),
-    name: getRequiredEnv("POSTGRES_DATABASE"),
   },
 
   // JWT
@@ -70,6 +65,11 @@ export const config = {
     clientIdAndroid: getRequiredEnv("GOOGLE_OAUTH_CLIENT_ID_ANDROID"),
   },
 
+  // Apple OAuth
+  appleOAuth: {
+    audience: getRequiredEnv("APPLE_OAUTH_AUDIENCE"),
+  },
+
   // OpenAI
   openAI: {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
@@ -86,11 +86,23 @@ export const config = {
 
   // NSW Transport API
   nswTransportApi: {
-    apiKey: getOptionalEnv("NSW_TRANSPORT_API_KEY", ""),
+    apiKey: getRequiredEnv("NSW_TRANSPORT_API_KEY"),
+  },
+
+  // WAQI API
+  waqiApi: {
+    apiToken: getRequiredEnv("WAQI_API_TOKEN"),
   },
 
   // Google Maps API
   googleMapsApi: {
-    apiKey: getOptionalEnv("GOOGLE_MAPS_API_KEY", ""),
+    apiKey: getRequiredEnv("GOOGLE_MAPS_API_KEY"),
+  },
+
+  // Sightengine API
+  sightengineApi: {
+    apiUser: getRequiredEnv("SIGHTENGINE_API_USER"),
+    apiSecret: getRequiredEnv("SIGHTENGINE_API_SECRET"),
+    workflowId: getRequiredEnv("SIGHTENGINE_WORKFLOW_ID"),
   },
 };

@@ -5,19 +5,29 @@ export const getNotificationsFeedSchema = z.object({
 
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
-  severityFilter: z
-    .object({
-      aws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-      nonAws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-    })
+  awsEmergency: z
+    .string()
+    .regex(/^(true|false)$/, "awsEmergency must be 'true' or 'false'")
+    .optional(),
+
+  awsWatchAndAct: z
+    .string()
+    .regex(/^(true|false)$/, "awsWatchAndAct must be 'true' or 'false'")
+    .optional(),
+
+  awsAdvice: z
+    .string()
+    .regex(/^(true|false)$/, "awsAdvice must be 'true' or 'false'")
+    .optional(),
+
+  officialNonAws: z
+    .string()
+    .regex(/^(true|false)$/, "officialNonAws must be 'true' or 'false'")
+    .optional(),
+
+  userReported: z
+    .string()
+    .regex(/^(true|false)$/, "userReported must be 'true' or 'false'")
     .optional(),
 
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),
@@ -34,7 +44,7 @@ export const getNotificationsFeedSchema = z.object({
   sortSettings: z
     .array(
       z.object({
-        severity: z.enum(["asc", "desc"]).optional(),
+        severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),

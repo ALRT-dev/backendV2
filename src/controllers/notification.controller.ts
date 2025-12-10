@@ -2,14 +2,13 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { getHazardsApplyingFiltersRaw } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import type {
   GetNotificationsFeedQuery,
   PushNotificationTokenInput,
 } from "../validators/notification.validator.js";
 import { parseBoolean } from "../utils/parse.util.js";
 import { enrichHazardsWithPresignedUrls } from "../services/s3.service.js";
-import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
+import { getUserLocationSubscriptions } from "../services/location_subscription.service.js";
 
 export const getNotificationsFeed = async (
   req: Request,
@@ -21,7 +20,11 @@ export const getNotificationsFeed = async (
     const {
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency,
+      awsWatchAndAct,
+      awsAdvice,
+      officialNonAws,
+      userReported,
       reviewStatus,
       showExpired,
       sortSettings,
@@ -29,8 +32,8 @@ export const getNotificationsFeed = async (
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
 
-    const subscriptions = await prisma.locationSubscription.findMany({
-      where: { userId: userId! },
+    const subscriptions = await getUserLocationSubscriptions({
+      userId: userId!,
     });
 
     if (subscriptions.length === 0) {
@@ -47,7 +50,11 @@ export const getNotificationsFeed = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency: parseBoolean(awsEmergency),
+      awsWatchAndAct: parseBoolean(awsWatchAndAct),
+      awsAdvice: parseBoolean(awsAdvice),
+      officialNonAws: parseBoolean(officialNonAws),
+      userReported: parseBoolean(userReported),
       reviewStatus,
       userId,
       page: Number(page),
@@ -79,6 +86,17 @@ export const sendPushNotificationToken = async (
     const { token, platform }: PushNotificationTokenInput = req.body;
     const { userId } = res;
 
+    // delete any existing entries with the same token but different user
+    await prisma.userDevice.deleteMany({
+      where: {
+        deviceToken: token,
+        NOT: {
+          userId: userId!,
+        },
+      },
+    });
+
+    // upsert the device token for the user
     const newDevice = await prisma.userDevice.upsert({
       where: {
         deviceToken: token,

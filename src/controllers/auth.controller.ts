@@ -6,10 +6,14 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt.util.js";
-import { comparePassword, hashPassword } from "../services/auth.service.js";
-import client from "../utils/google_oauth_client.util.js";
-import { config } from "../utils/config.js";
+import {
+  comparePassword,
+  hashPassword,
+  verifyAppleToken,
+  verifyGoogleToken,
+} from "../services/auth.service.js";
 import type {
+  AppleOAuthInput,
   GoogleOAuthInput,
   LoginInput,
   RefreshTokenInput,
@@ -114,16 +118,7 @@ export const verifyGoogleOAuth = async (
   try {
     const { idToken }: GoogleOAuthInput = req.body;
 
-    const ticket = await client.verifyIdToken({
-      idToken,
-      audience: [
-        config.googleOAuth.clientIdWeb,
-        config.googleOAuth.clientIdIos,
-        config.googleOAuth.clientIdAndroid,
-      ],
-    });
-
-    const payload = ticket.getPayload();
+    const payload = await verifyGoogleToken(idToken);
     if (!payload || !payload.email) {
       throw new HttpError(400, "Invalid ID token");
     }
@@ -143,6 +138,66 @@ export const verifyGoogleOAuth = async (
     if (!user) {
       user = await prisma.user.create({
         data: { email, name },
+      });
+    }
+
+    const accessToken = signAccessToken({ userId: user.id });
+    if (!accessToken) {
+      throw new HttpError(500, "Error signing access token");
+    }
+
+    const refreshToken = signRefreshToken({ userId: user.id });
+    if (!refreshToken) {
+      throw new HttpError(500, "Error signing refresh token");
+    }
+
+    res.status(200).json({
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle user login or registration via Apple OAuth.
+export const verifyAppleOAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { identityToken, firstName, lastName }: AppleOAuthInput = req.body;
+
+    const applePayload = await verifyAppleToken(identityToken);
+
+    if (!applePayload || !applePayload.email) {
+      throw new HttpError(400, "Invalid identity token");
+    }
+
+    const email = applePayload.email;
+    let name: string | null = null;
+
+    // Apple only sends user info on first sign-in
+    if (firstName || lastName) {
+      name = [firstName, lastName].filter(Boolean).join(" ") || null;
+    }
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email, name },
+      });
+    } else if (name && !user.name) {
+      // Update name if user exists but doesn't have a name
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name },
+        select: { id: true, name: true },
       });
     }
 

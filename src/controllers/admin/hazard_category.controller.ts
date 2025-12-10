@@ -91,9 +91,6 @@ export const createHazardCategoryForAdmin = async (
       name,
       description,
       color,
-      severityKeywords,
-      callToActions,
-      aiInstructions,
       parentId,
     }: CreateHazardCategoryForAdminBody = req.body;
 
@@ -120,9 +117,6 @@ export const createHazardCategoryForAdmin = async (
         name,
         ...(description && { description }),
         ...(color && { color }),
-        ...(severityKeywords && { severityKeywords }),
-        ...(callToActions && { callToActions }),
-        ...(aiInstructions && { aiInstructions }),
         ...(parentId && { parentId }),
       },
       include: {
@@ -152,9 +146,6 @@ export const updateHazardCategoryForAdmin = async (
       name,
       description,
       color,
-      severityKeywords,
-      callToActions,
-      aiInstructions,
       parentId,
     }: UpdateHazardCategoryForAdminBody = req.body;
 
@@ -229,9 +220,6 @@ export const updateHazardCategoryForAdmin = async (
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
         ...(color !== undefined && { color }),
-        ...(severityKeywords !== undefined && { severityKeywords }),
-        ...(callToActions !== undefined && { callToActions }),
-        ...(aiInstructions !== undefined && { aiInstructions }),
         ...(parentId !== undefined && { parentId }),
       },
       include: {

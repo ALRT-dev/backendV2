@@ -1,5 +1,6 @@
 import {
   HazardSeverity,
+  HazardSeverityBand,
   Prisma,
   type LocationSubscription,
 } from "@prisma/client";
@@ -8,7 +9,6 @@ import type {
   SortSetting,
 } from "../models/hazard_search_params_interface.js";
 import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
-import { parseArray } from "./parse.util.js";
 
 /**
  * Builds the where clause for querying hazards based on various filters.
@@ -26,13 +26,19 @@ export const buildHazardsWhereClause = (
   const {
     searchString,
     categoryIds,
-    severityFilter,
+    sourceIds,
+    awsEmergency,
+    awsWatchAndAct,
+    awsAdvice,
+    officialNonAws,
+    userReported,
     reportedById,
     reviewStatus,
     northeastLat,
     northeastLng,
     southwestLat,
     southwestLng,
+    ignoreHazardLatLngBounds,
     subscriptions,
     showExpired,
     isAwsCompliant,
@@ -53,7 +59,7 @@ export const buildHazardsWhereClause = (
           },
         },
         {
-          shortDescription: {
+          description: {
             contains: searchString,
             mode: "insensitive",
           },
@@ -98,36 +104,62 @@ export const buildHazardsWhereClause = (
     }
   }
 
-  // Apply severities filter if provided
-  if (severityFilter && typeof severityFilter === "object") {
-    const severityConditions: Prisma.HazardWhereInput[] = [];
+  // Apply sourceIds filter if provided
+  if (sourceIds) {
+    const sourceIdArray = Array.isArray(sourceIds)
+      ? sourceIds
+      : sourceIds.split(",");
 
-    // Extract AWS and non-AWS severities from the new structure
-    const awsSeverities = parseArray(severityFilter.aws);
-    const nonAwsSeverities = parseArray(severityFilter.nonAws);
+    andConditions.push({
+      sourceId: {
+        in: sourceIdArray,
+      },
+    });
+  }
 
-    // Add conditions for AWS compliant hazards
-    if (awsSeverities.length > 0) {
-      severityConditions.push({
-        AND: [{ severity: { in: awsSeverities } }, { isAwsCompliant: true }],
-      });
-    }
+  // Apply new filter conditions
+  const filterConditions: Prisma.HazardWhereInput[] = [];
 
-    // Add conditions for non-AWS compliant hazards
-    if (nonAwsSeverities.length > 0) {
-      severityConditions.push({
-        AND: [
-          { severity: { in: nonAwsSeverities } },
-          { isAwsCompliant: false },
-        ],
-      });
-    }
+  // AWS Emergency: isAwsCompliant = true AND severity = emergency
+  if (awsEmergency) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.emergency }],
+    });
+  }
 
-    if (severityConditions.length > 0) {
-      andConditions.push({
-        OR: severityConditions,
-      });
-    }
+  // AWS Watch and Act: isAwsCompliant = true AND severity = watchAndAct
+  if (awsWatchAndAct) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.watchAndAct }],
+    });
+  }
+
+  // AWS Advice: isAwsCompliant = true AND severity = advice
+  if (awsAdvice) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: true }, { severity: HazardSeverity.advice }],
+    });
+  }
+
+  // Official Non-AWS: isAwsCompliant = false AND sourceId != null
+  if (officialNonAws) {
+    filterConditions.push({
+      AND: [{ isAwsCompliant: false }, { sourceId: { not: null } }],
+    });
+  }
+
+  // User Reported: reportedById != null
+  if (userReported) {
+    filterConditions.push({
+      reportedById: { not: null },
+    });
+  }
+
+  // If any filter conditions exist, add them as OR conditions
+  if (filterConditions.length > 0) {
+    andConditions.push({
+      OR: filterConditions,
+    });
   }
 
   // Apply reportedById filter if provided
@@ -147,57 +179,155 @@ export const buildHazardsWhereClause = (
   // Filter hazards that fall within subscription regions if provided
   if (subscriptions && subscriptions.length > 0) {
     andConditions.push({
-      OR: subscriptions.map((subscription) => ({
-        AND: [
+      OR: subscriptions.map((subscription) => {
+        const conditions: Prisma.HazardWhereInput[] = [
+          // Check point-based hazards (latitude/longitude)
           {
-            latitude: {
-              gte: Math.min(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-              lte: Math.max(
-                subscription.southwestLat,
-                subscription.northeastLat
-              ),
-            },
+            AND: [
+              { latitude: { not: null } },
+              { longitude: { not: null } },
+              {
+                latitude: {
+                  gte: Math.min(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                  lte: Math.max(
+                    subscription.southwestLat,
+                    subscription.northeastLat
+                  ),
+                },
+              },
+              {
+                longitude: {
+                  gte: Math.min(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                  lte: Math.max(
+                    subscription.southwestLng,
+                    subscription.northeastLng
+                  ),
+                },
+              },
+            ],
           },
-          {
-            longitude: {
-              gte: Math.min(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-              lte: Math.max(
-                subscription.southwestLng,
-                subscription.northeastLng
-              ),
-            },
-          },
-        ],
-      })),
+        ];
+
+        // Only include bounding box check if ignoreHazardLatLngBounds is false
+        if (!ignoreHazardLatLngBounds) {
+          conditions.push(
+            // Check bounding box hazards (intersection with subscription box)
+            {
+              AND: [
+                { northeastLat: { not: null } },
+                { northeastLng: { not: null } },
+                { southwestLat: { not: null } },
+                { southwestLng: { not: null } },
+                // Bounding box intersection logic
+                {
+                  northeastLat: {
+                    gte: Math.min(
+                      subscription.southwestLat,
+                      subscription.northeastLat
+                    ),
+                  },
+                },
+                {
+                  northeastLng: {
+                    gte: Math.min(
+                      subscription.southwestLng,
+                      subscription.northeastLng
+                    ),
+                  },
+                },
+                {
+                  southwestLat: {
+                    lte: Math.max(
+                      subscription.southwestLat,
+                      subscription.northeastLat
+                    ),
+                  },
+                },
+                {
+                  southwestLng: {
+                    lte: Math.max(
+                      subscription.southwestLng,
+                      subscription.northeastLng
+                    ),
+                  },
+                },
+              ],
+            }
+          );
+        }
+
+        return { OR: conditions };
+      }),
     });
   }
 
   // Filter hazards that fall within geographic bounds if provided
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
+    const geoConditions: Prisma.HazardWhereInput[] = [
+      // Check point-based hazards
+      {
+        AND: [
+          { latitude: { not: null } },
+          { longitude: { not: null } },
+          {
+            latitude: {
+              gte: southwestLat,
+              lte: northeastLat,
+            },
+          },
+          {
+            longitude: {
+              gte: southwestLng,
+              lte: northeastLng,
+            },
+          },
+        ],
+      },
+    ];
+
+    // Only include bounding box check if ignoreHazardLatLngBounds is false
+    if (!ignoreHazardLatLngBounds) {
+      geoConditions.push(
+        // Check bounding box hazards (intersection)
+        {
+          AND: [
+            { northeastLat: { not: null } },
+            { northeastLng: { not: null } },
+            { southwestLat: { not: null } },
+            { southwestLng: { not: null } },
+            { northeastLat: { gte: southwestLat } },
+            { northeastLng: { gte: southwestLng } },
+            { southwestLat: { lte: northeastLat } },
+            { southwestLng: { lte: northeastLng } },
+          ],
+        }
+      );
+    }
+
     andConditions.push({
-      latitude: {
-        gte: southwestLat,
-        lte: northeastLat,
-      },
-      longitude: {
-        gte: southwestLng,
-        lte: northeastLng,
-      },
+      OR: geoConditions,
     });
   }
 
   // Only include hazards that haven't expired yet
   if (!showExpired) {
     andConditions.push({
-      expiresAt: {
-        gt: new Date(),
-      },
+      OR: [
+        {
+          expiresAt: {
+            gt: new Date(),
+          },
+        },
+        {
+          expiresAt: null,
+        },
+      ],
     });
   }
 
@@ -281,13 +411,19 @@ export const buildHazardsWhereClauseRaw = (
   const {
     searchString,
     categoryIds,
-    severityFilter,
+    sourceIds,
+    awsEmergency,
+    awsWatchAndAct,
+    awsAdvice,
+    officialNonAws,
+    userReported,
     reportedById,
     reviewStatus,
     northeastLat,
     northeastLng,
     southwestLat,
     southwestLng,
+    ignoreHazardLatLngBounds,
     subscriptions,
     showExpired,
     isAwsCompliant,
@@ -300,7 +436,7 @@ export const buildHazardsWhereClauseRaw = (
   // Apply search string filter if provided
   if (searchString) {
     whereConditions.push(
-      `(h.title ILIKE $${paramIndex} OR h."shortDescription" ILIKE $${paramIndex})`
+      `(h.title ILIKE $${paramIndex} OR h."description" ILIKE $${paramIndex})`
     );
     queryParams.push(`%${searchString}%`);
     paramIndex++;
@@ -335,39 +471,62 @@ export const buildHazardsWhereClauseRaw = (
     queryParams.push(...categoryArray, ...categoryArray);
   }
 
-  // Apply severities filter if provided
-  if (severityFilter && typeof severityFilter === "object") {
-    const severityConditions: string[] = [];
+  // Apply sourceIds filter if provided
+  if (sourceIds) {
+    const sourceArray = Array.isArray(sourceIds) ? sourceIds : [sourceIds];
+    const sourcePlaceholders = sourceArray
+      .map(() => `$${paramIndex++}`)
+      .join(",");
 
-    // Extract AWS and non-AWS severities from the new structure
-    const awsSeverities = parseArray(severityFilter.aws);
-    const nonAwsSeverities = parseArray(severityFilter.nonAws);
+    whereConditions.push(`h."sourceId" IN (${sourcePlaceholders})`);
+    queryParams.push(...sourceArray);
+  }
 
-    // Add conditions for AWS compliant hazards
-    if (awsSeverities.length > 0) {
-      const awsCompliantPlaceholders = awsSeverities
-        .map(() => `$${paramIndex++}::"HazardSeverity"`)
-        .join(",");
-      severityConditions.push(
-        `(h.severity IN (${awsCompliantPlaceholders}) AND h."isAwsCompliant" = true)`
-      );
-      queryParams.push(...awsSeverities);
-    }
+  // Apply new filter conditions
+  const filterConditions: string[] = [];
 
-    // Add conditions for non-AWS compliant hazards
-    if (nonAwsSeverities.length > 0) {
-      const nonAwsCompliantPlaceholders = nonAwsSeverities
-        .map(() => `$${paramIndex++}::"HazardSeverity"`)
-        .join(",");
-      severityConditions.push(
-        `(h.severity IN (${nonAwsCompliantPlaceholders}) AND h."isAwsCompliant" = false)`
-      );
-      queryParams.push(...nonAwsSeverities);
-    }
+  // AWS Emergency: isAwsCompliant = true AND severity = emergency
+  if (awsEmergency) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.emergency);
+    paramIndex++;
+  }
 
-    if (severityConditions.length > 0) {
-      whereConditions.push(`(${severityConditions.join(" OR ")})`);
-    }
+  // AWS Watch and Act: isAwsCompliant = true AND severity = watchAndAct
+  if (awsWatchAndAct) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.watchAndAct);
+    paramIndex++;
+  }
+
+  // AWS Advice: isAwsCompliant = true AND severity = advice
+  if (awsAdvice) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = true AND h.severity = $${paramIndex}::"HazardSeverity")`
+    );
+    queryParams.push(HazardSeverity.advice);
+    paramIndex++;
+  }
+
+  // Official Non-AWS: isAwsCompliant = false AND sourceId != null
+  if (officialNonAws) {
+    filterConditions.push(
+      `(h."isAwsCompliant" = false AND h."sourceId" IS NOT NULL)`
+    );
+  }
+
+  // User Reported: reportedById != null
+  if (userReported) {
+    filterConditions.push(`h."reportedById" IS NOT NULL`);
+  }
+
+  // If any filter conditions exist, add them as OR conditions
+  if (filterConditions.length > 0) {
+    whereConditions.push(`(${filterConditions.join(" OR ")})`);
   }
 
   // Apply reporter filter if provided
@@ -386,77 +545,85 @@ export const buildHazardsWhereClauseRaw = (
     paramIndex++;
   }
 
-  // Apply geographic bounds filter if provided - OPTIMIZED for better index usage
+  // Apply geographic bounds filter if provided - Using PostGIS for dramatic performance improvement
   if (northeastLat && northeastLng && southwestLat && southwestLng) {
-    // If we also have subscriptions, combine with OR
-    if (subscriptions && subscriptions.length > 0) {
-      // Build subscription conditions and regular bounds condition with OR
-      const allConditions = [];
+    // Create bounding box polygon using PostGIS
+    let boundsCondition: string;
 
-      // Add subscription conditions first - optimize for spatial index usage
-      subscriptions.forEach(() => {
-        const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
-          paramIndex + 1
-        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-          paramIndex + 3
-        })`;
-        allConditions.push(condition);
-        paramIndex += 4;
-      });
-
-      // Add regular bounds condition - optimize for spatial index usage
-      const regularBounds = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
-        paramIndex + 1
-      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-        paramIndex + 3
-      })`;
-      allConditions.push(regularBounds);
-      paramIndex += 4;
-
-      whereConditions.push(`(${allConditions.join(" OR ")})`);
-
-      // Add subscription parameters first (to match the parameter order)
-      subscriptions.forEach((sub) => {
-        queryParams.push(
-          Math.min(sub.southwestLat, sub.northeastLat),
-          Math.max(sub.southwestLat, sub.northeastLat),
-          Math.min(sub.southwestLng, sub.northeastLng),
-          Math.max(sub.southwestLng, sub.northeastLng)
-        );
-      });
-
-      // Add regular bounds parameters
-      queryParams.push(
-        Math.min(southwestLat, northeastLat),
-        Math.max(southwestLat, northeastLat),
-        Math.min(southwestLng, northeastLng),
-        Math.max(southwestLng, northeastLng)
-      );
+    if (ignoreHazardLatLngBounds) {
+      // Only check point-based hazards
+      boundsCondition = `(
+        h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+        ST_Intersects(
+          ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+        paramIndex + 2
+      }, $${paramIndex + 3}, 4326),
+          ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+        )
+      )`;
     } else {
-      // Only regular bounds, no subscriptions - optimize for spatial index usage
-      whereConditions.push(
-        `(h.latitude >= $${paramIndex} AND h.latitude <= $${
-          paramIndex + 1
-        } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
-          paramIndex + 3
-        })`
-      );
-      queryParams.push(
-        Math.min(southwestLat, northeastLat),
-        Math.max(southwestLat, northeastLat),
-        Math.min(southwestLng, northeastLng),
-        Math.max(southwestLng, northeastLng)
-      );
-      paramIndex += 4;
-    }
-  } else if (subscriptions && subscriptions.length > 0) {
-    // Only subscription bounds, no regular bounds - optimize for spatial index usage
-    const subscriptionConditions = subscriptions.map(() => {
-      const condition = `(h.latitude >= $${paramIndex} AND h.latitude <= $${
-        paramIndex + 1
-      } AND h.longitude >= $${paramIndex + 2} AND h.longitude <= $${
+      // Check both point-based and bounding box hazards
+      boundsCondition = `(
+        (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+         ST_Intersects(
+           ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+        paramIndex + 2
+      }, $${paramIndex + 3}, 4326),
+           ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+         ))
+        OR
+        (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
+         h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
+         h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
         paramIndex + 3
-      })`;
+      } AND
+         h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
+        paramIndex + 2
+      })
+      )`;
+    }
+
+    whereConditions.push(boundsCondition);
+    queryParams.push(southwestLng, southwestLat, northeastLng, northeastLat);
+    paramIndex += 4;
+  } else if (subscriptions && subscriptions.length > 0) {
+    // Apply subscription bounds using PostGIS
+    const subscriptionConditions = subscriptions.map(() => {
+      let condition: string;
+
+      if (ignoreHazardLatLngBounds) {
+        // Only check point-based hazards
+        condition = `(
+          h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+          ST_Intersects(
+            ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+          paramIndex + 2
+        }, $${paramIndex + 3}, 4326),
+            ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+          )
+        )`;
+      } else {
+        // Check both point-based and bounding box hazards
+        condition = `(
+          (h.latitude IS NOT NULL AND h.longitude IS NOT NULL AND 
+           ST_Intersects(
+             ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
+          paramIndex + 2
+        }, $${paramIndex + 3}, 4326),
+             ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+           ))
+          OR
+          (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
+           h."northeastLng" IS NOT NULL AND h."southwestLng" IS NOT NULL AND
+           h."northeastLat" >= $${paramIndex + 1} AND h."southwestLat" <= $${
+          paramIndex + 3
+        } AND
+           h."northeastLng" >= $${paramIndex} AND h."southwestLng" <= $${
+          paramIndex + 2
+        })
+        )`;
+      }
+
       paramIndex += 4;
       return condition;
     });
@@ -464,17 +631,19 @@ export const buildHazardsWhereClauseRaw = (
 
     subscriptions.forEach((sub) => {
       queryParams.push(
-        Math.min(sub.southwestLat, sub.northeastLat),
-        Math.max(sub.southwestLat, sub.northeastLat),
-        Math.min(sub.southwestLng, sub.northeastLng),
-        Math.max(sub.southwestLng, sub.northeastLng)
+        sub.southwestLng,
+        sub.southwestLat,
+        sub.northeastLng,
+        sub.northeastLat
       );
     });
   }
 
   // Only include hazards that haven't expired yet
   if (!showExpired) {
-    whereConditions.push(`(h."expiresAt" > NOW() AT TIME ZONE 'UTC')`);
+    whereConditions.push(
+      `(h."expiresAt" > NOW() AT TIME ZONE 'UTC' OR h."expiresAt" IS NULL)`
+    );
   }
 
   // Apply isAwsCompliant filter if provided
@@ -539,18 +708,17 @@ export const buildHazardsOrderByClauseRaw = (
     for (const setting of sortSettings) {
       // Handle severity sorting
       if (
-        setting.severity &&
-        (setting.severity === "asc" || setting.severity === "desc")
+        setting.severityBand &&
+        (setting.severityBand === "asc" || setting.severityBand === "desc")
       ) {
-        const direction = setting.severity.toUpperCase();
+        const direction = setting.severityBand.toUpperCase();
         orderByClauses.push(`
-            CASE h.severity
-              WHEN 'unknown' THEN 1
-              WHEN 'info' THEN 2
-              WHEN 'advice' THEN 3
-              WHEN 'watchAndAct' THEN 4
-              WHEN 'emergency' THEN 5
-              ELSE 6
+            CASE h."severityBand"
+              WHEN 'info' THEN 1
+              WHEN 'monitor' THEN 2
+              WHEN 'action' THEN 3
+              WHEN 'critical' THEN 4
+              ELSE 5
             END ${direction}`);
       }
 
@@ -565,10 +733,13 @@ export const buildHazardsOrderByClauseRaw = (
         orderByClauses.push(`
           CASE 
             WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-              (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-          currentParamIndex + 1
-        })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-            ELSE 999999
+              ST_Distance(
+                ST_SetSRID(ST_MakePoint($${
+                  currentParamIndex + 1
+                }, $${currentParamIndex}), 4326)::geography,
+                ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+              )
+            ELSE 99999999
           END ${direction}`);
         queryParams.push(userLat, userLng);
         currentParamIndex += 2;
@@ -596,23 +767,26 @@ export const buildHazardsOrderByClauseRaw = (
   } else {
     // Default sorting when no sortSettings are provided
     orderByClauses.push(`
-      CASE h.severity
-        WHEN 'emergency' THEN 1
-        WHEN 'watchAndAct' THEN 2
-        WHEN 'advice' THEN 3
+      CASE h."severityBand"
+        WHEN 'critical' THEN 1
+        WHEN 'action' THEN 2
+        WHEN 'monitor' THEN 3
         WHEN 'info' THEN 4
         ELSE 5
       END ASC`);
 
-    // Add distance ordering if user location is provided
+    // Add distance ordering if user location is provided - Using PostGIS for optimal performance
     if (userLat && userLng) {
       orderByClauses.push(`
         CASE 
           WHEN h.latitude IS NOT NULL AND h.longitude IS NOT NULL THEN
-            (6371 * acos(cos(radians($${currentParamIndex})) * cos(radians(h.latitude)) * cos(radians(h.longitude) - radians($${
-        currentParamIndex + 1
-      })) + sin(radians($${currentParamIndex})) * sin(radians(h.latitude))))
-          ELSE 999999
+            ST_Distance(
+              ST_SetSRID(ST_MakePoint($${
+                currentParamIndex + 1
+              }, $${currentParamIndex}), 4326)::geography,
+              ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+            )
+          ELSE 99999999
         END ASC`);
       queryParams.push(userLat, userLng);
       currentParamIndex += 2;
@@ -703,6 +877,28 @@ export const getFormattedHazardSeverity = (
   }
 };
 
+/**
+ * Returns a formatted string representation of the hazard severity band.
+ * @param severityBand - The hazard severity band
+ * @returns Formatted string representation of the hazard severity band
+ */
+export const getFormattedHazardSeverityBand = (
+  severityBand: HazardSeverityBand
+): string => {
+  switch (severityBand) {
+    case HazardSeverityBand.info:
+      return "Info";
+    case HazardSeverityBand.monitor:
+      return "Monitor";
+    case HazardSeverityBand.action:
+      return "Action";
+    case HazardSeverityBand.critical:
+      return "Critical";
+    default:
+      return "Info";
+  }
+};
+
 /// Returns the keywords string for each hazard severity level.
 export const getSeverityKeywords = (severity: HazardSeverity): string => {
   switch (severity) {
@@ -769,14 +965,6 @@ export const getSeverityCallToActions = (
   }
 };
 
-/**
- * Lists of allowed severities for Australian Warnings System (AWS) hazards.
- */
-export const awsCompliantSeverities: HazardSeverity[] = [
-  HazardSeverity.advice,
-  HazardSeverity.watchAndAct,
-  HazardSeverity.emergency,
-];
 /**
  * Performs keyword matching to determine severity level based on title and description.
  */

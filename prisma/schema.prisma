@@ -11,22 +11,13 @@ datasource db {
   extensions = [postgis]
 }
 
-enum OnboardingStep {
-  welcome
-  location
-  radius
-  pushNotification
-  tosAcceptance
-  completed
-}
-
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
   passwordHash String  @default("")
   name         String?
 
-  onboardingStep OnboardingStep @default(welcome)
+  isOnboardingCompleted Boolean @default(false)
 
   isTOSAccepted Boolean @default(false)
 
@@ -37,6 +28,8 @@ model User {
   longitude    Float?
   geoLocation  String? // PostGIS geometry as string (WKT or WKB)
   locationName String? // Human-readable location name or address
+
+  ownLocationSubscriptionRadiusKm Int @default(5) // The radius in km for the user's own location subscription
 
   profilePictureUrl String? // S3 URL for user's profile picture
 
@@ -57,14 +50,13 @@ model User {
 }
 
 model HazardCategory {
-  id               String  @id @default(uuid())
-  name             String  @unique
-  description      String?
-  color            String? // Hex color code for UI representation
-  severityKeywords Json? // JSON object mapping severity levels to arrays of keywords
-  callToActions    Json? // JSON object mapping severity levels to call-to-action messages
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  color       String? // Hex color code for UI representation
+  keywords    String[] // Keywords associated with this category for classification
 
-  aiInstructions String? // Additional instructions for AI to classify hazards into this category
+  isFireRelated Boolean @default(false) // True if this category pertains to fire hazards
 
   parentId String? // For subcategories, this points to the parent category
 
@@ -80,11 +72,18 @@ model HazardCategory {
 }
 
 enum HazardSeverity {
-  unknown // Used only for user reported hazards
-  info // For AWS and Non-AWS: info
-  advice // For AWS: advice ------ For Non-AWS: low
-  watchAndAct // For AWS: watchAndAct ------ For Non-AWS: moderate
-  emergency // For AWS: emergency ------ For Non-AWS: high
+  unknown
+  info
+  advice
+  watchAndAct
+  emergency
+}
+
+enum HazardSeverityBand {
+  info
+  monitor
+  action
+  critical
 }
 
 enum AIConfidence {
@@ -101,15 +100,14 @@ enum FireStatus {
 }
 
 model Hazard {
-  id               String          @id @default(uuid())
-  title            String
-  description      String
-  shortDescription String?
-  aiSummary        String?
-  aiSeverity       HazardSeverity?
-  aiConfidence     AIConfidence?
-  severity         HazardSeverity  @default(unknown)
-  callToAction     String?
+  id           String             @id @default(uuid())
+  title        String
+  description  String
+  aiSummary    String?
+  aiConfidence AIConfidence?
+  severity     HazardSeverity     @default(unknown)
+  severityBand HazardSeverityBand @default(info)
+  callToAction String?
 
   fireStatus FireStatus? // Only applies to fire-related hazards
 
@@ -117,6 +115,12 @@ model Hazard {
   longitude    Float?
   locationName String? // Human-readable location name or address
   geoLocation  String? // PostGIS geometry as string (WKT or WKB)
+
+  // Bounding box for hazard coverage area (for broader/general locations)
+  northeastLat Float? // Northeast corner latitude
+  northeastLng Float? // Northeast corner longitude
+  southwestLat Float? // Southwest corner latitude
+  southwestLng Float? // Southwest corner longitude
 
   categoryId   String
   sourceId     String?
@@ -135,6 +139,8 @@ model Hazard {
   upvoteCount   Int @default(0)
   downvoteCount Int @default(0)
   viewCount     Int @default(0)
+
+  link String? // External link for more information
 
   occurredAt DateTime  @default(now())
   createdAt  DateTime  @default(now())
@@ -158,12 +164,18 @@ model Hazard {
   @@index([reviewStatus]) // Review status filtering
   @@index([reportedById]) // Reporter filtering
   @@index([isAwsCompliant]) // AWS compliance filtering
+  @@index([sourceId]) // Official source filtering
   @@index([severity, isAwsCompliant]) // Combined severity + AWS filtering
   @@index([categoryId, severity]) // Combined category + severity filtering
   @@index([expiresAt, reviewStatus]) // Combined expiry + review filtering
   @@index([latitude, longitude, severity]) // Geographic + severity filtering
   @@index([createdAt, confidenceScore]) // Combined sorting index
   @@index([severity, createdAt]) // Severity + temporal sorting
+  @@index([severityBand, createdAt, confidenceScore]) // Optimized for default map view sorting
+  @@index([reviewStatus, expiresAt, severityBand]) // Optimized for active hazard queries
+  @@index([isAwsCompliant, severity, expiresAt]) // AWS compliance with severity and expiry
+  @@index([categoryId, expiresAt, severityBand]) // Category filtering with active hazards
+  @@index([reportedById, expiresAt]) // User-reported active hazards
 }
 
 model HazardVote {
@@ -183,6 +195,7 @@ model HazardSource {
   id        String   @id @default(uuid())
   name      String
   url       String   @unique
+  imageUrl  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   hazards   Hazard[]
@@ -274,18 +287,22 @@ model UserDevice {
 }
 
 model UserPushNotificationSetting {
-  id          String   @id @default(uuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  settingType String // e.g., "hazard_severity", "location_updates", "system_notifications"
-  settingKey  String // e.g., "info", "advice", "watchAndAct", "emergency" for hazard_severity
-  isEnabled   Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, settingType, settingKey])
+  awsEmergency          Boolean  @default(true)
+  awsWatchAndAct        Boolean  @default(true)
+  awsAdvice             Boolean  @default(true)
+  officialNonAws        Boolean  @default(true)
+  userReported          Boolean  @default(true)
+  subscribedCategoryIds String[] @default([]) // List of hazard category IDs the user is subscribed to
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId])
   @@index([userId])
-  @@index([settingType])
 }
 
 model Admin {

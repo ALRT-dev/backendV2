@@ -241,6 +241,24 @@ export const updateConfiguration = async (
 };
 
 /**
+ * Upsert configuration
+ */
+export const upsertConfiguration = async (
+  data: CreateConfigurationData,
+  adminId: string
+): Promise<Configuration> => {
+  const existingConfig = await prisma.configuration.findUnique({
+    where: { key: data.key },
+  });
+
+  if (existingConfig) {
+    return updateConfiguration(existingConfig.id, data, adminId);
+  } else {
+    return createConfiguration(data, adminId);
+  }
+};
+
+/**
  * Delete a configuration
  */
 export const deleteConfiguration = async (id: string): Promise<void> => {
@@ -316,11 +334,7 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
     const prompts = await prisma.aIPrompt.findMany({
       where: {
         name: {
-          in: [
-            DefaultAIPromptNames.userReportReviewAndSummarize,
-            DefaultAIPromptNames.summarization,
-            DefaultAIPromptNames.severityAndCallToAction,
-          ],
+          in: Object.values(DefaultAIPromptNames),
         },
       },
       select: {
@@ -333,29 +347,97 @@ export const initializeDefaultConfigurations = async (): Promise<void> => {
       promptMap[prompt.name] = prompt.id;
     }
 
+    const aiPromptConfig: AIPromptConfiguration = {
+      userReportedAlertReviewAndSummarizePromptId: {
+        infoPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo
+          ] || "",
+        monitorPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationMonitor
+          ] || "",
+        actionPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationAction
+          ] || "",
+        criticalPromptId:
+          promptMap[
+            DefaultAIPromptNames.userReportedAlertReviewAndSummarizationCritical
+          ] || "",
+      },
+      officialAlertSummarizationPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationMonitor] ||
+          "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationAction] ||
+          "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.officialAlertSummarizationCritical] ||
+          "",
+      },
+      officialAwsAlertSummarizationPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationInfo] ||
+          "",
+        monitorPromptId:
+          promptMap[
+            DefaultAIPromptNames.officialAwsAlertSummarizationMonitor
+          ] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.officialAwsAlertSummarizationAction] ||
+          "",
+        criticalPromptId:
+          promptMap[
+            DefaultAIPromptNames.officialAwsAlertSummarizationCritical
+          ] || "",
+      },
+      airQualityAlertCategoryPromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryMonitor] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryAction] || "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.airQualityAlertCategoryCritical] || "",
+      },
+      smartravellerSourcePromptId: {
+        infoPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceInfo] || "",
+        monitorPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceMonitor] || "",
+        actionPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceAction] || "",
+        criticalPromptId:
+          promptMap[DefaultAIPromptNames.smartravellerSourceCritical] || "",
+      },
+      extractLocationPromptId:
+        promptMap[DefaultAIPromptNames.extractLocationPrompt] || "",
+    };
+
     // Define default configurations
     const defaultConfigs: CreateConfigurationData[] = [
       {
         key: ConfigurationKey.aiPrompts,
-        value: {
-          userReportReviewAndSummarizePromptId:
-            promptMap[DefaultAIPromptNames.userReportReviewAndSummarize],
-          summarizePromptId: promptMap[DefaultAIPromptNames.summarization],
-          severityAndCallToActionPromptId:
-            promptMap[DefaultAIPromptNames.severityAndCallToAction],
-        },
+        value: aiPromptConfig,
         title: "AI Prompts Configuration",
         description:
-          "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportReviewAndSummarizePromptId, summarizePromptId, severityAndCallToActionPromptId",
+          "Configuration for AI prompts used in hazard processing. It includes prompt IDs for various AI tasks. 3 keys are required for basic functionality: userReportedAlertReviewAndSummarizePromptId, officialAlertSummarizationPromptId, severityAndCallToActionPromptId",
       },
     ];
 
     // Create default configurations
     for (const configData of defaultConfigs) {
-      await createConfiguration(configData, superAdmin.id);
+      await upsertConfiguration(configData, superAdmin.id);
     }
 
-    console.log("Default configurations initialized successfully");
+    console.log(
+      "---------------------------------------> Default configurations initialized successfully"
+    );
   } catch (error) {
     console.error("Error initializing default configurations:", error);
   }

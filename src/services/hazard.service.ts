@@ -2,14 +2,14 @@ import {
   type Prisma,
   type LocationSubscription,
   HazardVoteType,
-  HazardSeverity,
   type Hazard,
   type HazardCategory,
-  FireStatus,
-  ConfigurationKey,
+  HazardSeverityBand,
+  HazardReviewStatus,
+  type HazardSource,
+  type AIPrompt,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
-import openai from "../utils/open_ai_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import type { AISummaryResponse } from "../models/ai_summary_response_interface.js";
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
@@ -21,110 +21,11 @@ import {
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
-  getSeverityCallToActions,
-  performKeywordMatchingForSeverity,
 } from "../utils/hazard.util.js";
-import type { SeverityKeywords } from "../models/severity_keywords_interface.js";
-import type { SeverityCallToActions } from "../models/severity_call_to_action_interface.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
-
-/**
- * Utility function to add delay between API calls
- */
-const delay = (ms: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
-/**
- * Utility function to retry API calls with exponential backoff
- */
-const retryWithBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000
-): Promise<T> => {
-  let lastError: Error;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: any) {
-      lastError = error;
-
-      // If it's a rate limit error and we have retries left
-      if (error?.status === 429 && attempt < maxRetries) {
-        // Don't retry if it's a quota exceeded error (insufficient_quota)
-        if (
-          error?.code === "insufficient_quota" ||
-          error?.type === "insufficient_quota"
-        ) {
-          console.log(
-            "OpenAI quota exceeded, not retrying. Please check your billing and quota limits."
-          );
-          throw error;
-        }
-
-        const retryAfterMs =
-          error?.headers?.["retry-after-ms"] ||
-          (error?.headers?.["retry-after"]
-            ? parseInt(error.headers["retry-after"]) * 1000
-            : null);
-        const delayMs = retryAfterMs || baseDelay * Math.pow(2, attempt);
-
-        console.log(
-          `Rate limit hit, retrying in ${delayMs}ms (attempt ${attempt + 1}/${
-            maxRetries + 1
-          })`
-        );
-        await delay(delayMs);
-        continue;
-      }
-
-      // If it's not a rate limit error or we're out of retries, throw
-      throw error;
-    }
-  }
-
-  throw lastError!;
-};
-
-/**
- * Process items in batches with rate limiting to avoid hitting OpenAI rate limits
- */
-const processBatchWithRateLimit = async <T, R>(
-  items: T[],
-  processor: (item: T) => Promise<R>,
-  batchSize: number = 5,
-  delayBetweenBatches: number = 2000
-): Promise<R[]> => {
-  const results: R[] = [];
-
-  for (let i = 0; i < items.length; i += batchSize) {
-    const batch = items.slice(i, i + batchSize);
-    console.log(
-      `---------------------------------------> Processing batch ${
-        Math.floor(i / batchSize) + 1
-      }/${Math.ceil(items.length / batchSize)} (${batch.length} items)`
-    );
-
-    const batchResults = await Promise.all(
-      batch.map((item) => processor(item))
-    );
-
-    results.push(...batchResults);
-
-    // Add delay between batches (except for the last batch)
-    if (i + batchSize < items.length) {
-      console.log(
-        `---------------------------------------> Waiting ${delayBetweenBatches}ms before next batch...`
-      );
-      await delay(delayBetweenBatches);
-    }
-  }
-
-  return results;
-};
+import { executePrompt } from "./open-ai.service.js";
+import { MainCategoryId } from "./hazard_category.service.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -325,7 +226,6 @@ export const getHazardsApplyingFiltersRaw = async (
     FROM hazard_data hd
     LEFT JOIN hazard_medias hm ON hd.id = hm."hazardId"`;
 
-  // Execute the optimized query
   const hazards = (await prisma.$queryRawUnsafe(
     query,
     ...queryParams
@@ -426,6 +326,7 @@ export const reviewHazard = async ({
   latitude,
   longitude,
   locationName,
+  severityBand,
 }: {
   title: string | undefined | null;
   description: string | undefined | null;
@@ -433,11 +334,12 @@ export const reviewHazard = async ({
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
+  severityBand: HazardSeverityBand;
 }): Promise<AIReviewResponse> => {
-  const { userReportReviewAndSummarizePromptId } =
+  const { userReportedAlertReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    userReportReviewAndSummarizePromptId
+    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`]
   );
 
   const userContent = `Please analyze this hazard report:
@@ -446,15 +348,10 @@ export const reviewHazard = async ({
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
-  const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: promptContent },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
+  const response = await executePrompt({
+    model: model,
+    systemPromptContent: promptContent,
+    userPromptContent: userContent,
   });
 
   const content = response.choices[0]?.message?.content;
@@ -463,8 +360,20 @@ export const reviewHazard = async ({
   }
 
   try {
-    const aiReview = JSON.parse(content) as AIReviewResponse;
-    return aiReview;
+    const aiReview = JSON.parse(content) as {
+      title: string;
+      summary: string;
+      callToAction: string;
+      confidence: "high" | "medium" | "low";
+    };
+
+    return {
+      reviewStatus: HazardReviewStatus.accepted,
+      title: aiReview.title,
+      summary: aiReview.summary,
+      callToAction: aiReview.callToAction,
+      confidence: aiReview.confidence,
+    };
   } catch (parseError) {
     console.error("Failed to parse AI review response:", parseError);
     throw new HttpError(500, "AI review failed: Invalid response format");
@@ -472,7 +381,7 @@ export const reviewHazard = async ({
 };
 
 /**
- * Summarizes a hazard report using AI to generate a concise title, short description, summary, confidence level, and severity.
+ * Summarizes a hazard report using AI to generate a concise title, short description, summary, callToAction and confidence level.
  *
  * The AI provides a structured response to standardize the hazard report for clarity and actionability.
  */
@@ -482,72 +391,51 @@ export const summarizeHazard = async ({
   latitude,
   longitude,
   locationName,
-  availableCategories,
+  category,
+  source,
+  isAwsCompliant,
+  severityBand,
+  useDummy = false,
 }: {
   title: string;
   description: string;
   latitude: number;
   longitude: number;
   locationName?: string | undefined | null;
-  availableCategories?:
-    | (HazardCategory & { parent: HazardCategory | null })[]
-    | undefined
-    | null;
+  category: HazardCategory;
+  source: HazardSource;
+  isAwsCompliant: boolean;
+  severityBand: HazardSeverityBand;
+  useDummy?: boolean;
 }): Promise<AISummaryResponse> => {
-  const { summarizePromptId } = await getAIPromptConfiguration();
-  const { content: promptContent, model } = await getPromptById(
-    summarizePromptId
-  );
+  if (useDummy) {
+    return {
+      title,
+      summary: description,
+      callToAction: "Please stay informed and take necessary precautions.",
+      confidence: "high",
+    };
+  }
 
-  const parentCategories =
-    availableCategories
-      ?.map((cat) => cat.parent)
-      ?.filter((cat) => cat !== null)
-      .reduce<HazardCategory[]>((acc, curr) => {
-        if (curr && !acc.find((c) => c.id === curr.id)) {
-          acc.push(curr);
-        }
-        return acc;
-      }, []) || [];
+  const { model, content: systemPromptContent } = await getAIPromptForHazard({
+    isAwsCompliant,
+    severityBand,
+    category,
+    source,
+  });
 
-  const categoriesInfo =
-    availableCategories
-      ?.map((cat) =>
-        cat.aiInstructions && cat.aiInstructions.length !== 0
-          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
-          : `- CATEGORY: ${cat.id}`
-      )
-      .join("\n\n") || "";
+  const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
+  Inputs:
+  - title: ${title}
+  - description: ${description}
+  - location: ${locationName || ""} (${latitude}, ${longitude})
+  - category: ${category.name}
+  - agency: ${source.name}`;
 
-  const parentCategoriesInfo =
-    parentCategories
-      ?.map((cat) =>
-        cat.aiInstructions && cat.aiInstructions.length !== 0
-          ? `- CATEGORY: ${cat.id}\nSPECIAL RULES FOR ${cat.id}: ${cat.aiInstructions}`
-          : `- CATEGORY: ${cat.id}`
-      )
-      .join("\n\n") || "";
-
-  const userContent = `Please standardize this hazard report:
-    TITLE: ${title}
-    DESCRIPTION: ${description}
-    LOCATION: ${locationName || ""} (${latitude}, ${longitude})
-
-    AVAILABLE CATEGORIES:
-    ${categoriesInfo}
-
-    AVAILABLE PARENT CATEGORIES:
-    ${parentCategoriesInfo}`;
-
-  const response = await retryWithBackoff(async () => {
-    return await openai.chat.completions.create({
-      model: model,
-      messages: [
-        { role: "system", content: promptContent },
-        { role: "user", content: userContent },
-      ],
-      response_format: { type: "json_object" },
-    });
+  const response = await executePrompt({
+    model: model,
+    systemPromptContent: systemPromptContent,
+    userPromptContent: userPromptContent,
   });
 
   const content = response.choices[0]?.message?.content;
@@ -556,36 +444,8 @@ export const summarizeHazard = async ({
   }
 
   try {
-    const aiSummary = JSON.parse(content) as {
-      title: string;
-      shortDescription: string;
-      summary: string;
-      confidence: "high" | "medium" | "low";
-      category?: string;
-      fireStatus?: string | null;
-    };
-
-    const { severity, callToAction } = await getAISeverity({
-      title,
-      description,
-      latitude,
-      longitude,
-      locationName,
-      categoryId: aiSummary.category ?? "other",
-    });
-
-    const fullResponse: AISummaryResponse = {
-      ...aiSummary,
-      category: aiSummary.category ?? "other",
-      severity,
-      callToAction,
-      fireStatus:
-        aiSummary.fireStatus && aiSummary.fireStatus in FireStatus
-          ? (aiSummary.fireStatus as FireStatus)
-          : null,
-    };
-
-    return fullResponse;
+    const aiSummary = JSON.parse(content) as AISummaryResponse;
+    return aiSummary;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);
     throw new HttpError(
@@ -596,181 +456,198 @@ export const summarizeHazard = async ({
 };
 
 /**
- * Determines the severity of a hazard report using AI based on its title, description, and location.
- *
- * The AI analyzes the content and provides a severity level from predefined categories.
+ * Determines the appropriate AI prompt based on whether the hazard is AWS compliant and its severity band.
+ * @param isAwsCompliant - Indicates if the hazard follows AWS compliance.
+ * @param severityBand - The severity band of the hazard.
+ * @returns The corresponding AI prompt.
  */
-export const getAISeverity = async ({
-  title,
-  description,
-  latitude,
-  longitude,
-  locationName,
-  categoryId,
+export const getAIPromptForHazard = async ({
+  isAwsCompliant,
+  severityBand,
+  category,
+  source,
 }: {
-  title: string;
-  description: string;
-  latitude: number;
-  longitude: number;
-  categoryId: string;
-  locationName?: string | undefined | null;
-}): Promise<{
-  severity: HazardSeverity;
-  callToAction: string;
-}> => {
+  isAwsCompliant: boolean;
+  severityBand: HazardSeverityBand;
+  category: HazardCategory;
+  source: HazardSource;
+}): Promise<AIPrompt> => {
+  const config = await getAIPromptConfiguration();
+
+  // Check if source-specific prompt key exists in the config
+  console.log("Checking for source-specific prompt for:", source.id);
+  const sourcePromptKey = `${source.id}SourcePromptId`;
   try {
-    const { severityAndCallToActionPromptId } =
-      await getAIPromptConfiguration();
-    const { content: promptContent, model } = await getPromptById(
-      severityAndCallToActionPromptId
-    );
-
-    const defaultSeverityKeywords: SeverityKeywords = {
-      unknown: ["not applicable"],
-      info: ["miscellaneous incident", "unclassified", "investigating"],
-      advice: ["notable incident", "monitor situation", "potential concern"],
-      watchAndAct: [
-        "significant incident",
-        "action required",
-        "serious concern",
-      ],
-      emergency: ["critical incident", "immediate action", "life threatening"],
-    };
-    const defaultCallToActions: SeverityCallToActions = {
-      unknown: ["No action required"],
-      info: ["Stay informed and monitor updates"],
-      advice: ["Be cautious and stay alert", "Follow official guidance"],
-      watchAndAct: [
-        "Prepare to take action",
-        "Follow evacuation orders if issued",
-      ],
-      emergency: [
-        "Evacuate immediately",
-        "Seek shelter and follow emergency services instructions",
-      ],
-    };
-
-    let category = await prisma.hazardCategory.findUnique({
-      where: { id: categoryId },
-    });
-    if (!category) {
-      category = await prisma.hazardCategory.findFirst({
-        where: { id: "other" },
-      });
-      if (!category) {
-        category = await prisma.hazardCategory.create({
-          data: {
-            id: "other",
-            name: "Other",
-            description: "Miscellaneous hazards not fitting other categories",
-            severityKeywords: defaultSeverityKeywords,
-            callToActions: defaultCallToActions,
-          },
-        });
-      }
-    }
-    let severityKeywords = category.severityKeywords as SeverityKeywords | null;
-    if (!severityKeywords) {
-      severityKeywords = defaultSeverityKeywords;
-    }
-    let callToActions = category.callToActions as SeverityCallToActions | null;
-    if (!callToActions) {
-      callToActions = defaultCallToActions;
-    }
-
-    // Available severity levels
-    const severityLevels = Object.keys(
-      severityKeywords
-    ) as (keyof SeverityKeywords)[];
-
-    // If callToActions is missing any severity level, fill with defaults
-    for (const level of severityLevels) {
-      if (!callToActions[level] || callToActions[level].length === 0) {
-        callToActions[level] = defaultCallToActions[level];
-      }
-    }
-
-    // Create keyword context for each severity level
-    const keywordContext = Object.entries(severityKeywords)
-      .map(([severity, keywords]) => {
-        if (keywords.length === 0) return `${severity}: ${severity}`;
-        return `${severity}: ${keywords.map((e) => `"${e}"`).join(", ")}`;
-      })
-      .filter(Boolean)
-      .join("\n");
-
-    const userContent = `Please assess the severity of this hazard:
-
-      TITLE: ${title}
-      DESCRIPTION: ${description}
-      LOCATION: ${locationName || ""} (${latitude}, ${longitude})
-      CATEGORY: ${category.name}
-
-      SEVERITY KEYWORDS:
-      ${keywordContext}
-
-      ALLOWED SEVERITY LEVELS:
-      - ${severityLevels.join("\n- ")}`;
-
-    const response = await retryWithBackoff(async () => {
-      return await openai.chat.completions.create({
-        model: model,
-        messages: [
-          { role: "system", content: promptContent },
-          { role: "user", content: userContent },
-        ],
-        response_format: { type: "json_object" },
-      });
-    });
-
-    const context = response.choices[0]?.message?.content;
-    if (!context) {
-      throw new HttpError(
-        500,
-        "Severity determination failed: Empty response from AI"
-      );
-    }
-
-    const aiResponse = JSON.parse(context) as {
-      severity: HazardSeverity;
-      callToAction: string;
-    };
-    return aiResponse;
-  } catch (error) {
-    console.error("Error in getAISeverity:", error);
-
-    // Fallback to keyword matching if OpenAI fails
-    try {
-      const category = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-
-      if (category?.severityKeywords) {
-        const severityKeywords = category.severityKeywords as SeverityKeywords;
-        const severity = performKeywordMatchingForSeverity(
-          title,
-          description,
-          severityKeywords
+    if (sourcePromptKey in config) {
+      const sourcePromptId = config[sourcePromptKey as keyof typeof config];
+      if (sourcePromptId) {
+        const requiredPromptId =
+          sourcePromptId[
+            `${severityBand}PromptId` as keyof typeof sourcePromptId
+          ];
+        console.log(
+          `Found source-specific prompt for ${source.id}:`,
+          requiredPromptId
         );
-
-        return {
-          severity,
-          callToAction: getSeverityCallToActions(severity)[0] || "",
-        };
+        return getPromptById(requiredPromptId);
       }
-    } catch (fallbackError) {
-      console.error("Error in fallback keyword matching:", fallbackError);
     }
-
-    return {
-      severity: HazardSeverity.unknown,
-      callToAction: getSeverityCallToActions(HazardSeverity.unknown)[0] || "",
-    };
+  } catch (error) {
+    console.error("Error fetching source-specific prompt:", error);
   }
+
+  // Check if the category-specific prompt key exists in the config
+  const categoryPromptKey = `${category.id}CategoryPromptId`;
+  console.log("Checking for category-specific prompt for:", category.id);
+  try {
+    if (categoryPromptKey in config) {
+      const categoryPromptId = config[categoryPromptKey as keyof typeof config];
+      if (categoryPromptId) {
+        const requiredPromptId =
+          categoryPromptId[
+            `${severityBand}PromptId` as keyof typeof categoryPromptId
+          ];
+        console.log(
+          `Found category-specific prompt for ${category.id}:`,
+          requiredPromptId
+        );
+        return getPromptById(requiredPromptId);
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching category-specific prompt:", error);
+  }
+
+  // Key doesn't exist, use default prompts
+  console.error(
+    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`
+  );
+  const requiredPromptId = isAwsCompliant
+    ? config.officialAwsAlertSummarizationPromptId[
+        `${severityBand}PromptId` as keyof typeof config.officialAwsAlertSummarizationPromptId
+      ]
+    : config.officialAlertSummarizationPromptId[
+        `${severityBand}PromptId` as keyof typeof config.officialAlertSummarizationPromptId
+      ];
+  return getPromptById(requiredPromptId);
 };
 
 /**
- * Rate-limited batch processing for AI operations
- * Use this function when processing multiple hazards to avoid rate limits
+ * Deletes all hazards associated with the specified source IDs.
+ * @param sourceIds - An array of source IDs whose hazards should be deleted.
+ * @returns The number of hazards deleted.
  */
-export { processBatchWithRateLimit };
+export const deleteAllHazardsForSourceIds = async (
+  sourceIds: string[]
+): Promise<number> => {
+  const deleteResult = await prisma.hazard.deleteMany({
+    where: {
+      sourceId: {
+        in: sourceIds,
+      },
+    },
+  });
+
+  console.log(
+    `Deleted ${deleteResult.count} hazards for source IDs: ${sourceIds.join(
+      ", "
+    )}`
+  );
+
+  return deleteResult.count;
+};
+
+/**
+ * Analyzes the hazard report details and suggests the most appropriate hazard category.
+ *
+ * @param title - The title of the hazard report.
+ * @param description - The description of the hazard report.
+ * @param availableCategories - The list of available hazard categories to choose from.
+ * @returns The suggested hazard category.
+ */
+export const getSuggestedCategory = async ({
+  title,
+  description,
+  currentCategoryId,
+  availableCategories,
+}: {
+  title: string;
+  description: string;
+  currentCategoryId?: string | null | undefined;
+  availableCategories: HazardCategory[];
+}): Promise<HazardCategory> => {
+  const systemPromptContent = `You are an expert in hazard classification. Based on the title and description of a hazard report, suggest the most appropriate hazard category from the provided list. Consider the context and details in the report to make your suggestion.
+
+  AVAILABLE CATEGORIES:
+  ${availableCategories
+    .map((cat) => `- "${cat.id}": ${cat.description}`)
+    .join("\n")}
+
+  INSTRUCTIONS:
+  ${
+    currentCategoryId &&
+    `- If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+  }
+  - Analyze the title and description carefully.
+  - Choose the category that best fits the hazard report.
+  - Only suggest one category.
+  - "${
+    MainCategoryId.communityInfo
+  }" category should only be used for non-urgent, informational announcements.
+  - "${
+    MainCategoryId.other
+  }" category should be a last resort when no other category fits.
+  - Do not suggest categories that are not in the provided list.
+
+  Always respond with **valid JSON** in this format:
+  {
+    "suggestedCategory": "${availableCategories
+      .map((cat) => cat.id)
+      .join("|")}", (MUST be only one.${
+    currentCategoryId &&
+    ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+  })
+  }`;
+
+  const userPromptContent = `Hazard Report:
+  Title: ${title}
+  Description: ${description}
+  ${currentCategoryId ? `Current Category: ${currentCategoryId}` : ""}`;
+
+  const response = await executePrompt({
+    model: "gpt-5-nano",
+    systemPromptContent,
+    userPromptContent,
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new HttpError(
+      500,
+      "AI category suggestion failed: Empty response from AI"
+    );
+  }
+
+  try {
+    const aiResponse = JSON.parse(content) as {
+      suggestedCategory: string;
+    };
+
+    const category = availableCategories.find(
+      (cat) => cat.id === aiResponse.suggestedCategory
+    );
+    if (!category) {
+      throw new HttpError(
+        500,
+        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`
+      );
+    }
+
+    return category;
+  } catch (parseError) {
+    throw new HttpError(
+      500,
+      `AI category suggestion failed: Invalid response format: ${parseError}`
+    );
+  }
+};

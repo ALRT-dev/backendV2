@@ -108,12 +108,11 @@ export const activateSuperAdmin = async () => {
       role: AdminRole.superAdmin,
     });
 
-    console.log("✅ Super admin account activated successfully!");
-    console.log("📧 Email:", admin.email);
-    console.log("👤 Name:", admin.name);
-    console.log("🛡️  Role:", admin.role);
-    console.log("📅 Created:", admin.createdAt.toISOString());
+    console.log(
+      "---------------------------------------> Super admin account activated successfully!"
+    );
   } catch (error) {
+    console.error("Error activating super admin:", error);
     throw new HttpError(500, "Failed to activate super admin");
   }
 };

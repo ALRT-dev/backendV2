@@ -25,9 +25,9 @@ export const setUserRadiusSchema = z.object({
 export type SetUserRadiusInput = z.infer<typeof setUserRadiusSchema>;
 
 export const setPushNotificationPreferenceSchema = z.object({
-  pushNotificationPreference: z.nativeEnum(PushNotificationPreference, {
+  pushNotificationPreference: z.enum(PushNotificationPreference, {
     message:
-      "Invalid notification preference. Must be 'all', 'official', or 'crowdSourced'",
+      "Invalid notification preference. Must be 'all', 'official', or 'userReported'",
   }),
 });
 

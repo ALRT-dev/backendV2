@@ -1,8 +1,11 @@
-import { type Hazard } from "@prisma/client";
+import { HazardSeverity, type Hazard } from "@prisma/client";
 import { firebaseAdmin } from "../utils/firebase_admin_client.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
-import { getFormattedHazardSeverity } from "../utils/hazard.util.js";
+import {
+  getFormattedHazardSeverity,
+  getFormattedHazardSeverityBand,
+} from "../utils/hazard.util.js";
 
 /**
  * A function to get user push notification tokens of a specific user by their user ID.
@@ -32,54 +35,117 @@ const getUserPushNotificationTokens = async (
 };
 
 /**
- * A function to get user push notification tokens subscribed to a hazard location and severity.
+ * A function to get user push notification tokens subscribed to a hazard location and type.
+ * Supports both point-based and bounding-box based hazard locations.
+ * Uses bounding box intersection to match hazards with subscriptions.
  */
 const getUserPushNotificationTokensSubscribedToHazard = async (
   hazard: Hazard
 ): Promise<string[]> => {
   try {
-    const { latitude, longitude, reportedById, severity } = hazard;
-    if (!latitude || !longitude) {
+    const {
+      latitude,
+      longitude,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+      reportedById,
+      isAwsCompliant,
+      severity,
+      categoryId,
+    } = hazard;
+
+    const isUserReported = reportedById !== null;
+    const isOfficialNonAws = !isAwsCompliant && !isUserReported;
+
+    // Determine the hazard's bounding box
+    let hazardNortheastLat: number;
+    let hazardNortheastLng: number;
+    let hazardSouthwestLat: number;
+    let hazardSouthwestLng: number;
+
+    if (northeastLat && northeastLng && southwestLat && southwestLng) {
+      // Use explicit bounding box if provided (for general/broad locations)
+      hazardNortheastLat = northeastLat;
+      hazardNortheastLng = northeastLng;
+      hazardSouthwestLat = southwestLat;
+      hazardSouthwestLng = southwestLng;
+    } else if (latitude && longitude) {
+      // For point-based hazards, use the exact point
+      hazardNortheastLat = latitude;
+      hazardNortheastLng = longitude;
+      hazardSouthwestLat = latitude;
+      hazardSouthwestLng = longitude;
+    } else {
       console.log(
-        "Hazard does not have valid coordinates to send notifications"
+        "Hazard does not have valid coordinates or bounding box to send notifications"
       );
       return [];
     }
 
+    // Determine which notification setting field applies to this hazard
+    let notificationFilter:
+      | { awsEmergency: true }
+      | { awsWatchAndAct: true }
+      | { awsAdvice: true }
+      | { officialNonAws: true }
+      | { userReported: true };
+
+    if (isUserReported) {
+      notificationFilter = { userReported: true };
+    } else if (isOfficialNonAws) {
+      notificationFilter = { officialNonAws: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.emergency) {
+      notificationFilter = { awsEmergency: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.watchAndAct) {
+      notificationFilter = { awsWatchAndAct: true };
+    } else if (isAwsCompliant && severity === HazardSeverity.advice) {
+      notificationFilter = { awsAdvice: true };
+    } else {
+      // Fallback for AWS info/unknown - use awsAdvice
+      notificationFilter = { awsAdvice: true };
+    }
+
+    // Get the hazard's parent category ID if it exists (for subcategories)
+    let parentCategoryId: string | null = null;
+    if (categoryId) {
+      const category = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+        select: { parentId: true },
+      });
+      parentCategoryId = category?.parentId || null;
+    }
+
+    // Determine which category ID to check against subscribedCategoryIds
+    // If the hazard has a parent category, use that; otherwise use the category itself
+    const categoryIdToCheck = parentCategoryId || categoryId;
+
+    // Find subscriptions where the hazard location intersects with the subscription's bounding box
+    // For point hazards: check if the point is inside the subscription box
+    // For area hazards: check if any part of the hazard area overlaps with the subscription box
     const subscriptions = await prisma.locationSubscription.findMany({
       where: {
-        northeastLat: { gte: latitude },
-        northeastLng: { gte: longitude },
-        southwestLat: { lte: latitude },
-        southwestLng: { lte: longitude },
+        // Bounding box intersection: subscription box overlaps with hazard box
+        // Subscription's NE (max) must be >= Hazard's SW (min)
+        // Subscription's SW (min) must be <= Hazard's NE (max)
+        northeastLat: { gte: hazardSouthwestLat }, // subscription's max lat >= hazard's min lat
+        southwestLat: { lte: hazardNortheastLat }, // subscription's min lat <= hazard's max lat
+        northeastLng: { gte: hazardSouthwestLng }, // subscription's max lng >= hazard's min lng
+        southwestLng: { lte: hazardNortheastLng }, // subscription's min lng <= hazard's max lng
 
         // don't notify the user who reported the hazard
         ...(reportedById && { userId: { not: reportedById } }),
 
-        // Only get subscriptions for users who have notifications enabled for this severity
-        // OR users who don't have any explicit setting (default to enabled)
+        // Only get subscriptions for users who have notifications enabled for this hazard type
+        // AND have at least one category subscribed (subscribedCategoryIds not empty)
         user: {
-          OR: [
-            // Users who don't have any setting for this severity (default to enabled)
-            {
-              pushNotificationSettings: {
-                none: {
-                  settingType: "severity",
-                  settingKey: severity,
-                },
-              },
+          pushNotificationSettings: {
+            some: {
+              ...notificationFilter,
+              subscribedCategoryIds: { has: categoryIdToCheck },
             },
-            // Users who have the setting enabled
-            {
-              pushNotificationSettings: {
-                some: {
-                  settingType: "severity",
-                  settingKey: severity,
-                  isEnabled: true,
-                },
-              },
-            },
-          ],
+          },
         },
       },
       select: {
@@ -209,14 +275,22 @@ export const sendPushNotificationAboutNewHazard = async (hazard: Hazard) => {
  * Returns the notification title for a new hazard based on its severity and title.
  */
 const getNotificationTitleForNewHazard = (hazard: Hazard): string => {
-  const { severity, title } = hazard;
-  return `${getFormattedHazardSeverity(severity)} | ${title}`;
+  const { severity, title, isAwsCompliant, severityBand } = hazard;
+
+  const formattedSeverity = getFormattedHazardSeverity(severity);
+  const foramttedSeverityBand = getFormattedHazardSeverityBand(severityBand);
+
+  const requiredSeverity = isAwsCompliant
+    ? formattedSeverity
+    : foramttedSeverityBand;
+
+  return `${requiredSeverity} | ${title}`;
 };
 
 /**
  * Returns the notification body for a new hazard based on its short description or description.
  */
 const getNotificationBodyForNewHazard = (hazard: Hazard): string => {
-  const { shortDescription, description } = hazard;
-  return shortDescription || description || "A new alrt has been reported.";
+  const { aiSummary, description } = hazard;
+  return aiSummary || description || "New hazard reported.";
 };

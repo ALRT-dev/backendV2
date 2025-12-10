@@ -2,71 +2,7 @@ import { HazardVoteType } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import { UserReportsStatus } from "../enums/user_reports_status_types.js";
 import { extractS3KeyFromUrl, generatePresignedUrl } from "./s3.service.js";
-
-/**
- * Creates or updates a user's own location subscription when their lat/lng is updated.
- * This creates a subscription area around the user's location for receiving hazard notifications.
- */
-export const upsertUserOwnLocationSubscription = async ({
-  userId,
-  latitude,
-  longitude,
-  locationName,
-  radiusKm = 10, // Default 10km radius around user's location
-}: {
-  userId: string;
-  latitude: number;
-  longitude: number;
-  locationName?: string;
-  radiusKm?: number;
-}) => {
-  // Calculate bounding box for the subscription area
-  // Rough conversion: 1 degree ≈ 111 km at equator
-  const latDelta = radiusKm / 111;
-  const lngDelta = radiusKm / (111 * Math.cos((latitude * Math.PI) / 180));
-
-  const northeastLat = latitude + latDelta;
-  const northeastLng = longitude + lngDelta;
-  const southwestLat = latitude - latDelta;
-  const southwestLng = longitude - lngDelta;
-
-  // Check if user already has an own location subscription
-  const existingSubscription = await prisma.locationSubscription.findFirst({
-    where: {
-      userId,
-      isOwnLocation: true,
-    },
-  });
-
-  if (existingSubscription) {
-    // Update existing own location subscription
-    return await prisma.locationSubscription.update({
-      where: { id: existingSubscription.id },
-      data: {
-        northeastLat,
-        northeastLng,
-        southwestLat,
-        southwestLng,
-        name: locationName || "My Location",
-        address: locationName || null,
-      },
-    });
-  } else {
-    // Create new own location subscription
-    return await prisma.locationSubscription.create({
-      data: {
-        userId,
-        northeastLat,
-        northeastLng,
-        southwestLat,
-        southwestLng,
-        name: locationName || "My Location",
-        address: locationName || null,
-        isOwnLocation: true,
-      },
-    });
-  }
-};
+import type { PushNotificationSettings } from "../models/push_notification_settings_interface.js";
 
 /**
  * Retrieves a user by their ID, excluding sensitive information like password hash.
@@ -134,6 +70,52 @@ export const getUserById = async (userId: string) => {
   }
 
   return user;
+};
+
+/**
+ * Retrieves the push notification settings for a given user.
+ * @param userId - The ID of the user
+ */
+export const getUserPushNotificationSettings = async (
+  userId: string
+): Promise<PushNotificationSettings> => {
+  const settings = await prisma.userPushNotificationSetting.findUnique({
+    where: { userId },
+  });
+
+  const defaultSettings: PushNotificationSettings = {
+    awsEmergency: false,
+    awsWatchAndAct: false,
+    awsAdvice: false,
+    officialNonAws: false,
+    userReported: false,
+    subscribedCategoryIds: [],
+  };
+
+  return settings || defaultSettings;
+};
+
+/**
+ * Updates the push notification settings for a given user.
+ * If settings do not exist, they will be created.
+ *
+ * @param userId - The ID of the user
+ * @param settings - The new push notification settings
+ */
+export const updateUserPushNotificationSettings = async (
+  userId: string,
+  settings: PushNotificationSettings
+): Promise<PushNotificationSettings> => {
+  return await prisma.userPushNotificationSetting.upsert({
+    where: { userId },
+    create: {
+      userId,
+      ...settings,
+    },
+    update: {
+      ...settings,
+    },
+  });
 };
 
 /**

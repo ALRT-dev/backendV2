@@ -3,16 +3,17 @@ import prisma from "../utils/prisma_client.util.js";
 import {
   HazardReviewStatus,
   HazardSeverity,
+  HazardSeverityBand,
   HazardVoteType,
   MediaType,
   type Hazard,
-  type LocationSubscription,
+  type HazardCategory,
 } from "@prisma/client";
 import {
   getHazardsApplyingFiltersRaw,
+  getSuggestedCategory,
   reviewHazard,
 } from "../services/hazard.service.js";
-import { getCategoriesApplyingFilters } from "../services/hazard_category.service.js";
 import {
   sendPushNotificationAboutNewHazard,
   sendPushNotificationToUser,
@@ -33,7 +34,6 @@ import {
 } from "../services/confidence_score.service.js";
 import type {
   CreateHazardInput,
-  GetHazardFiltersQuery,
   GetHazardsQuery,
   UpdateHazardInput,
   VoteHazardInput,
@@ -50,8 +50,11 @@ import {
   enrichHazardWithPresignedUrls,
 } from "../services/s3.service.js";
 import type { MediaUploadResult } from "../models/media_upload_result_interface.js";
-import { getSeveritiesApplyingFilters } from "../services/hazard_severity.service.js";
-import { syncHazardsFromDifferentSources } from "../services/ingestion.service.js";
+import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
+import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
+import { checkMediasForProblems } from "../services/image_video_detection.service.js";
+import { getAllParentHazardCategories } from "./hazard_category.controller.js";
+import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/hazard_category.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -63,13 +66,19 @@ export const getHazards = async (
     const {
       searchString,
       categoryIds,
-      severityFilter,
+      sourceIds,
+      awsEmergency,
+      awsWatchAndAct,
+      awsAdvice,
+      officialNonAws,
+      userReported,
       reviewStatus,
       reportedById,
       northeastLat,
       northeastLng,
       southwestLat,
       southwestLng,
+      ignoreHazardLatLngBounds,
       showExpired,
       sortSettings,
       page = "1",
@@ -87,13 +96,19 @@ export const getHazards = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
+      sourceIds,
       reportedById,
-      severityFilter,
+      awsEmergency: parseBoolean(awsEmergency),
+      awsWatchAndAct: parseBoolean(awsWatchAndAct),
+      awsAdvice: parseBoolean(awsAdvice),
+      officialNonAws: parseBoolean(officialNonAws),
+      userReported: parseBoolean(userReported),
       reviewStatus,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
       southwestLng: Number(southwestLng),
+      ignoreHazardLatLngBounds: parseBoolean(ignoreHazardLatLngBounds),
       userId,
       userLat,
       userLng,
@@ -124,13 +139,18 @@ export const getHazardsWithSubscriptionId = async (
     const {
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency,
+      awsWatchAndAct,
+      awsAdvice,
+      officialNonAws,
+      userReported,
       reportedById,
       reviewStatus,
       northeastLat,
       northeastLng,
       southwestLat,
       southwestLng,
+      ignoreHazardLatLngBounds,
       showExpired,
       sortSettings,
       page = "1",
@@ -145,26 +165,28 @@ export const getHazardsWithSubscriptionId = async (
     const userLat = user?.latitude || undefined;
     const userLng = user?.longitude || undefined;
 
-    const subscriptionPromise = prisma.locationSubscription.findFirst({
-      where: {
-        northeastLat: Number(northeastLat),
-        northeastLng: Number(northeastLng),
-        southwestLat: Number(southwestLat),
-        southwestLng: Number(southwestLng),
-        userId: userId!,
-      },
-      select: { id: true },
+    const subscriptionPromise = getSingleUserLocationSubscriptionByBounds({
+      userId: userId!,
+      northeastLat: Number(northeastLat),
+      northeastLng: Number(northeastLng),
+      southwestLat: Number(southwestLat),
+      southwestLng: Number(southwestLng),
     });
 
     const hazardsPromise = getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency: parseBoolean(awsEmergency),
+      awsWatchAndAct: parseBoolean(awsWatchAndAct),
+      awsAdvice: parseBoolean(awsAdvice),
+      officialNonAws: parseBoolean(officialNonAws),
+      userReported: parseBoolean(userReported),
       reviewStatus,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
       southwestLng: Number(southwestLng),
+      ignoreHazardLatLngBounds: parseBoolean(ignoreHazardLatLngBounds),
       reportedById,
       userId,
       userLat,
@@ -236,88 +258,6 @@ export const getHazardById = async (
   }
 };
 
-/// Controller to handle fetching available hazard category and severity filters.
-export const getHazardFilters = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const {
-      searchString,
-      reportedById,
-      reviewStatus,
-      northeastLat,
-      northeastLng,
-      southwestLat,
-      southwestLng,
-      showExpired,
-      includeSubscribed: includeSubscribedRaw,
-    }: GetHazardFiltersQuery = req.query;
-    const { userId } = res;
-
-    const includeSubscribed = parseBoolean(includeSubscribedRaw);
-    let subscriptions: LocationSubscription[] = [];
-    if (includeSubscribed) {
-      subscriptions = await prisma.locationSubscription.findMany({
-        where: { userId: userId! },
-      });
-    }
-
-    const categoriesPromise = getCategoriesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const severitiesAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      isHazardAwsCompliant: true,
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const severitiesNonAwsPromise = getSeveritiesApplyingFilters({
-      hazardSearchString: searchString,
-      hazardReviewStatus: reviewStatus,
-      hazardReportedById: reportedById,
-      hazardNortheastLat: Number(northeastLat),
-      hazardNortheastLng: Number(northeastLng),
-      hazardSouthwestLat: Number(southwestLat),
-      hazardSouthwestLng: Number(southwestLng),
-      isHazardAwsCompliant: false,
-      showExpiredHazards: parseBoolean(showExpired),
-      subscriptions: subscriptions,
-    });
-
-    const [categories, severitiesAws, severitiesNonAws] = await Promise.all([
-      categoriesPromise,
-      severitiesAwsPromise,
-      severitiesNonAwsPromise,
-    ]);
-
-    res.status(200).json({
-      categoryFilters: categories,
-      severityFiltersAws: severitiesAws,
-      severityFiltersNonAws: severitiesNonAws,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 /// Controller to handle creating a new hazard report.
 export const createHazard = async (
   req: Request,
@@ -337,21 +277,53 @@ export const createHazard = async (
     } = hazardData;
     const { userId } = res;
 
-    // Validate that category exists
-    const category = await prisma.hazardCategory.findUnique({
-      where: { id: categoryId },
-    });
-    if (!category) {
-      throw new HttpError(400, "Invalid Category ID");
+    // Overwrite category using AI suggestion <----------------------------------------------------------------------------------
+    let category: HazardCategory | null = null;
+    try {
+      if (title || description) {
+        const availableCategories =
+          await getAllMainHazardCategoriesWithoutSubcategories();
+        const suggestedCategory = await getSuggestedCategory({
+          title: title || "[No Title Provided]",
+          description: description || "[No Description Provided]",
+          currentCategoryId: categoryId,
+          availableCategories,
+        });
+        category = suggestedCategory;
+      }
+    } catch (error) {
+      console.error("Error getting AI suggested category:", error);
     }
 
-    console.log("File upload - req.files:", req.files);
+    if (!category) {
+      category = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+      });
+    }
+    if (!category) {
+      throw new HttpError(400, "Invalid or missing hazard category");
+    }
+
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+
+    // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
+    const mediaModerationResult = await checkMediasForProblems(
+      uploadedFiles || []
+    );
+    const mediaModerationFeedback =
+      mediaModerationResult.isRejected &&
+      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
+        "\n- "
+      )}\nPlease adjust your media and try again.`;
 
     // Upload media files to S3 if provided <----------------------------------------------------------------------------------
-    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
     let mediaUploadResults: MediaUploadResult[] = [];
 
-    if (uploadedFiles && uploadedFiles.length > 0) {
+    if (
+      uploadedFiles &&
+      uploadedFiles.length > 0 &&
+      !mediaModerationResult.isRejected
+    ) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           uploadedFiles,
@@ -379,6 +351,9 @@ export const createHazard = async (
         latitude,
         longitude,
         locationName,
+        severityBand:
+          (description && getSeverityBandFromDescription(description)) ||
+          HazardSeverityBand.info,
       });
     } catch (error) {
       console.log("Error during hazard review:", error);
@@ -394,7 +369,6 @@ export const createHazard = async (
       reviewStatus,
       reviewFeedback,
       title: suggestedTitle,
-      shortDescription,
       summary: aiSummary,
       confidence: aiConfidence,
       callToAction,
@@ -442,16 +416,17 @@ export const createHazard = async (
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus,
-          reviewFeedback,
+          reviewStatus: mediaModerationResult.isRejected
+            ? HazardReviewStatus.rejected
+            : reviewStatus,
+          reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),
-          shortDescription,
           aiSummary,
           ...(aiConfidence && { aiConfidence }),
           callToAction,
-          categoryId,
+          categoryId: category.id,
           reportedById: userId,
           latitude,
           longitude,
@@ -623,23 +598,55 @@ export const updateHazard = async (
       occurredAt,
     } = hazardData;
 
-    let category = existingHazard.category;
-    if (categoryId) {
-      // Validate that category exists
-      const foundCategory = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-      if (!foundCategory) {
-        throw new HttpError(400, "Invalid Category ID");
+    const catId = categoryId || existingHazard.categoryId;
+
+    // Overwrite category using AI suggestion <----------------------------------------------------------------------------------
+    let category: HazardCategory | null = null;
+    try {
+      if (title || description) {
+        const availableCategories =
+          await getAllMainHazardCategoriesWithoutSubcategories();
+        const suggestedCategory = await getSuggestedCategory({
+          title: title || "[No Title Provided]",
+          description: description || "[No Description Provided]",
+          currentCategoryId: catId,
+          availableCategories,
+        });
+        category = suggestedCategory;
       }
-      category = foundCategory;
+    } catch (error) {
+      console.error("Error getting AI suggested category:", error);
     }
 
-    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
-    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
-    let mediaUploadResults: MediaUploadResult[] = [];
+    if (!category) {
+      category = await prisma.hazardCategory.findUnique({
+        where: { id: catId },
+      });
+    }
+    if (!category) {
+      category = existingHazard.category;
+    }
 
-    if (uploadedFiles && uploadedFiles.length > 0) {
+    const uploadedFiles = req.files as Express.Multer.File[] | undefined;
+
+    // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
+    const mediaModerationResult = await checkMediasForProblems(
+      uploadedFiles || []
+    );
+    const mediaModerationFeedback =
+      mediaModerationResult.isRejected &&
+      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
+        "\n- "
+      )}\nPlease adjust your media and try again.`;
+
+    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
+
+    let mediaUploadResults: MediaUploadResult[] = [];
+    if (
+      uploadedFiles &&
+      uploadedFiles.length > 0 &&
+      !mediaModerationResult.isRejected
+    ) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           uploadedFiles,
@@ -667,6 +674,9 @@ export const updateHazard = async (
         latitude: latitude || existingHazard.latitude!,
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
+        severityBand: getSeverityBandFromDescription(
+          description || existingHazard.description
+        ),
       });
     } catch (error) {
       console.log("Error during hazard review:", error);
@@ -682,7 +692,6 @@ export const updateHazard = async (
       reviewStatus,
       reviewFeedback,
       title: suggestedTitle,
-      shortDescription,
       summary: aiSummary,
       confidence: aiConfidence,
       callToAction,
@@ -692,22 +701,28 @@ export const updateHazard = async (
 
     // Update hazard with new media in a transaction <----------------------------------------------------------------------------------
     const result = await prisma.$transaction(async (tx) => {
-      // Update the hazard
+      // Delete all existing votes for this hazard
+      await tx.hazardVote.deleteMany({
+        where: { hazardId: id },
+      });
+
+      // Update the hazard and reset vote counts
       const updatedHazard = await tx.hazard.update({
         where: { id },
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus,
-          reviewFeedback,
+          reviewStatus: mediaModerationResult.isRejected
+            ? HazardReviewStatus.rejected
+            : reviewStatus,
+          reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
           }),
-          shortDescription,
           aiSummary,
           callToAction,
           ...(aiConfidence && { aiConfidence }),
-          ...(categoryId && { categoryId }),
+          categoryId: category.id,
           ...(latitude && { latitude }),
           ...(longitude && { longitude }),
           ...(locationName && { locationName }),
@@ -717,6 +732,8 @@ export const updateHazard = async (
               existingHazard.expiresAt ||
               new Date(date.setMinutes(date.getMinutes() + 30)), // Default expiry to 30 minutes from now
           }),
+          upvoteCount: 0,
+          downvoteCount: 0,
         },
       });
 

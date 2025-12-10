@@ -124,20 +124,17 @@ export const getHazardsQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
-  severityFilter: z
-    .object({
-      aws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-      nonAws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-    })
-    .optional(),
+  sourceIds: z.string().optional(),
+
+  awsEmergency: z.enum(["true", "false"]).default("true").optional(),
+
+  awsWatchAndAct: z.enum(["true", "false"]).default("true").optional(),
+
+  awsAdvice: z.enum(["true", "false"]).default("true").optional(),
+
+  officialNonAws: z.enum(["true", "false"]).default("true").optional(),
+
+  userReported: z.enum(["true", "false"]).default("true").optional(),
 
   reportedById: z.string().uuid().optional(),
 
@@ -167,6 +164,14 @@ export const getHazardsQuerySchema = z.object({
     .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
     .optional(),
 
+  ignoreHazardLatLngBounds: z
+    .string()
+    .regex(
+      /^(true|false)$/,
+      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+    )
+    .optional(),
+
   showExpired: z
     .string()
     .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
@@ -175,7 +180,7 @@ export const getHazardsQuerySchema = z.object({
   sortSettings: z
     .array(
       z.object({
-        severity: z.enum(["asc", "desc"]).optional(),
+        severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),

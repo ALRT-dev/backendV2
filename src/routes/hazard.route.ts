@@ -8,7 +8,6 @@ import {
   voteHazard,
   viewHazard,
   updateHazard,
-  getHazardFilters,
   deleteAllHazards,
 } from "../controllers/hazard.controller.js";
 import {
@@ -37,12 +36,6 @@ hazardRouter.get(
   requireAuth,
   validate(getHazardsQuerySchema),
   getHazardsWithSubscriptionId
-);
-hazardRouter.get(
-  "/filters",
-  validate(getHazardFiltersQuerySchema),
-  requireAuth,
-  getHazardFilters
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 

@@ -1,7 +1,7 @@
 import z from "zod";
 
 export const registerSchema = z.object({
-  email: z.string().email("Invalid email format").min(1, "Email is required"),
+  email: z.email("Invalid email format").min(1, "Email is required"),
 
   password: z
     .string()
@@ -12,7 +12,7 @@ export const registerSchema = z.object({
 export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const loginSchema = z.object({
-  email: z.string().email("Invalid email format").min(1, "Email is required"),
+  email: z.email("Invalid email format").min(1, "Email is required"),
 
   password: z.string().min(1, "Password is required"),
 });
@@ -24,6 +24,20 @@ export const googleOAuthSchema = z.object({
 });
 
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
+
+export const appleOAuthSchema = z.object({
+  identityToken: z.string().min(1, "Identity Token is required"),
+  firstName: z
+    .string()
+    .max(100, "First name must be less than 100 characters")
+    .optional(),
+  lastName: z
+    .string()
+    .max(100, "Last name must be less than 100 characters")
+    .optional(),
+});
+
+export type AppleOAuthInput = z.infer<typeof appleOAuthSchema>;
 
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),

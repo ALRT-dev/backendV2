@@ -1,7 +1,7 @@
 import type { HazardReviewStatus, HazardSeverity } from "@prisma/client";
 
 export interface SortSetting {
-  severity?: "asc" | "desc" | undefined;
+  severityBand?: "asc" | "desc" | undefined;
   distance?: "asc" | "desc" | undefined;
   createdAt?: "asc" | "desc" | undefined;
   confidenceScore?: "asc" | "desc" | undefined;
@@ -15,7 +15,12 @@ export type HazardSeverityWithAwsCompliant = {
 export interface HazardSearchParams {
   searchString?: string | undefined;
   categoryIds?: string | string[] | undefined;
-  severityFilter?: HazardSeverityWithAwsCompliant | undefined;
+  sourceIds?: string | string[] | undefined;
+  awsEmergency?: boolean | undefined;
+  awsWatchAndAct?: boolean | undefined;
+  awsAdvice?: boolean | undefined;
+  officialNonAws?: boolean | undefined;
+  userReported?: boolean | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 
@@ -23,6 +28,8 @@ export interface HazardSearchParams {
   northeastLng?: number | undefined;
   southwestLat?: number | undefined;
   southwestLng?: number | undefined;
+
+  ignoreHazardLatLngBounds?: boolean | undefined;
 
   userLat?: number | undefined;
   userLng?: number | undefined;

@@ -6,19 +6,29 @@ export const getHazardsForAdminQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
-  severityFilter: z
-    .object({
-      aws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-      nonAws: z
-        .array(
-          z.enum(["unknown", "info", "advice", "watchAndAct", "emergency"])
-        )
-        .optional(),
-    })
+  awsEmergency: z
+    .string()
+    .regex(/^(true|false)$/, "awsEmergency must be 'true' or 'false'")
+    .optional(),
+
+  awsWatchAndAct: z
+    .string()
+    .regex(/^(true|false)$/, "awsWatchAndAct must be 'true' or 'false'")
+    .optional(),
+
+  awsAdvice: z
+    .string()
+    .regex(/^(true|false)$/, "awsAdvice must be 'true' or 'false'")
+    .optional(),
+
+  officialNonAws: z
+    .string()
+    .regex(/^(true|false)$/, "officialNonAws must be 'true' or 'false'")
+    .optional(),
+
+  userReported: z
+    .string()
+    .regex(/^(true|false)$/, "userReported must be 'true' or 'false'")
     .optional(),
 
   reportedById: z.string().uuid().optional(),
@@ -49,6 +59,14 @@ export const getHazardsForAdminQuerySchema = z.object({
     .regex(/^-?\d+\.?\d*$/, "Longitude must be a number")
     .optional(),
 
+  ignoreHazardLatLngBounds: z
+    .string()
+    .regex(
+      /^(true|false)$/,
+      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+    )
+    .optional(),
+
   showExpired: z
     .string()
     .regex(/^(true|false)$/, "showExpired must be 'true' or 'false'")
@@ -57,7 +75,7 @@ export const getHazardsForAdminQuerySchema = z.object({
   sortSettings: z
     .array(
       z.object({
-        severity: z.enum(["asc", "desc"]).optional(),
+        severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),
@@ -72,11 +90,6 @@ export type GetHazardsForAdminQuery = z.infer<
 
 export const createHazardForAdminBodySchema = z.object({
   title: z.string().max(100, "Title must be at most 100 characters").optional(),
-
-  shortDescription: z
-    .string()
-    .min(1, "Short description is required")
-    .optional(),
 
   description: z
     .string()
@@ -105,7 +118,7 @@ export const createHazardForAdminBodySchema = z.object({
     .max(200, "Location name must be at most 200 characters")
     .optional(),
 
-  categoryId: z.string().optional(),
+  categoryId: z.string(),
 
   fireStatus: z
     .enum(["active", "beingControlled", "underControl", "closed"])
@@ -128,11 +141,6 @@ export type CreateHazardForAdminBody = z.infer<
 
 export const updateHazardForAdminBodySchema = z.object({
   title: z.string().max(100, "Title must be at most 100 characters").optional(),
-
-  shortDescription: z
-    .string()
-    .min(1, "Short description is required")
-    .optional(),
 
   description: z
     .string()

@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
 import {
-  getHazardsApplyingFilters,
   getHazardsApplyingFiltersRaw,
   summarizeHazard,
 } from "../../services/hazard.service.js";
@@ -11,10 +10,15 @@ import type {
   UpdateHazardForAdminBody,
 } from "../../validators/admin/hazard.validator.js";
 import { parseBoolean } from "../../utils/parse.util.js";
-import { getAllSubHazardCategories } from "../../services/hazard_category.service.js";
 import prisma from "../../utils/prisma_client.util.js";
 import { HttpError } from "../../models/http_error.js";
-import { HazardReviewStatus } from "@prisma/client";
+import {
+  HazardReviewStatus,
+  HazardSeverity,
+  HazardSeverityBand,
+  type HazardCategory,
+  type HazardSource,
+} from "@prisma/client";
 import {
   calculateConfidenceScore,
   type HazardForConfidenceCalculation,
@@ -33,13 +37,18 @@ export const getHazardsForAdmin = async (
     const {
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency,
+      awsWatchAndAct,
+      awsAdvice,
+      officialNonAws,
+      userReported,
       reviewStatus,
       reportedById,
       northeastLat,
       northeastLng,
       southwestLat,
       southwestLng,
+      ignoreHazardLatLngBounds,
       showExpired,
       sortSettings,
       page = "1",
@@ -49,13 +58,18 @@ export const getHazardsForAdmin = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
-      severityFilter,
+      awsEmergency: parseBoolean(awsEmergency),
+      awsWatchAndAct: parseBoolean(awsWatchAndAct),
+      awsAdvice: parseBoolean(awsAdvice),
+      officialNonAws: parseBoolean(officialNonAws),
+      userReported: parseBoolean(userReported),
       reviewStatus,
       reportedById,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
       southwestLng: Number(southwestLng),
+      ignoreHazardLatLngBounds: parseBoolean(ignoreHazardLatLngBounds),
       showExpired: parseBoolean(showExpired),
       sortSettings,
       page: Number(page),
@@ -79,7 +93,6 @@ export const createHazardForAdmin = async (
 
     const {
       title,
-      shortDescription,
       description,
       aiSummary,
       callToAction,
@@ -94,16 +107,23 @@ export const createHazardForAdmin = async (
       occurredAt,
     }: CreateHazardForAdminBody = req.body;
 
-    if (categoryId) {
-      const category = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-      if (!category) {
-        throw new HttpError(400, "Invalid categoryId provided");
-      }
+    const category = await prisma.hazardCategory.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) {
+      throw new HttpError(400, "Invalid categoryId provided");
     }
 
-    const availableCategories = await getAllSubHazardCategories();
+    let source: HazardSource;
+    if (sourceId) {
+      const foundSource = await prisma.hazardSource.findUnique({
+        where: { id: sourceId },
+      });
+      if (!foundSource) {
+        throw new HttpError(400, "Invalid sourceId provided");
+      }
+      source = foundSource;
+    }
 
     const summarized = await summarizeHazard({
       title: title || "",
@@ -111,14 +131,17 @@ export const createHazardForAdmin = async (
       latitude,
       longitude,
       locationName,
-      availableCategories,
+      category,
+      source: source!,
+      isAwsCompliant: isAwsCompliant ?? false,
+      severityBand: HazardSeverityBand.info,
     });
 
     // Calculate confidence score for the admin created hazard
     let confidenceScore = 75; // Default high score for admin created hazards
     try {
       const hazardForCalculation: HazardForConfidenceCalculation = {
-        severity: summarized.severity,
+        severity: severity || HazardSeverity.unknown,
         aiConfidence: summarized.confidence,
         upvoteCount: 0,
         downvoteCount: 0,
@@ -138,17 +161,16 @@ export const createHazardForAdmin = async (
     const createdHazard = await prisma.hazard.create({
       data: {
         title: title || summarized.title,
-        shortDescription: shortDescription || summarized.shortDescription,
         description,
         aiSummary: aiSummary || summarized.summary,
         callToAction: callToAction || summarized.callToAction,
         latitude,
         longitude,
         ...(locationName && { locationName }),
-        categoryId: categoryId || summarized.category,
-        fireStatus: fireStatus || summarized.fireStatus,
+        ...(categoryId && { categoryId }),
+        ...(fireStatus && { fireStatus }),
         ...(isAwsCompliant !== undefined && { isAwsCompliant }),
-        severity: severity || summarized.severity,
+        ...(severity && { severity }),
         ...(sourceId && { sourceId }),
         ...(occurredAt && { occurredAt }),
         aiConfidence: summarized.confidence,
@@ -182,7 +204,6 @@ export const updateHazardForAdmin = async (
 
     const {
       title,
-      shortDescription,
       description,
       aiSummary,
       callToAction,
@@ -197,51 +218,54 @@ export const updateHazardForAdmin = async (
       occurredAt,
     }: UpdateHazardForAdminBody = req.body;
 
-    if (categoryId) {
-      const category = await prisma.hazardCategory.findUnique({
-        where: { id: categoryId },
-      });
-      if (!category) {
-        throw new HttpError(400, "Invalid categoryId provided");
-      }
-    }
-
     const existingHazard = await prisma.hazard.findUnique({
       where: { id: hazardId },
+      include: { category: true, source: true },
     });
     if (!existingHazard) {
       throw new HttpError(404, `Hazard with id ${hazardId} not found`);
     }
 
-    const availableCategories = await getAllSubHazardCategories();
+    let category: HazardCategory | undefined = undefined;
+    if (categoryId) {
+      const foundCategory = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
+      });
+      if (!foundCategory) {
+        throw new HttpError(400, "Invalid categoryId provided");
+      }
+      category = foundCategory;
+    }
+
+    let source: HazardSource | undefined = undefined;
+    if (sourceId) {
+      const foundSource = await prisma.hazardSource.findUnique({
+        where: { id: sourceId },
+      });
+      if (!foundSource) {
+        throw new HttpError(400, "Invalid sourceId provided");
+      }
+      source = foundSource;
+    }
 
     let summarized: AISummaryResponse = {
       title: existingHazard.title,
-      shortDescription: existingHazard.shortDescription || "",
       summary: existingHazard.aiSummary || "",
       callToAction: existingHazard.callToAction || "",
-      category: existingHazard.categoryId,
-      fireStatus: existingHazard.fireStatus,
-      severity: existingHazard.severity,
       confidence: existingHazard.aiConfidence || "low",
     };
 
-    if (
-      !title ||
-      !description ||
-      !shortDescription ||
-      !aiSummary ||
-      !callToAction ||
-      !categoryId ||
-      !severity
-    ) {
+    if (!title || !description || !aiSummary || !callToAction) {
       summarized = await summarizeHazard({
         title: title || existingHazard.title,
         description: description || existingHazard.description,
         latitude: latitude ?? existingHazard.latitude!,
         longitude: longitude ?? existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
-        availableCategories,
+        category: category || existingHazard.category!,
+        source: source || existingHazard.source!,
+        isAwsCompliant: isAwsCompliant ?? existingHazard.isAwsCompliant,
+        severityBand: HazardSeverityBand.info,
       });
     }
 
@@ -250,17 +274,16 @@ export const updateHazardForAdmin = async (
       include: buildHazardInclude(),
       data: {
         title: title || summarized.title,
-        shortDescription: shortDescription || summarized.shortDescription,
         ...(description && { description }),
         aiSummary: aiSummary || summarized.summary,
         callToAction: callToAction || summarized.callToAction,
         ...(latitude !== undefined && { latitude }),
         ...(longitude !== undefined && { longitude }),
         ...(locationName && { locationName }),
-        categoryId: categoryId || summarized.category,
-        fireStatus: fireStatus || summarized.fireStatus,
+        ...(categoryId && { categoryId }),
+        ...(fireStatus && { fireStatus }),
         ...(isAwsCompliant !== undefined && { isAwsCompliant }),
-        severity: severity || summarized.severity,
+        ...(severity && { severity }),
         ...(sourceId && { sourceId }),
         ...(occurredAt && { occurredAt }),
         aiConfidence: summarized.confidence,
