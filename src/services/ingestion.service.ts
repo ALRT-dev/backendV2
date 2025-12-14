@@ -670,8 +670,6 @@ const summarizeAndPostHazards = async ({
             title: hazardData.title,
             description: hazardData.description,
             locationName: hazardData.locationName,
-            latitude: Number(hazardData.latitude),
-            longitude: Number(hazardData.longitude),
             category: hazardData.category!,
             source: hazardData.source!,
             isAwsCompliant: hazardData.isAwsCompliant ?? false,

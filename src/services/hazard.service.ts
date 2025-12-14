@@ -388,8 +388,6 @@ export const reviewHazard = async ({
 export const summarizeHazard = async ({
   title,
   description,
-  latitude,
-  longitude,
   locationName,
   category,
   source,
@@ -399,8 +397,6 @@ export const summarizeHazard = async ({
 }: {
   title: string;
   description: string;
-  latitude: number;
-  longitude: number;
   locationName?: string | undefined | null;
   category: HazardCategory;
   source: HazardSource;
@@ -426,9 +422,9 @@ export const summarizeHazard = async ({
 
   const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
   Inputs:
-  - title: ${title}
+  - title: ${title || "[No title provided]"}
   - description: ${description}
-  - location: ${locationName || ""} (${latitude}, ${longitude})
+  - ${locationName && `location: ${locationName}`}
   - category: ${category.name}
   - agency: ${source.name}`;
 

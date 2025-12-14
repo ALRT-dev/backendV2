@@ -12,6 +12,8 @@ import {
   requireAnyAdmin,
   requireAdminOrAbove,
 } from "../../middlewares/auth.admin.middleware.js";
+import { validate } from "../../middlewares/validation.middleware.js";
+import { createHazardForAdminBodySchema } from "../../validators/admin/hazard.validator.js";
 
 const adminHazardRouter = Router();
 
@@ -23,7 +25,12 @@ adminHazardRouter.get("/", requireAnyAdmin, getHazardsForAdmin);
 adminHazardRouter.get("/sources", requireAnyAdmin, getHazardSourcesForAdmin);
 
 // Write operations - admin or above
-adminHazardRouter.post("/", requireAdminOrAbove, createHazardForAdmin);
+adminHazardRouter.post(
+  "/",
+  requireAdminOrAbove,
+  validate(createHazardForAdminBodySchema),
+  createHazardForAdmin
+);
 adminHazardRouter.put("/:hazardId", requireAdminOrAbove, updateHazardForAdmin);
 adminHazardRouter.delete(
   "/:hazardId",
