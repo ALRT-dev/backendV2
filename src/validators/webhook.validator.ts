@@ -19,9 +19,9 @@ export const createHazardWebhookBodySchema = z.object({
     .max(1000, "Summary must be at most 1000 characters")
     .optional(),
 
-  severity: z.nativeEnum(HazardSeverity).optional(),
+  severity: z.enum(HazardSeverity).optional(),
 
-  severityBand: z.nativeEnum(HazardSeverityBand).optional(),
+  severityBand: z.enum(HazardSeverityBand).optional(),
 
   callToAction: z
     .string()
@@ -29,7 +29,7 @@ export const createHazardWebhookBodySchema = z.object({
     .max(500, "Call to action must be at most 500 characters")
     .optional(),
 
-  fireStatus: z.nativeEnum(FireStatus).optional(),
+  fireStatus: z.enum(FireStatus).optional(),
 
   latitude: z
     .number()
@@ -85,13 +85,21 @@ export const createHazardWebhookBodySchema = z.object({
 
   isAwsCompliant: z.boolean().optional(),
 
-  link: z.string().url("Invalid URL format").optional(),
+  link: z.url("Invalid URL format").optional(),
 
-  occurredAt: z.string().datetime().optional(),
+  occurredAt: z.iso.datetime().optional(),
 
-  expiresAt: z.string().datetime().optional(),
+  expiresAt: z.iso.datetime().optional(),
 });
 
 export type CreateHazardWebhookBody = z.infer<
   typeof createHazardWebhookBodySchema
+>;
+
+export const createHazardsWebhookBodySchema = z
+  .array(createHazardWebhookBodySchema)
+  .min(1, "At least one hazard is required");
+
+export type CreateHazardsWebhookBody = z.infer<
+  typeof createHazardsWebhookBodySchema
 >;
