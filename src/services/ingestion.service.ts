@@ -445,7 +445,7 @@ export const syncHazardsFromDifferentSources = async ({
     });
 
     const createdHazards = await summarizeAndPostHazards({
-      hazardDatas: allHazardData,
+      hazardDatas: allHazardData.slice(0, 5),
       syncOption,
       severityBandFilters,
     });
@@ -453,7 +453,8 @@ export const syncHazardsFromDifferentSources = async ({
     console.log(
       `---------------------------------------> Successfully processed ${
         createdHazards.length
-      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
+      createdHazards
     );
     return createdHazards;
     return [];
@@ -715,7 +716,7 @@ const summarizeAndPostHazards = async ({
             title: summarized.title || hazardData.title,
             aiSummary: summarized.summary,
             aiConfidence: summarized.confidence,
-            callToAction: hazardData.callToAction || summarized.callToAction,
+            callsToAction: hazardData.callsToAction || summarized.callsToAction,
             reviewStatus: HazardReviewStatus.accepted,
             reviewedAt: new Date(),
             confidenceScore,

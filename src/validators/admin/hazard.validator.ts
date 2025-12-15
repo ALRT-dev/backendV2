@@ -111,10 +111,15 @@ export const createHazardForAdminBodySchema = z.object({
 
   severityBand: z.enum(HazardSeverityBand).optional(),
 
-  callToAction: z
-    .string()
-    .min(1, "Call to action cannot be empty")
-    .max(500, "Call to action must be at most 500 characters")
+  callsToAction: z
+    .array(
+      z
+        .string()
+        .min(1, "Call to action item cannot be empty")
+        .max(500, "Each call to action must be at most 500 characters")
+    )
+    .min(1, "At least one call to action is required")
+    .max(10, "Maximum 10 calls to action allowed")
     .optional(),
 
   fireStatus: z.enum(FireStatus).optional(),
@@ -195,9 +200,15 @@ export const updateHazardForAdminBodySchema = z.object({
 
   aiSummary: z.string().min(1, "Summary is required").optional(),
 
-  callToAction: z
-    .string()
-    .max(500, "Call to action must be at most 500 characters")
+  callsToAction: z
+    .array(
+      z
+        .string()
+        .min(1, "Call to action item cannot be empty")
+        .max(500, "Each call to action must be at most 500 characters")
+    )
+    .min(1, "At least one call to action is required")
+    .max(10, "Maximum 10 calls to action allowed")
     .optional(),
 
   latitude: z

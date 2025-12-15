@@ -3,6 +3,6 @@ export interface AIReviewResponse {
   reviewFeedback?: string;
   title: string;
   summary: string;
-  callToAction: string;
+  callsToAction: string[];
   confidence: "high" | "medium" | "low";
 }

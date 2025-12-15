@@ -108,7 +108,7 @@ export const createHazardForAdmin = async (
       aiSummary,
       severity = attributes.severity,
       severityBand = attributes.severityBand,
-      callToAction,
+      callsToAction,
       fireStatus = attributes.fireStatus || undefined,
       latitude,
       longitude,
@@ -199,7 +199,7 @@ export const createHazardForAdmin = async (
         aiSummary: aiSummary || summarized.summary,
         severity,
         severityBand,
-        callToAction: callToAction || summarized.callToAction,
+        callsToAction: callsToAction || summarized.callsToAction,
         ...(fireStatus && { fireStatus }),
         ...(latitude !== undefined && { latitude }),
         ...(longitude !== undefined && { longitude }),
@@ -246,7 +246,7 @@ export const updateHazardForAdmin = async (
       title,
       description,
       aiSummary,
-      callToAction,
+      callsToAction,
       latitude,
       longitude,
       locationName,
@@ -291,11 +291,11 @@ export const updateHazardForAdmin = async (
     let summarized: AISummaryResponse = {
       title: existingHazard.title,
       summary: existingHazard.aiSummary || "",
-      callToAction: existingHazard.callToAction || "",
+      callsToAction: existingHazard.callsToAction || [],
       confidence: existingHazard.aiConfidence || "low",
     };
 
-    if (!title || !description || !aiSummary || !callToAction) {
+    if (!title || !description || !aiSummary || !callsToAction) {
       summarized = await summarizeHazard({
         title: title || existingHazard.title,
         description: description || existingHazard.description,
@@ -314,7 +314,7 @@ export const updateHazardForAdmin = async (
         title: title || summarized.title,
         ...(description && { description }),
         aiSummary: aiSummary || summarized.summary,
-        callToAction: callToAction || summarized.callToAction,
+        callsToAction: callsToAction || summarized.callsToAction,
         ...(latitude !== undefined && { latitude }),
         ...(longitude !== undefined && { longitude }),
         ...(locationName && { locationName }),

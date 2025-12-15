@@ -363,7 +363,7 @@ export const reviewHazard = async ({
     const aiReview = JSON.parse(content) as {
       title: string;
       summary: string;
-      callToAction: string;
+      callsToAction: string[];
       confidence: "high" | "medium" | "low";
     };
 
@@ -371,7 +371,7 @@ export const reviewHazard = async ({
       reviewStatus: HazardReviewStatus.accepted,
       title: aiReview.title,
       summary: aiReview.summary,
-      callToAction: aiReview.callToAction,
+      callsToAction: aiReview.callsToAction,
       confidence: aiReview.confidence,
     };
   } catch (parseError) {
@@ -381,7 +381,7 @@ export const reviewHazard = async ({
 };
 
 /**
- * Summarizes a hazard report using AI to generate a concise title, short description, summary, callToAction and confidence level.
+ * Summarizes a hazard report using AI to generate a concise title, short description, summary, callsToAction and confidence level.
  *
  * The AI provides a structured response to standardize the hazard report for clarity and actionability.
  */
@@ -408,7 +408,7 @@ export const summarizeHazard = async ({
     return {
       title,
       summary: description,
-      callToAction: "Please stay informed and take necessary precautions.",
+      callsToAction: ["Please stay informed and take necessary precautions."],
       confidence: "high",
     };
   }
