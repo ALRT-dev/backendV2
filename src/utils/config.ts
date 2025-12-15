@@ -105,4 +105,7 @@ export const config = {
     apiSecret: getRequiredEnv("SIGHTENGINE_API_SECRET"),
     workflowId: getRequiredEnv("SIGHTENGINE_WORKFLOW_ID"),
   },
+
+  // Webhook API Key
+  WEBHOOK_API_KEY: getOptionalEnv("WEBHOOK_API_KEY", ""),
 };

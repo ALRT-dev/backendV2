@@ -15,7 +15,8 @@
     "prisma:migrate:resolve": "dotenv -e .env.dev -- npx prisma migrate resolve",
     "prisma:migrate:deploy": "dotenv -e .env.dev -- npx prisma migrate deploy",
     "prisma:generate": "dotenv -e .env.dev -- npx prisma generate",
-    "super-admin:create": "dotenv -e .env.dev -- tsx src/scripts/create-super-admin.ts"
+    "super-admin:create": "dotenv -e .env.dev -- tsx src/scripts/create-super-admin.ts",
+    "webhook-key": "dotenv -e .env.dev -- tsx src/scripts/webhook-api-key.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.913.0",
@@ -27,6 +28,8 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.2.1",
+    "express-slow-down": "^3.0.1",
     "fetch": "^1.1.0",
     "firebase-admin": "^13.5.0",
     "geojson": "^0.5.0",

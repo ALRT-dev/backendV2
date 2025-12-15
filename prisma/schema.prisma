@@ -322,6 +322,7 @@ model Admin {
   promptsUpdated        AIPrompt[]      @relation("AIPromptUpdatedBy")
   configurationsCreated Configuration[] @relation("ConfigurationCreatedBy")
   configurationsUpdated Configuration[] @relation("ConfigurationUpdatedBy")
+  webhookApiKeysCreated WebhookApiKey[] @relation("WebhookApiKeyCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -373,4 +374,64 @@ model Configuration {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model WebhookApiKey {
+  id          String  @id @default(uuid())
+  name        String // e.g., "Client A - N8N", "Partner B - Automation"
+  description String? // Purpose or notes about this key
+  keyHash     String  @unique // Bcrypt hash of the API key for security
+
+  isActive Boolean @default(true) // Can be disabled to block access
+
+  // Rate limiting per key
+  maxRequestsPerMinute Int @default(10) // Burst protection
+  maxRequestsPerHour   Int @default(100) // Rate limit
+  maxRequestsPerDay    Int @default(1000) // Daily quota
+
+  // Usage tracking
+  totalRequests Int       @default(0)
+  lastUsedAt    DateTime?
+  lastUsedIp    String?
+
+  // Metadata
+  createdById String?
+  createdBy   Admin?  @relation("WebhookApiKeyCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime? // Optional expiration date
+
+  logs WebhookLog[]
+
+  @@index([keyHash])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model WebhookLog {
+  id String @id @default(uuid())
+
+  apiKeyId String?
+  apiKey   WebhookApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  success    Boolean
+  statusCode Int
+  reason     String? // Error reason if failed
+
+  clientIp String
+  endpoint String
+  method   String @default("POST")
+
+  requestBody  Json? // Optional: store request data
+  responseTime Int? // Response time in milliseconds
+
+  hazardId String? // If successfully created a hazard
+
+  createdAt DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([success])
+  @@index([createdAt])
+  @@index([clientIp])
 }
