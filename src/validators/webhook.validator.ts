@@ -1,7 +1,14 @@
 import z from "zod";
 import { FireStatus, HazardSeverity, HazardSeverityBand } from "@prisma/client";
+import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 
 export const createHazardWebhookBodySchema = z.object({
+  id: z
+    .string()
+    .min(1, "Invalid id provided")
+    .max(100, "Invalid id provided")
+    .optional(),
+
   title: z
     .string()
     .min(1, "Title cannot be empty")
@@ -96,9 +103,18 @@ export type CreateHazardWebhookBody = z.infer<
   typeof createHazardWebhookBodySchema
 >;
 
-export const createHazardsWebhookBodySchema = z
-  .array(createHazardWebhookBodySchema)
-  .min(1, "At least one hazard is required");
+export const createHazardsWebhookBodySchema = z.object({
+  hazards: z
+    .array(createHazardWebhookBodySchema)
+    .min(1, "At least one hazard is required"),
+
+  syncOption: z
+    .enum(SyncHazardsFromExternalSourceOption)
+    .optional()
+    .default(SyncHazardsFromExternalSourceOption.ignoreExisting),
+
+  minimumSeverityBands: z.array(z.enum(HazardSeverityBand)).optional(),
+});
 
 export type CreateHazardsWebhookBody = z.infer<
   typeof createHazardsWebhookBodySchema

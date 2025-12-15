@@ -472,7 +472,7 @@ export const syncHazardsFromDifferentSources = async ({
  * @param severityBandFilters Map of source IDs to their severity band filter configurations.
  * @returns Array of created Hazard objects.
  */
-const summarizeAndPostHazards = async ({
+export const summarizeAndPostHazards = async ({
   hazardDatas,
   syncOption,
   severityBandFilters,
@@ -713,7 +713,7 @@ const summarizeAndPostHazards = async ({
           const finalHazardData: HazardDataWithRelations = {
             ...hazardData,
             title: summarized.title || hazardData.title,
-            aiSummary: summarized.summary,
+            aiSummary: hazardData.aiSummary || summarized.summary,
             aiConfidence: summarized.confidence,
             callToAction: hazardData.callToAction || summarized.callToAction,
             reviewStatus: HazardReviewStatus.accepted,
