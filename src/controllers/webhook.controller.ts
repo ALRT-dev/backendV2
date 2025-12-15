@@ -32,7 +32,7 @@ export const createHazardViaWebhook = async (
     const availableCategories = await getAllSubHazardCategories();
     const requestBody: CreateHazardsWebhookBody = req.body;
 
-    const { hazards, syncOption, minimumSeverityBands } = requestBody;
+    const { hazards, syncOption, allowedSeverityBands } = requestBody;
 
     // Process all hazards to prepare data
     const validationResults = await Promise.allSettled(
@@ -84,13 +84,13 @@ export const createHazardViaWebhook = async (
       ExternalSourceId,
       HazardSeverityBand[]
     >();
-    if (minimumSeverityBands && minimumSeverityBands.length > 0) {
+    if (allowedSeverityBands && allowedSeverityBands.length > 0) {
       // Group by sourceId to apply filters per source
       const sourceIds = [...new Set(validHazardDatas.map((h) => h.source!.id))];
       sourceIds.forEach((sourceId) => {
         severityBandFilters.set(
           sourceId as ExternalSourceId,
-          minimumSeverityBands
+          allowedSeverityBands
         );
       });
     }

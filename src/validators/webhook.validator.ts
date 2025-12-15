@@ -113,7 +113,7 @@ export const createHazardsWebhookBodySchema = z.object({
     .optional()
     .default(SyncHazardsFromExternalSourceOption.ignoreExisting),
 
-  minimumSeverityBands: z.array(z.enum(HazardSeverityBand)).optional(),
+  allowedSeverityBands: z.array(z.enum(HazardSeverityBand)).optional(),
 });
 
 export type CreateHazardsWebhookBody = z.infer<
