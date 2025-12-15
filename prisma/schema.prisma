@@ -100,14 +100,14 @@ enum FireStatus {
 }
 
 model Hazard {
-  id           String             @id @default(uuid())
-  title        String
-  description  String
-  aiSummary    String?
-  aiConfidence AIConfidence?
-  severity     HazardSeverity     @default(unknown)
-  severityBand HazardSeverityBand @default(info)
-  callToAction String?
+  id            String             @id @default(uuid())
+  title         String
+  description   String
+  aiSummary     String?
+  aiConfidence  AIConfidence?
+  severity      HazardSeverity     @default(unknown)
+  severityBand  HazardSeverityBand @default(info)
+  callsToAction String[]           @default([])
 
   fireStatus FireStatus? // Only applies to fire-related hazards
 

@@ -371,7 +371,7 @@ export const createHazard = async (
       title: suggestedTitle,
       summary: aiSummary,
       confidence: aiConfidence,
-      callToAction,
+      callsToAction,
     } = review;
 
     // Calculate confidence score for the new hazard <----------------------------------------------------------------------------------
@@ -425,7 +425,7 @@ export const createHazard = async (
           }),
           aiSummary,
           ...(aiConfidence && { aiConfidence }),
-          callToAction,
+          callsToAction,
           categoryId: category.id,
           reportedById: userId,
           latitude,
@@ -694,7 +694,7 @@ export const updateHazard = async (
       title: suggestedTitle,
       summary: aiSummary,
       confidence: aiConfidence,
-      callToAction,
+      callsToAction,
     } = review;
 
     const date = new Date();
@@ -720,7 +720,7 @@ export const updateHazard = async (
             reviewedAt: new Date(),
           }),
           aiSummary,
-          callToAction,
+          callsToAction,
           ...(aiConfidence && { aiConfidence }),
           categoryId: category.id,
           ...(latitude && { latitude }),

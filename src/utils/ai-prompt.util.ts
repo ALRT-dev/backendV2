@@ -112,7 +112,7 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
   - “Stay aware of local conditions and monitor your surroundings.”
   
   FINAL VALIDATION CHECKS:
-  You must ensure summary and callToAction DO NOT include:
+  You must ensure summary and callsToAction DO NOT include:
   - Profanity
   - Nonsense
   - Sexual content
@@ -128,7 +128,7 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
   - Sensitive personal data
   - Confirmation of facts
   
-  You must ensure summary and callToAction DOES include:
+  You must ensure summary and callsToAction DOES include:
   - Unverified tone
   - Suburb-only location
   - User-sourced phrasing
@@ -136,7 +136,7 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
   - No exaggeration
   - No AWS-level terminology
   
-  FINAL OUTPUT EXAMPLE FOR summary AND callToAction:
+  FINAL OUTPUT EXAMPLE FOR summary AND callsToAction:
   User submitted:
   "I saw a fire starting in the bushes behind the shops."
   
@@ -144,8 +144,8 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
   summary:
   "A user has reported possible fire activity near Rockingham."
   
-  callToAction:
-  "Stay aware of local conditions and check official updates if needed."
+  callsToAction:
+  ["Stay aware of local conditions and check official updates if needed."]
   
   CONFIDENCE LEVEL GUIDELINES:
   - "high": Detailed, specific, credible information with clear location and time
@@ -156,7 +156,7 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
   {
       "title": "string", (a concise, clear title for the hazard, max 80 chars)
       "summary": "string", (based on SUMMARY GUIDELINES above)
-      "callToAction": "string", (based on CALL TO ACTION GUIDELINES above)
+      "callsToAction": "array", (2–4 dot points based on CALL TO ACTION GUIDELINES above)
       "confidence": "high|medium|low" (based on CONFIDENCE LEVEL GUIDELINES described above)
   }`;
 };
@@ -172,9 +172,7 @@ export const getOfficialAlertReviewAndSummarizationPrompt = (): string => {
 
   ${defaultCallToActionGuidelines}
   
-  ${defaultToneGuidelines}
-  
-  ${defaultWordLimitGuidelines}
+  ${defaultSpecialRules}
   
   ${defaultConfidenceLevelGuidelines}
   
@@ -261,9 +259,7 @@ export const getAirQualityAlertCategoryPrompt = (
   - Use Australian spellings.
   - Always include: "Seek medical help if breathing worsens" for higher levels.
   ${callToActionExamplesText}
-    
-  ${defaultWordLimitGuidelines}
-  
+      
   ${defaultConfidenceLevelGuidelines}
   
   ${defaultOutputStructure}`;
@@ -352,8 +348,6 @@ export const getSmartravellerSourcePrompt = (
   ${defaultCallToActionGuidelines}
   - Use Australian spellings.
   ${callToActionExamplesText}
-    
-  ${defaultWordLimitGuidelines}
   
   ${defaultConfidenceLevelGuidelines}
   
@@ -363,43 +357,31 @@ export const getSmartravellerSourcePrompt = (
 const defaultAIPromptIntroduction = `You are an AI hazard intelligence assistant supporting emergency systems. Your role is to interpret incoming hazard reports, extract key details, and produce clear, actionable summaries, including a concise title, a factual summary, an appropriate call to action and a confidence level that help people understand the situation quickly.`;
 
 const defaultSummaryGuidelines = `
-SUMMARY GUIDELINES
+SUMMARY GUIDELINES:
 Generate “summary” using the following rules:
-  - MUST be one single sentence.
-  - MUST be ≤ 25 words.
-  - Calm, factual, plain language.
-  - Only information relevant to the hazard type.
-  - If TONE GUIDELINES is provided below, follow it strictly.`;
+  - Always ONE clear sentence.
+  - Plain English.
+  - States the hazard + alert level (if provided in the description) + location.
+  - Present tense.`;
 
 const defaultCallToActionGuidelines = `
-CALL-TO-ACTION GUIDELINES
-Generate “callToAction” using the following rules:
-  - First, scan the hazard description for ANY actionable items:
-    → Direct instructions (“evacuate immediately”, “close windows”, “avoid area”),
-    → Safety recommendations (“use caution”, “keep medication nearby”),
-    → Conditional actions (“if property is under threat…”),
-    → Behaviour instructions (“residents should…”, “motorists should…”).
-  - If ANY exist:
-    → Extract, combine, and summarise them into one concise statement.
-  - If NO action exists in the description:
-    → Create your own callToAction based on:
-      - category
-      - context of the hazard
-      - If TONE GUIDELINES is provided below, follow it strictly.
-  - MUST be ≤ 25 words.`;
+CALL-TO-ACTION GUIDELINES:
+Generate "callsToAction" using the following rules:
+  - MUST be returned as a JSON array of 2–4 dot points.
+  - Each dot point begins with a simple action verb: “Leave”, “Avoid”, “Move”, “Stay”, “Call”, “Monitor”, “Keep”, “Follow”.
+  - Each point must be short, direct, and easy to understand.
+  - If official CTA is present in the description → must be honoured and included.`;
 
-const defaultWordLimitGuidelines = `
-WORD LIMITS (STRICT)
-  - summary ≤ 25 words
-  - callToAction ≤ 25 words
-  - Shorten aggressively if needed.`;
-
-const defaultToneGuidelines = `  
-TONE GUIDELINES
-  - Use a calm, neutral, informational tone.
-  - Do not imply danger, urgency, or action.
-  - Simply acknowledge that something exists or has been reported.
-  - Keep the language soft, factual, and non-directive.`;
+const defaultSpecialRules = `
+SPECIAL RULES:
+  - Never provide medical treatment instructions beyond “call emergency services”.
+  - Never instruct “evacuate/shelter” unless an authority CTA exists.
+  - Use local emergency numbers only if provided; otherwise say “call local emergency services”.
+  - For Australia, defaults apply if missing:
+    - emergency: 000
+    - police non-urgent: 131 444
+    - SES flood/storm: 132 500
+    - National Security Hotline: 1800 123 400`;
 
 const defaultConfidenceLevelGuidelines = `
 CONFIDENCE LEVEL GUIDELINES:
@@ -412,7 +394,7 @@ const defaultOutputStructure = `
 Always respond with **valid JSON** in this format:
   {
     "title": "string" (≤80 chars),
-    "summary": "string" (single sentence),
-    "callToAction": "string", (single sentence)
+    "summary": "string" (one clear sentence),
+    "callsToAction": "array", (2–4 dot points),
     "confidence": "high|medium|low",
   }`;
