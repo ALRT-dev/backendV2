@@ -142,7 +142,7 @@ const processSingleHazard = async (
     aiSummary,
     severity = attributes.severity,
     severityBand = attributes.severityBand,
-    callToAction,
+    callsToAction,
     fireStatus = attributes.fireStatus || undefined,
     latitude,
     longitude,
@@ -168,16 +168,10 @@ const processSingleHazard = async (
   }
 
   // Step 3: Validate location
-  if (
-    (latitude === undefined || longitude === undefined) &&
-    (northeastLat === undefined ||
-      northeastLng === undefined ||
-      southwestLat === undefined ||
-      southwestLng === undefined)
-  ) {
+  if ((latitude === undefined || longitude === undefined) && !locationName) {
     throw new HttpError(
       400,
-      "Either latitude & longitude or northeast & southwest bounds must be provided"
+      "Either latitude & longitude or locationName must be provided"
     );
   }
 
@@ -201,7 +195,7 @@ const processSingleHazard = async (
     ...(aiSummary && { aiSummary }),
     severity,
     severityBand: severityBand || HazardSeverityBand.info,
-    ...(callToAction && { callToAction }),
+    ...(callsToAction && { callsToAction }),
     ...(fireStatus && { fireStatus }),
     ...(latitude !== undefined && { latitude }),
     ...(longitude !== undefined && { longitude }),

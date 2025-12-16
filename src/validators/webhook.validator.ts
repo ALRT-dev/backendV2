@@ -30,10 +30,10 @@ export const createHazardWebhookBodySchema = z.object({
 
   severityBand: z.enum(HazardSeverityBand).optional(),
 
-  callToAction: z
-    .string()
-    .min(1, "Call to action cannot be empty")
-    .max(500, "Call to action must be at most 500 characters")
+  callsToAction: z
+    .array(
+      z.string().max(500, "Each call to action must be at most 500 characters")
+    )
     .optional(),
 
   fireStatus: z.enum(FireStatus).optional(),
