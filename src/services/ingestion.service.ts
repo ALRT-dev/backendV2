@@ -453,7 +453,8 @@ export const syncHazardsFromDifferentSources = async ({
     console.log(
       `---------------------------------------> Successfully processed ${
         createdHazards.length
-      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
+      createdHazards
     );
     return createdHazards;
     return [];
@@ -715,7 +716,7 @@ export const summarizeAndPostHazards = async ({
             title: summarized.title || hazardData.title,
             aiSummary: hazardData.aiSummary || summarized.summary,
             aiConfidence: summarized.confidence,
-            callToAction: hazardData.callToAction || summarized.callToAction,
+            callsToAction: hazardData.callsToAction || summarized.callsToAction,
             reviewStatus: HazardReviewStatus.accepted,
             reviewedAt: new Date(),
             confidenceScore,
@@ -760,14 +761,14 @@ export const summarizeAndPostHazards = async ({
             finalHazardData.title
           );
 
-          // Send push notifications to users who subscribed to this area when a new hazard is created
-          sendPushNotificationAboutNewHazard(createdHazard);
+          // // Send push notifications to users who subscribed to this area when a new hazard is created
+          // sendPushNotificationAboutNewHazard(createdHazard);
 
-          // Send socket events to users who subscribed to this area when a new hazard is created
-          sendSocketEventAboutHazardToSubscribers({
-            hazard: createdHazard,
-            socketEvent: SocketEvent.newHazard,
-          });
+          // // Send socket events to users who subscribed to this area when a new hazard is created
+          // sendSocketEventAboutHazardToSubscribers({
+          //   hazard: createdHazard,
+          //   socketEvent: SocketEvent.newHazard,
+          // });
 
           return createdHazard;
         } catch (error) {

@@ -1573,14 +1573,14 @@ export function parseSmartravellerToHazards({
     // Determine severity band from advice level
     const severityBand = getSeverityBandFromSmartravellerLevel(adviceLevel);
 
-    const callToAction = advisory.field_last_update_notes
+    const callsToAction = advisory.field_last_update_notes
       ? advisory.field_last_update_notes
           .replace(/&nbsp;/g, " ")
           .replace(/&[a-z]+;/gi, " ")
           .split("\n")
           .slice(1)
-          .join("\n")
-          .trim() || undefined
+          .filter((line) => line.trim())
+          .map((line) => line.trim())
       : undefined;
 
     // Parse the last updated date
@@ -1597,7 +1597,7 @@ export function parseSmartravellerToHazards({
       description,
       severityBand,
       category,
-      ...(callToAction && { callToAction }),
+      ...(callsToAction && callsToAction.length > 0 && { callsToAction }),
       isAwsCompliant: false, // Travel advisories are not AWS compliant
       locationName: country,
       ...(advisory.field_url && { link: advisory.field_url }),
