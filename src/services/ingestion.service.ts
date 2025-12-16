@@ -453,8 +453,7 @@ export const syncHazardsFromDifferentSources = async ({
     console.log(
       `---------------------------------------> Successfully processed ${
         createdHazards.length
-      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
-      createdHazards
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
     );
     return createdHazards;
     return [];
