@@ -109,7 +109,7 @@ export const getUserReportedAlertReviewAndSummarizationPrompt = (): string => {
     “Stay alert to changing conditions.”
   
   Default Call to Action (mandatory if no description or unverifiable):
-  - “Stay aware of local conditions and monitor your surroundings.”
+  - [“Stay aware of local conditions and monitor your surroundings.”]
   
   FINAL VALIDATION CHECKS:
   You must ensure summary and callsToAction DO NOT include:
