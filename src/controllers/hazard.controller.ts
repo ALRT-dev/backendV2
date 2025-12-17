@@ -310,27 +310,35 @@ export const createHazard = async (
     const mediaModerationResult = await checkMediasForProblems(
       uploadedFiles || []
     );
-    const mediaModerationFeedback =
-      mediaModerationResult.isRejected &&
-      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
-        "\n- "
-      )}\nPlease adjust your media and try again.`;
 
-    // Upload media files to S3 if provided <----------------------------------------------------------------------------------
+    // Generate feedback message if some media was rejected
+    let mediaModerationFeedback: string | undefined = undefined;
+    if (mediaModerationResult.hasProblematicFiles) {
+      const uniqueReasons = [
+        ...new Set(
+          mediaModerationResult.problematicFiles.flatMap((item) => item.reasons)
+        ),
+      ];
+      mediaModerationFeedback = `We have removed ${
+        mediaModerationResult.problematicFiles.length
+      } media file${
+        mediaModerationResult.problematicFiles.length > 1 ? "s" : ""
+      } from the alert because of the following reason(s):\n- ${uniqueReasons.join(
+        "\n- "
+      )}`;
+    }
+
+    // Upload only valid media files to S3 <----------------------------------------------------------------------------------
     let mediaUploadResults: MediaUploadResult[] = [];
 
-    if (
-      uploadedFiles &&
-      uploadedFiles.length > 0 &&
-      !mediaModerationResult.isRejected
-    ) {
+    if (mediaModerationResult.validFiles.length > 0) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
-          uploadedFiles,
+          mediaModerationResult.validFiles,
           "hazards"
         );
         console.log(
-          `Successfully uploaded ${mediaUploadResults.length} media files to S3`
+          `Successfully uploaded ${mediaUploadResults.length} valid media files to S3`
         );
       } catch (error) {
         console.error("Error uploading media files:", error);
@@ -416,9 +424,7 @@ export const createHazard = async (
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus: mediaModerationResult.isRejected
-            ? HazardReviewStatus.rejected
-            : reviewStatus,
+          reviewStatus: reviewStatus,
           reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
@@ -633,27 +639,34 @@ export const updateHazard = async (
     const mediaModerationResult = await checkMediasForProblems(
       uploadedFiles || []
     );
-    const mediaModerationFeedback =
-      mediaModerationResult.isRejected &&
-      `Your alrt report was rejected due to the following reasons:\n- ${mediaModerationResult.reasons.join(
+
+    // Generate feedback message if some media was rejected
+    let mediaModerationFeedback: string | undefined = undefined;
+    if (mediaModerationResult.hasProblematicFiles) {
+      const uniqueReasons = [
+        ...new Set(
+          mediaModerationResult.problematicFiles.flatMap((item) => item.reasons)
+        ),
+      ];
+      mediaModerationFeedback = `We have removed ${
+        mediaModerationResult.problematicFiles.length
+      } media file${
+        mediaModerationResult.problematicFiles.length > 1 ? "s" : ""
+      } from the alert because of the following reason(s):\n- ${uniqueReasons.join(
         "\n- "
-      )}\nPlease adjust your media and try again.`;
+      )}`;
+    }
 
-    // Upload new media files to S3 if provided <----------------------------------------------------------------------------------
-
+    // Upload only valid new media files to S3 <----------------------------------------------------------------------------------
     let mediaUploadResults: MediaUploadResult[] = [];
-    if (
-      uploadedFiles &&
-      uploadedFiles.length > 0 &&
-      !mediaModerationResult.isRejected
-    ) {
+    if (mediaModerationResult.validFiles.length > 0) {
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
-          uploadedFiles,
+          mediaModerationResult.validFiles,
           "hazards"
         );
         console.log(
-          `Successfully uploaded ${mediaUploadResults.length} new media files to S3`
+          `Successfully uploaded ${mediaUploadResults.length} new valid media files to S3`
         );
       } catch (error) {
         console.error("Error uploading new media files:", error);
@@ -712,9 +725,7 @@ export const updateHazard = async (
         data: {
           title: suggestedTitle || title || "An unverified incident",
           description: description || "",
-          reviewStatus: mediaModerationResult.isRejected
-            ? HazardReviewStatus.rejected
-            : reviewStatus,
+          reviewStatus: reviewStatus,
           reviewFeedback: mediaModerationFeedback || reviewFeedback,
           ...(reviewStatus === HazardReviewStatus.accepted && {
             reviewedAt: new Date(),
