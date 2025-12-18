@@ -760,14 +760,14 @@ export const summarizeAndPostHazards = async ({
             finalHazardData.title
           );
 
-          // // Send push notifications to users who subscribed to this area when a new hazard is created
-          // sendPushNotificationAboutNewHazard(createdHazard);
+          // Send push notifications to users who subscribed to this area when a new hazard is created
+          sendPushNotificationAboutNewHazard(createdHazard);
 
-          // // Send socket events to users who subscribed to this area when a new hazard is created
-          // sendSocketEventAboutHazardToSubscribers({
-          //   hazard: createdHazard,
-          //   socketEvent: SocketEvent.newHazard,
-          // });
+          // Send socket events to users who subscribed to this area when a new hazard is created
+          sendSocketEventAboutHazardToSubscribers({
+            hazard: createdHazard,
+            socketEvent: SocketEvent.newHazard,
+          });
 
           return createdHazard;
         } catch (error) {
