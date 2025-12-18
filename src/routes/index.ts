@@ -7,6 +7,7 @@ import xpPointsRouter from "./xpPoints.route.js";
 import onboardingRouter from "./onboarding.route.js";
 import adminRouter from "./admin/index.js";
 import webhookRouter from "./webhook.route.js";
+import supportRouter from "./support.route.js";
 
 export {
   authRouter,
@@ -18,4 +19,5 @@ export {
   onboardingRouter,
   adminRouter,
   webhookRouter,
+  supportRouter,
 };

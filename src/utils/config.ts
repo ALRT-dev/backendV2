@@ -108,4 +108,18 @@ export const config = {
 
   // Webhook API Key
   WEBHOOK_API_KEY: getOptionalEnv("WEBHOOK_API_KEY", ""),
+
+  // Email configuration
+  email: {
+    smtpHost: getRequiredEnv("SMTP_HOST"),
+    smtpPort: parseInt(getRequiredEnv("SMTP_PORT"), 10),
+    smtpSecure: getOptionalEnv("SMTP_SECURE", "true") === "true",
+    smtpUser: getRequiredEnv("SMTP_USER"),
+    smtpPassword: getRequiredEnv("SMTP_PASSWORD"),
+    fromAddress: getRequiredEnv("EMAIL_FROM_ADDRESS"),
+    supportAddress: getRequiredEnv("EMAIL_SUPPORT_ADDRESS"),
+    supportCcAddresses: getOptionalEnv("EMAIL_SUPPORT_CC_ADDRESSES", "")
+      .split(",")
+      .map((email) => email.trim()),
+  },
 };
