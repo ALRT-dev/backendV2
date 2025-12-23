@@ -6,6 +6,7 @@ import {
   getPromptById,
   deletePrompt,
   validatePromptContent,
+  getGroupedPrompts,
   type CreatePromptData,
   type UpdatePromptData,
 } from "../../services/ai-prompt.service.js";
@@ -22,6 +23,22 @@ export const getAllAIPrompts = async (
 ) => {
   try {
     const result = await getAllPrompts();
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get all AI prompts grouped by their groups
+ */
+export const getGroupedAIPrompts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await getGroupedPrompts();
     res.status(200).json(result);
   } catch (error) {
     next(error);

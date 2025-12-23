@@ -72,7 +72,6 @@ export const authenticateAdmin = async (data: AdminLoginBody) => {
       admin.passwordHash
     );
 
-    console.log("Password verification result:", isPasswordValid);
     if (!isPasswordValid) {
       // Increment failed attempts
       await prisma.admin.update({

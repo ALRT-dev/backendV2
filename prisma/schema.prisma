@@ -337,6 +337,18 @@ enum AdminRole {
   moderator
 }
 
+model AIPromptGroup {
+  id          String     @id @default(uuid())
+  name        String     @unique // e.g., "User Reported Alerts", "Official Alerts"
+  description String? // Human-readable description of the group
+  prompts     AIPrompt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
 model AIPrompt {
   id          String  @id @default(uuid())
   name        String  @unique // e.g., "review_and_summarize", "summarize", "severity_assessment"
@@ -344,6 +356,9 @@ model AIPrompt {
   content     String // The actual prompt content with placeholder variables
   variables   Json // JSON array of variable names expected in the prompt
   model       String // e.g., "gpt-4o-mini", "gpt-5-nano", "gpt-3.5-turbo"
+
+  groupId String?
+  group   AIPromptGroup? @relation(fields: [groupId], references: [id])
 
   createdById String
   updatedById String?
@@ -354,6 +369,7 @@ model AIPrompt {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([groupId])
 }
 
 enum ConfigurationKey {
