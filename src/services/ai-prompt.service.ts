@@ -37,6 +37,7 @@ export interface CreatePromptData {
   content: string;
   variables: string[];
   model: string;
+  groupId?: string;
 }
 
 export interface UpdatePromptData {
@@ -44,6 +45,7 @@ export interface UpdatePromptData {
   content?: string;
   variables?: string[];
   model?: string;
+  groupId?: string;
 }
 
 /**
@@ -341,10 +343,10 @@ export const getAllPromptGroups = async (): Promise<AIPromptGroup[]> => {
   const groups = await prisma.aIPromptGroup.findMany({
     include: {
       prompts: {
-        orderBy: { name: "asc" },
+        orderBy: { createdAt: "desc" },
       },
     },
-    orderBy: { name: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
   return groups;
@@ -357,27 +359,18 @@ export const getGroupedPrompts = async () => {
   const groups = await prisma.aIPromptGroup.findMany({
     include: {
       prompts: {
-        orderBy: { name: "asc" },
+        orderBy: { createdAt: "desc" },
       },
     },
-    orderBy: { name: "asc" },
+    orderBy: { createdAt: "desc" },
   });
 
-  return (
-    groups
-      .map((group) => ({
-        id: group.id,
-        name: group.name,
-        description: group.description,
-        prompts: group.prompts,
-      }))
-      // always keep "Other" group at the end
-      .sort((a, b) => {
-        if (a.name === "Other") return 1;
-        if (b.name === "Other") return -1;
-        return 0;
-      })
-  );
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    description: group.description,
+    prompts: group.prompts,
+  }));
 };
 
 /**
@@ -390,7 +383,7 @@ export const getPromptGroupById = async (
     where: { id: groupId },
     include: {
       prompts: {
-        orderBy: { name: "asc" },
+        orderBy: { createdAt: "desc" },
       },
     },
   });
@@ -422,6 +415,82 @@ export const createPromptGroup = async (data: {
 
   return await prisma.aIPromptGroup.create({
     data,
+  });
+};
+
+/**
+ * Updates an existing AI prompt group.
+ */
+export const updatePromptGroup = async (
+  groupId: string,
+  data: {
+    name?: string;
+    description?: string;
+  }
+): Promise<AIPromptGroup> => {
+  // Check if the group exists
+  const existingGroup = await prisma.aIPromptGroup.findUnique({
+    where: { id: groupId },
+  });
+
+  if (!existingGroup) {
+    throw new HttpError(404, `Prompt group with ID '${groupId}' not found`);
+  }
+
+  // If name is being updated, check if another group with that name exists
+  if (data.name && data.name !== existingGroup.name) {
+    const duplicateGroup = await prisma.aIPromptGroup.findUnique({
+      where: { name: data.name },
+    });
+
+    if (duplicateGroup) {
+      throw new HttpError(
+        409,
+        `Prompt group with name '${data.name}' already exists`
+      );
+    }
+  }
+
+  return await prisma.aIPromptGroup.update({
+    where: { id: groupId },
+    include: {
+      prompts: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+    data,
+  });
+};
+
+/**
+ * Deletes an AI prompt group.
+ * Only allows deletion if the group has no prompts associated with it.
+ */
+export const deletePromptGroup = async (
+  groupId: string
+): Promise<AIPromptGroup> => {
+  // Check if the group exists and fetch its prompts
+  const existingGroup = await prisma.aIPromptGroup.findUnique({
+    where: { id: groupId },
+    include: {
+      prompts: true,
+    },
+  });
+
+  if (!existingGroup) {
+    throw new HttpError(404, `Prompt group with ID '${groupId}' not found`);
+  }
+
+  // Check if the group has any prompts
+  if (existingGroup.prompts.length > 0) {
+    throw new HttpError(
+      400,
+      `Cannot delete group '${existingGroup.name}' because it has ${existingGroup.prompts.length} prompt(s) associated with it. Please reassign or delete the prompts first.`
+    );
+  }
+
+  return await prisma.aIPromptGroup.delete({
+    where: { id: groupId },
   });
 };
 
