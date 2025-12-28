@@ -15,6 +15,7 @@ import {
   getSmartravellerSourcePrompt,
   getUserReportedAlertReviewAndSummarizationPrompt,
 } from "../utils/ai-prompt.util.js";
+import { getAIPromptConfiguration } from "./configuration.service.js";
 
 // Cache for prompts to avoid database calls on every AI request
 const promptCache = new Map<string, AIPrompt>();
@@ -281,6 +282,32 @@ export const deletePrompt = async (promptId: string): Promise<void> => {
     throw new HttpError(404, `Prompt with ID '${promptId}' not found`);
   }
 
+  const aiPromptConfig = await getAIPromptConfiguration();
+
+  // Recursively extract all prompt IDs from the configuration object
+  const extractPromptIds = (obj: any): string[] => {
+    const ids: string[] = [];
+
+    for (const value of Object.values(obj)) {
+      if (typeof value === "string" && value) {
+        ids.push(value);
+      } else if (typeof value === "object" && value !== null) {
+        ids.push(...extractPromptIds(value));
+      }
+    }
+
+    return ids;
+  };
+
+  const referencedPromptIds = extractPromptIds(aiPromptConfig);
+
+  if (referencedPromptIds.includes(promptId)) {
+    throw new HttpError(
+      400,
+      `Cannot delete prompt '${existingPrompt.name}' because it is currently referenced in the AI configuration. Please update the configuration first to use a different prompt.`
+    );
+  }
+
   await prisma.aIPrompt.delete({
     where: { id: promptId },
   });
@@ -510,27 +537,27 @@ export enum DefaultAIPromptNames {
   userReportedAlertReviewAndSummarizationInfo = "[INFO] User Reported Alert Review and Summarization",
   userReportedAlertReviewAndSummarizationMonitor = "[MONITOR] User Reported Alert Review and Summarization",
   userReportedAlertReviewAndSummarizationAction = "[ACTION] User Reported Alert Review and Summarization",
-  userReportedAlertReviewAndSummarizationCritical = "[CRITICAL ]User Reported Alert Review and Summarization",
+  userReportedAlertReviewAndSummarizationCritical = "[CRITICAL] User Reported Alert Review and Summarization",
 
   officialAlertSummarizationInfo = "[INFO] Official Alert Summarization",
   officialAlertSummarizationMonitor = "[MONITOR] Official Alert Summarization",
   officialAlertSummarizationAction = "[ACTION] Official Alert Summarization",
-  officialAlertSummarizationCritical = "[CRITICAL ] Official Alert Summarization",
+  officialAlertSummarizationCritical = "[CRITICAL] Official Alert Summarization",
 
   officialAwsAlertSummarizationInfo = "[INFO] Official AWS Alert Summarization",
   officialAwsAlertSummarizationMonitor = "[MONITOR] Official AWS Alert Summarization",
   officialAwsAlertSummarizationAction = "[ACTION] Official AWS Alert Summarization",
-  officialAwsAlertSummarizationCritical = "[CRITICAL ] Official AWS Alert Summarization",
+  officialAwsAlertSummarizationCritical = "[CRITICAL] Official AWS Alert Summarization",
 
   airQualityAlertCategoryInfo = "[INFO] Air Quality Alert Category Summarization",
   airQualityAlertCategoryMonitor = "[MONITOR] Air Quality Alert Category Summarization",
   airQualityAlertCategoryAction = "[ACTION] Air Quality Alert Category Summarization",
-  airQualityAlertCategoryCritical = "[CRITICAL ] Air Quality Alert Category Summarization",
+  airQualityAlertCategoryCritical = "[CRITICAL] Air Quality Alert Category Summarization",
 
   smartravellerSourceInfo = "[INFO] Smartraveller Source Alert Summarization",
   smartravellerSourceMonitor = "[MONITOR] Smartraveller Source Alert Summarization",
   smartravellerSourceAction = "[ACTION] Smartraveller Source Alert Summarization",
-  smartravellerSourceCritical = "[CRITICAL ] Smartraveller Source Alert Summarization",
+  smartravellerSourceCritical = "[CRITICAL] Smartraveller Source Alert Summarization",
 
   extractLocationPrompt = "Extract Location from Text",
 }
@@ -588,16 +615,16 @@ export const initializeAIPrompts = async (): Promise<void> => {
       },
     ];
 
-    // Create prompt groups (only for prompts with multiple variants)
-    const groups = await Promise.all(
-      groupsData.map((groupData) => {
-        return prisma.aIPromptGroup.upsert({
-          where: { name: groupData.name },
-          create: groupData,
-          update: groupData,
-        });
-      })
-    );
+    // Create prompt groups
+    const groups: AIPromptGroup[] = [];
+    for (const groupData of groupsData) {
+      const group = await prisma.aIPromptGroup.upsert({
+        where: { name: groupData.name },
+        create: groupData,
+        update: groupData,
+      });
+      groups.push(group);
+    }
 
     const userReportedGroup = groups.find(
       (g) => g.name === "User Reported Alerts"
