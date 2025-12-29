@@ -16,6 +16,7 @@
     "prisma:migrate:deploy": "dotenv -e .env.dev -- npx prisma migrate deploy",
     "prisma:generate": "dotenv -e .env.dev -- npx prisma generate",
     "super-admin:create": "dotenv -e .env.dev -- tsx src/scripts/create-super-admin.ts",
+    "admin": "dotenv -e .env.dev -- tsx src/scripts/admin-manager.ts",
     "webhook-key": "dotenv -e .env.dev -- tsx src/scripts/webhook-api-key.ts",
     "convert-md-to-pdf": "tsx src/scripts/convert-md-to-pdf.ts"
   },

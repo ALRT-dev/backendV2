@@ -313,6 +313,7 @@ model Admin {
   role         AdminRole @default(admin)
   isActive     Boolean   @default(true)
 
+  mustChangePassword  Boolean   @default(true) // Flag to require password change on next login
   lastLoginAt         DateTime?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
