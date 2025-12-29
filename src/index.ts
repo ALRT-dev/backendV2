@@ -43,7 +43,14 @@ const io = new Server(server, {
 io.use(requireSocketAuth);
 initSocket(io);
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true, // Reflects the request origin, works with credentials
+    credentials: true, // Allow cookies and authorization headers
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
 app.use("/api/auth", authRouter);

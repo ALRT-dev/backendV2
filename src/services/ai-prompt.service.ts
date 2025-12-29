@@ -584,24 +584,9 @@ export const initializeAIPrompts = async (): Promise<void> => {
 
     const groupsData = [
       {
-        name: "User Reported Alerts",
+        name: "Other",
         description:
-          "Prompts for processing and summarizing user-reported alerts.",
-      },
-      {
-        name: "Official Alerts",
-        description:
-          "Prompts for processing and summarizing alerts from official sources.",
-      },
-      {
-        name: "Official AWS Alerts",
-        description:
-          "Prompts for processing and summarizing AWS-compliant alerts from official sources.",
-      },
-      {
-        name: "Air Quality Alerts",
-        description:
-          "Prompts for processing and categorizing air quality alerts.",
+          "Miscellaneous prompts that don't fit into other categories.",
       },
       {
         name: "Smartraveller Alerts",
@@ -609,9 +594,24 @@ export const initializeAIPrompts = async (): Promise<void> => {
           "Prompts for processing and summarizing Smartraveller travel advisories.",
       },
       {
-        name: "Other",
+        name: "Air Quality Alerts",
         description:
-          "Miscellaneous prompts that don't fit into other categories.",
+          "Prompts for processing and categorizing air quality alerts.",
+      },
+      {
+        name: "Official AWS Alerts",
+        description:
+          "Prompts for processing and summarizing AWS-compliant alerts from official sources.",
+      },
+      {
+        name: "Official Alerts",
+        description:
+          "Prompts for processing and summarizing alerts from official sources.",
+      },
+      {
+        name: "User Reported Alerts",
+        description:
+          "Prompts for processing and summarizing user-reported alerts.",
       },
     ];
 
