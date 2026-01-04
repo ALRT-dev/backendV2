@@ -174,121 +174,6 @@ export function parseGeoJsonToHazards({
 }
 
 /**
- * Converts air quality data into an array of Hazard objects
- *
- * @param data - Array of air quality objects containing site information, pollutant data, and measurements
- * @param categoryId - The hazard category ID to associate with these air quality hazards
- * @returns Array of Prisma HazardCreateInput objects ready for database insertion
- *
- * @example
- * ```typescript
- * const airQualityData = [
- *   {
- *     "Site_Id": "33",
- *     "SiteName": "Randwick",
- *     "Longitude": "151.24278",
- *     "Latitude": "-33.93175",
- *     "Region": "East Sydney",
- *     "AirQualityCategory": "GOOD",
- *     "DeterminingPollutant": "PM2.5",
- *     // ... other fields
- *   }
- * ];
- * const hazards = parseAirQualityToHazards(airQualityData, categoryId);
- * ```
- */
-export function parseAirQualityToHazards(
-  data: any[],
-  categoryId: string
-): HazardDataWithRelations[] {
-  if (!Array.isArray(data) || !data.length) return [];
-
-  return data
-    .map((item: any) => {
-      // Determine severity based on air quality category
-      const severity = getAirQualitySeverity(item.AirQualityCategory);
-
-      // Only create hazards for significant air quality issues i.e (POOR, VERY POOR, EXTREMELY POOR, HAZARDOUS)
-      if (
-        severity !== HazardSeverity.emergency &&
-        severity !== HazardSeverity.watchAndAct &&
-        severity !== HazardSeverity.advice
-      ) {
-        return null;
-      }
-
-      const title = `Air Quality Alert - ${item.SiteName}`;
-
-      // Build comprehensive description using all relevant fields
-      const descriptionParts: string[] = [];
-
-      if (item.Region) descriptionParts.push(`Region: ${item.Region}`);
-      if (item.AirQualityCategory)
-        descriptionParts.push(
-          `Air Quality Category: ${item.AirQualityCategory}`
-        );
-      if (item.DeterminingPollutant)
-        descriptionParts.push(
-          `Determining Pollutant: ${item.DeterminingPollutant}`
-        );
-      if (item.DeterminingPollutantValue)
-        descriptionParts.push(
-          `Pollutant Value: ${item.DeterminingPollutantValue}`
-        );
-      if (item.WDR) descriptionParts.push(`Wind Direction: ${item.WDR}°`);
-      if (item.WSP) descriptionParts.push(`Wind Speed: ${item.WSP} km/h`);
-      if (item.SiteType) descriptionParts.push(`Site Type: ${item.SiteType}`);
-      if (item.SitePurpose)
-        descriptionParts.push(`Site Purpose: ${item.SitePurpose}`);
-      if (item.ContributeToNewRegionalAQC)
-        descriptionParts.push(
-          `Regional AQC: ${item.ContributeToNewRegionalAQC}`
-        );
-      if (item.HourDescription)
-        descriptionParts.push(`Time Period: ${item.HourDescription}`);
-      if (item.Date) descriptionParts.push(`Date: ${item.Date}`);
-
-      const description = descriptionParts.join("\n");
-
-      // Parse coordinates
-      const latitude = item.Latitude ? parseFloat(item.Latitude) : null;
-      const longitude = item.Longitude ? parseFloat(item.Longitude) : null;
-
-      // Parse occurrence date from Date and Hour fields
-      let occurredAt = new Date();
-      if (item.Date && item.Hour) {
-        try {
-          const dateStr = `${item.Date}T${String(item.Hour).padStart(
-            2,
-            "0"
-          )}:00:00`;
-          occurredAt = new Date(dateStr);
-          if (isNaN(occurredAt.getTime())) {
-            occurredAt = new Date();
-          }
-        } catch {
-          occurredAt = new Date();
-        }
-      }
-
-      const id = item.Site_Id && `airquality-${item.Site_Id}`;
-
-      const hazard: HazardDataWithRelations = {
-        id,
-        title,
-        description,
-        latitude,
-        longitude,
-        occurredAt,
-        severity,
-      };
-
-      return hazard;
-    })
-    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
-}
-
-/**
  * Parses World Air Quality Index (WAQI) data to hazards
  *
  * @param data - Array of WAQI station data
@@ -1608,6 +1493,149 @@ export function parseSmartravellerToHazards({
   }
 
   return hazards;
+}
+
+/**
+ * Converts USGS Earthquake GeoJSON data to an array of Hazard objects
+ *
+ * @param data - GeoJSON FeatureCollection containing earthquake data
+ * @param category - The hazard category to associate with these earthquake hazards
+ * @returns Array of HazardDataWithRelations objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const earthquakeData = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "properties": {
+ *         "mag": 2.24,
+ *         "place": "5 km NE of Petaluma, CA",
+ *         "time": 1767509792290,
+ *         "updated": 1767510441921,
+ *         "url": "https://earthquake.usgs.gov/earthquakes/eventpage/nc75290641",
+ *         "status": "automatic",
+ *         "tsunami": 0,
+ *         "type": "earthquake",
+ *         "title": "M 2.2 - 5 km NE of Petaluma, CA"
+ *       },
+ *       "geometry": {
+ *         "type": "Point",
+ *         "coordinates": [-122.589332580566, 38.2621650695801, 5.07000017166138]
+ *       },
+ *       "id": "nc75290641"
+ *     }
+ *   ]
+ * };
+ * const hazards = parseUSGSEarthquakeToHazards({ data: earthquakeData, category });
+ * ```
+ */
+export function parseUSGSEarthquakeToHazards({
+  data,
+  earthquakeCategory,
+}: {
+  data: FeatureCollection<Point, GeoJsonProperties>;
+  earthquakeCategory: HazardCategory;
+}): HazardDataWithRelations[] {
+  if (!data.features?.length) return [];
+
+  return data.features
+    .map((feature) => {
+      const { id, properties, geometry } = feature;
+
+      // Extract coordinates (longitude, latitude, depth)
+      const coordinates = geometry.coordinates;
+      const longitude = coordinates[0];
+      const latitude = coordinates[1];
+      const depth = coordinates[2]; // Depth in kilometers
+
+      // Skip if no valid coordinates
+      if (longitude == null || latitude == null) {
+        return null;
+      }
+
+      // Extract earthquake properties
+      const magnitude = properties?.mag;
+      const place = properties?.place || "Unknown location";
+      const time = properties?.time; // Unix timestamp in milliseconds
+      const updated = properties?.updated;
+      const url = properties?.url;
+      const tsunami = properties?.tsunami;
+      const status = properties?.status; // "automatic", "reviewed", etc.
+      const magType = properties?.magType; // "ml", "md", "mw", etc.
+      const alert = properties?.alert; // "green", "yellow", "orange", "red"
+      const sig = properties?.sig; // Significance score
+      const title = properties?.title || `M ${magnitude} - ${place}`;
+
+      // Build comprehensive description
+      const descriptionParts: string[] = [];
+
+      descriptionParts.push(`Location: ${place}`);
+
+      if (magnitude != null) {
+        descriptionParts.push(
+          `Magnitude: ${magnitude}${magType ? ` (${magType})` : ""}`
+        );
+      }
+
+      if (depth != null) {
+        descriptionParts.push(`Depth: ${depth.toFixed(2)} km`);
+      }
+
+      if (status) {
+        descriptionParts.push(
+          `Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`
+        );
+      }
+
+      if (tsunami === 1) {
+        descriptionParts.push(`Tsunami Warning: Yes`);
+      }
+
+      if (sig != null) {
+        descriptionParts.push(`Significance: ${sig}`);
+      }
+
+      const description = descriptionParts.join("\n");
+
+      // Determine severity band based on magnitude and alert level
+      let severityBand: HazardSeverityBand;
+
+      if (alert === "red" || magnitude >= 7.0 || tsunami === 1) {
+        severityBand = HazardSeverityBand.critical;
+      } else if (alert === "orange" || magnitude >= 6.0) {
+        severityBand = HazardSeverityBand.action;
+      } else if (alert === "yellow" || magnitude >= 3.0) {
+        severityBand = HazardSeverityBand.monitor;
+      } else {
+        severityBand = HazardSeverityBand.info;
+      }
+
+      // Parse occurrence date from timestamp
+      const occurredAt = time ? new Date(time) : new Date();
+
+      // Create hazard ID using the external ID
+      const hazardId = id
+        ? `${ExternalSourceId.earthquakeUsgs}-${id}`
+        : undefined;
+
+      const hazard: HazardDataWithRelations = {
+        ...(hazardId && { id: hazardId }),
+        title,
+        description,
+        severityBand,
+        category: earthquakeCategory,
+        latitude,
+        longitude,
+        ...(url && { link: url }),
+        occurredAt,
+        isAwsCompliant: false, // Earthquakes are not AWS compliant
+      };
+
+      return hazard;
+    })
+    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS

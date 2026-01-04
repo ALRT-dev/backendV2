@@ -23,6 +23,7 @@ import {
   cleanupLocationExtractionCache,
   getCachedLocationExtraction,
   setCachedLocationExtraction,
+  parseUSGSEarthquakeToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -42,6 +43,7 @@ import { config } from "../utils/config.js";
 import {
   getAllSubHazardCategories,
   MainCategoryId,
+  SubCategoryId,
 } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
@@ -67,6 +69,7 @@ export enum ExternalSourceId {
   openMeteo = "openMeteo",
   smartraveller = "smartraveller",
   waDfes = "waDfes",
+  earthquakeUsgs = "earthquakeUsgs",
 }
 
 // Configuration for hazard sources
@@ -314,10 +317,10 @@ export const syncHazardsFromDifferentSources = async ({
         },
         parseFunction: (responseData: any) => {
           const pollenCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === "pollen"
+            (cat: HazardCategory) => cat.id === SubCategoryId.pollen
           );
           const uvCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === "uvAlert"
+            (cat: HazardCategory) => cat.id === SubCategoryId.uvAlert
           );
           if (!pollenCategory || !uvCategory) {
             console.log(
@@ -391,6 +394,29 @@ export const syncHazardsFromDifferentSources = async ({
             url: "https://api.emergency.wa.gov.au/v1/rss/incidents",
             availableCategories,
           }),
+      },
+      {
+        id: ExternalSourceId.earthquakeUsgs,
+        name: "USGS Earthquake Hazards Program",
+        url: "https://earthquake.usgs.gov",
+        apiUrl:
+          "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
+        parseFunction: (responseData: any) => {
+          const earthquakeCategory = availableCategories.find(
+            (cat) => cat.id === SubCategoryId.earthquake
+          );
+          if (!earthquakeCategory) {
+            console.log(
+              "Earthquake category not found, skipping USGS Earthquake hazards."
+            );
+            return [];
+          }
+
+          return parseUSGSEarthquakeToHazards({
+            data: responseData,
+            earthquakeCategory,
+          });
+        },
       },
     ].filter((sourceConfig) =>
       sourceIds && sourceIds.length > 0

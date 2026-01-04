@@ -23,6 +23,9 @@ export enum MainCategoryId {
 
 export enum SubCategoryId {
   airQualityAlert = "airQualityAlert",
+  pollen = "pollen",
+  uvAlert = "uvAlert",
+  earthquake = "earthquake",
 }
 
 /**
@@ -309,9 +312,9 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "uvAlert" },
+              where: { id: SubCategoryId.uvAlert },
               create: {
-                id: "uvAlert",
+                id: SubCategoryId.uvAlert,
                 name: "UV Alert",
                 description: "Alerts related to ultraviolet radiation",
                 keywords: [
@@ -504,9 +507,9 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "earthquake" },
+              where: { id: SubCategoryId.earthquake },
               create: {
-                id: "earthquake",
+                id: SubCategoryId.earthquake,
                 name: "Earthquake",
                 description: "Seismic events and tremors",
                 keywords: [
@@ -541,9 +544,9 @@ export const populateInitialCategories = async () => {
               },
             },
             {
-              where: { id: "pollen" },
+              where: { id: SubCategoryId.pollen },
               create: {
-                id: "pollen",
+                id: SubCategoryId.pollen,
                 name: "Pollen",
                 description: "Pollen from plants affecting air quality",
                 keywords: [
