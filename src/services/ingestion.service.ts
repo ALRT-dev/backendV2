@@ -24,6 +24,7 @@ import {
   getCachedLocationExtraction,
   setCachedLocationExtraction,
   parseUSGSEarthquakeToHazards,
+  parseQLDTrafficToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -70,6 +71,7 @@ export enum ExternalSourceId {
   smartraveller = "smartraveller",
   waDfes = "waDfes",
   earthquakeUsgs = "earthquakeUsgs",
+  qldTraffic = "qldTraffic",
 }
 
 // Configuration for hazard sources
@@ -417,6 +419,20 @@ export const syncHazardsFromDifferentSources = async ({
             earthquakeCategory,
           });
         },
+      },
+      {
+        id: ExternalSourceId.qldTraffic,
+        name: "QLD Traffic",
+        url: "https://qldtraffic.qld.gov.au",
+        imageUrl:
+          "https://qldtraffic.qld.gov.au/assets/img/qld-traffic-logo.svg",
+        apiUrl:
+          "https://api.qldtraffic.qld.gov.au/v2/events?apikey=3e83add325cbb69ac4d8e5bf433d770b",
+        parseFunction: (responseData: any) =>
+          parseQLDTrafficToHazards({
+            data: responseData,
+            availableCategories,
+          }),
       },
     ].filter((sourceConfig) =>
       sourceIds && sourceIds.length > 0

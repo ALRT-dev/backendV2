@@ -1638,6 +1638,246 @@ export function parseUSGSEarthquakeToHazards({
     .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
 }
 
+/**
+ * Converts QLD Traffic GeoJSON data to an array of Hazard objects
+ *
+ * @param data - GeoJSON FeatureCollection containing Queensland traffic event data
+ * @param availableCategories - The list of available hazard categories to match against
+ * @returns Array of HazardDataWithRelations objects ready for database insertion
+ *
+ * @example
+ * ```typescript
+ * const qldTrafficData = {
+ *   "type": "FeatureCollection",
+ *   "features": [
+ *     {
+ *       "type": "Feature",
+ *       "geometry": {
+ *         "type": "MultiLineString",
+ *         "coordinates": [[[153.093805935, -28.188027458], [153.093945935, -28.188017458]]]
+ *       },
+ *       "properties": {
+ *         "id": 248797,
+ *         "event_type": "Hazard",
+ *         "event_subtype": "Road damage",
+ *         "event_due_to": null,
+ *         "impact": {
+ *           "direction": "All directions",
+ *           "impact_type": "Closures",
+ *           "impact_subtype": "Road closed to all traffic",
+ *           "delay": null
+ *         },
+ *         "duration": {
+ *           "start": "2017-09-06T09:39:00+10:00",
+ *           "end": null
+ *         },
+ *         "event_priority": "Low",
+ *         "description": "Vehicle access is closed to all vehicles",
+ *         "advice": "Use alternative route",
+ *         "road_summary": {
+ *           "road_name": "Duck Creek Road",
+ *           "locality": "Cainbable / Kerry",
+ *           "postcode": "4285",
+ *           "local_government_area": "Scenic Rim Regional",
+ *           "district": "South Coast"
+ *         },
+ *         "url": "https://api.qldtraffic.qld.gov.au/v2/events/248797"
+ *       }
+ *     }
+ *   ]
+ * };
+ * const hazards = parseQLDTrafficToHazards({ data: qldTrafficData, availableCategories });
+ * ```
+ */
+export function parseQLDTrafficToHazards({
+  data,
+  availableCategories,
+}: {
+  data: FeatureCollection;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): HazardDataWithRelations[] {
+  if (!data.features?.length) return [];
+
+  return data.features
+    .map((feature) => {
+      const { geometry, properties } = feature;
+
+      if (!properties) {
+        return null;
+      }
+
+      // Extract coordinates from various geometry types
+      const point = extractFirstPoint(geometry);
+      const latitude = point?.[1] ?? null;
+      const longitude = point?.[0] ?? null;
+
+      // Skip if no valid coordinates
+      if (latitude == null || longitude == null) {
+        return null;
+      }
+
+      // Extract event properties
+      const eventId = properties.id;
+      const eventType = properties.event_type;
+      const eventSubtype =
+        properties.event_subtype && properties.event_subtype !== "N/A"
+          ? properties.event_subtype
+          : null;
+      const eventDueTo = properties.event_due_to;
+      const eventPriority = properties.event_priority; // "Low", "Medium", "High"
+      const description = properties.description;
+      const advice = properties.advice;
+      const url = properties.url;
+
+      // Extract impact information
+      const impact = properties.impact;
+      const direction = impact?.direction;
+      const impactType = impact?.impact_type;
+      const impactSubtype = impact?.impact_subtype;
+      const delay = impact?.delay;
+
+      // Extract road summary information
+      const roadSummary = properties.road_summary;
+      const roadName = roadSummary?.road_name;
+      const locality = roadSummary?.locality;
+      const postcode = roadSummary?.postcode;
+      const localGovernmentArea = roadSummary?.local_government_area;
+      const district = roadSummary?.district;
+
+      // Extract duration information
+      const duration = properties.duration;
+      const startTime = duration?.start;
+      const endTime = duration?.end;
+
+      // Build title from event information
+      const title = `${eventSubtype || eventType || "Traffic Incident"} - ${
+        roadName || "Unknown Road"
+      }, ${locality || "Unknown Location"}`;
+
+      // Build comprehensive description
+      const descriptionParts: string[] = [];
+
+      if (description) {
+        descriptionParts.push(description);
+      }
+
+      if (eventSubtype || eventType) {
+        descriptionParts.push(`Event Type: ${eventSubtype || eventType}`);
+      }
+
+      if (eventDueTo) {
+        descriptionParts.push(`Due To: ${eventDueTo}`);
+      }
+
+      if (roadName) {
+        descriptionParts.push(`Road: ${roadName}`);
+      }
+
+      if (locality) {
+        descriptionParts.push(`Locality: ${locality}`);
+      }
+
+      if (localGovernmentArea) {
+        descriptionParts.push(`LGA: ${localGovernmentArea}`);
+      }
+
+      if (district) {
+        descriptionParts.push(`District: ${district}`);
+      }
+
+      if (direction) {
+        descriptionParts.push(`Direction: ${direction}`);
+      }
+
+      if (impactType) {
+        descriptionParts.push(`Impact: ${impactType}`);
+      }
+
+      if (impactSubtype) {
+        descriptionParts.push(`Impact Details: ${impactSubtype}`);
+      }
+
+      if (delay) {
+        descriptionParts.push(`Expected Delay: ${delay}`);
+      }
+
+      if (advice) {
+        descriptionParts.push(`Advice: ${advice}`);
+      }
+
+      const fullDescription = descriptionParts.join("\n");
+
+      // Parse occurrence date from start time
+      const occurredAt = startTime ? parseValidDate(startTime) : new Date();
+
+      // Parse expiry date from end time if available
+      const expiresAt = endTime ? parseValidDate(endTime) : null;
+
+      // Create hazard ID using the event ID
+      const hazardId = eventId
+        ? `${ExternalSourceId.qldTraffic}-${eventId}`
+        : undefined;
+
+      // Build location name from road and locality
+      const locationName = [
+        roadName,
+        locality,
+        district ? `${district} District` : null,
+        "Queensland",
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      // Determine category and other attributes from description
+      const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+        getHazardAttributesFromDescription(
+          fullDescription,
+          availableCategories
+        );
+
+      let finalCategory = category;
+      // If eventType or eventSubtype is provided, try to refine the category from them
+      if (eventType || eventSubtype) {
+        const eventCategoryDesc = `${eventType || ""}${
+          eventSubtype ? ` - ${eventSubtype}` : ""
+        }`.trim();
+        console.log(
+          "---> Refining category based on event type/subtype:",
+          eventCategoryDesc
+        );
+        const obtainedCategory = getCategoryFromDescription(
+          eventCategoryDesc,
+          availableCategories
+        );
+        if (obtainedCategory && obtainedCategory.id !== MainCategoryId.other) {
+          finalCategory = obtainedCategory;
+        }
+      }
+
+      const hazard: HazardDataWithRelations = {
+        ...(hazardId && { id: hazardId }),
+        title,
+        description: fullDescription,
+        severity,
+        severityBand,
+        category: finalCategory,
+        ...(finalCategory.isFireRelated && {
+          fireStatus,
+        }),
+        isAwsCompliant,
+        latitude,
+        longitude,
+        locationName,
+        ...(url && { link: url }),
+        occurredAt,
+        ...(expiresAt && { expiresAt }),
+      };
+
+      return hazard;
+    })
+    .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
+}
+
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
 
 /**
@@ -2000,19 +2240,55 @@ function extractIdFromGUID(guid: string): string | null {
 }
 
 /**
- * Recursively extracts the first Point coordinates from any GeometryCollection
+ * Recursively extracts the first Point coordinates from any geometry type
+ * Handles Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon, and GeometryCollection
  */
 function extractFirstPoint(geometry: Geometry): number[] | null {
-  if (geometry.type === "Point") {
-    return (geometry as Point).coordinates;
+  if (!geometry) return null;
+
+  switch (geometry.type) {
+    case "Point":
+      return (geometry as Point).coordinates;
+
+    case "MultiPoint":
+      // MultiPoint coordinates: [[lng, lat], [lng, lat], ...]
+      const multiPoint = geometry as any;
+      return multiPoint.coordinates?.[0] || null;
+
+    case "LineString":
+      // LineString coordinates: [[lng, lat], [lng, lat], ...]
+      const lineString = geometry as any;
+      return lineString.coordinates?.[0] || null;
+
+    case "MultiLineString":
+      // MultiLineString coordinates: [[[lng, lat], [lng, lat], ...], [[lng, lat], ...]]
+      const multiLineString = geometry as any;
+      return multiLineString.coordinates?.[0]?.[0] || null;
+
+    case "Polygon":
+      // Polygon coordinates: [[[lng, lat], [lng, lat], ...]] (outer ring)
+      const polygon = geometry as any;
+      return polygon.coordinates?.[0]?.[0] || null;
+
+    case "MultiPolygon":
+      // MultiPolygon coordinates: [[[[lng, lat], ...]], [[[lng, lat], ...]]]
+      const multiPolygon = geometry as any;
+      return multiPolygon.coordinates?.[0]?.[0]?.[0] || null;
+
+    case "GeometryCollection":
+      // Recursively search through geometries
+      const collection = geometry as any;
+      if (collection.geometries) {
+        for (const g of collection.geometries) {
+          const point = extractFirstPoint(g as Geometry);
+          if (point) return point;
+        }
+      }
+      return null;
+
+    default:
+      return null;
   }
-  if (geometry.type === "GeometryCollection") {
-    for (const g of geometry.geometries) {
-      const point = extractFirstPoint(g as Geometry);
-      if (point) return point;
-    }
-  }
-  return null;
 }
 
 /**
