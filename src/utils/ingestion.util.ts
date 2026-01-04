@@ -13,6 +13,9 @@ import type {
   Point,
 } from "geojson";
 import Parser from "rss-parser";
+import puppeteer from "puppeteer";
+import { readFileSync } from "fs";
+import { join } from "path";
 import type { GeocodeResult } from "@googlemaps/google-maps-services-js";
 import {
   convertAddressToLatLng,
@@ -1876,6 +1879,309 @@ export function parseQLDTrafficToHazards({
       return hazard;
     })
     .filter((hazard): hazard is HazardDataWithRelations => hazard !== null);
+}
+
+/**
+ * Converts QLD Parks RSS feed into Hazard objects
+ *
+ * @param url - URL of the QLD Parks RSS feed
+ * @param availableCategories - Array of available hazard categories
+ * @returns Promise resolving to an array of HazardDataWithRelations objects
+ *
+ * @description
+ * Parses QLD Parks RSS feed which contains park alerts about closures, wet weather access,
+ * and other conditions affecting Queensland's national parks, marine parks and forests.
+ * The feed includes:
+ * - Park closure information
+ * - Wet weather access restrictions
+ * - Severe weather impacts
+ * - Maintenance work closures
+ * - List of affected parks
+ *
+ * Note: This feed does not provide geographic coordinates, so a placeholder location
+ * (central Queensland) is used. These should be geocoded later using the affected park names.
+ *
+ * @example
+ * ```typescript
+ * const url = "https://parks.qld.gov.au/xml/rss/parkalerts.xml";
+ * const hazards = await parseQLDParkToHazards({
+ *   url,
+ *   availableCategories
+ * });
+ * ```
+ */
+export async function parseQLDParkToHazards({
+  url,
+  availableCategories,
+}: {
+  url: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): Promise<HazardDataWithRelations[]> {
+  const parser = new Parser({
+    customFields: {
+      item: ["guid", "description"],
+    },
+  });
+
+  // Use Puppeteer to bypass Cloudflare protection
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+
+  try {
+    const page = await browser.newPage();
+
+    // Set realistic viewport and user agent
+    await page.setViewport({ width: 1920, height: 1080 });
+    await page.setUserAgent(
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+
+    // Navigate to the RSS feed URL and wait for the response
+    const response = await page.goto(url, {
+      waitUntil: "networkidle0",
+      timeout: 30000,
+    });
+
+    if (!response || !response.ok()) {
+      throw new Error(
+        `Failed to fetch QLD Parks RSS feed: ${response?.status()} ${response?.statusText()}`
+      );
+    }
+
+    // Get the raw XML content from the response
+    const xmlString = await response.text();
+
+    if (!xmlString) {
+      throw new Error("Failed to extract XML content from response");
+    }
+
+    const feed = await parser.parseString(xmlString);
+
+    if (!feed.items?.length) return [];
+
+    const hazards: HazardDataWithRelations[] = [];
+
+    for (const item of feed.items) {
+      const title = item.title?.trim() || "Untitled Park Alert";
+      const rawDescription = item.description?.trim() || "";
+      const link = item.link || null;
+      const guid = item.guid;
+      const pubDate = item.pubDate;
+
+      // Extract affected parks from description
+      // Format: "...description text... Affected parks: Park1; Park2; Park3"
+      const { cleanedDescription, affectedParks } =
+        extractQLDParkInfo(rawDescription);
+
+      // Extract ID from GUID
+      // GUID format: "https://parks.qld.gov.au/park-alerts/25995?v=2"
+      const guidMatch = guid?.match(/\/park-alerts\/(\d+)/);
+      const alertId = guidMatch?.[1];
+
+      // Parse occurrence date
+      const occurredAt = parseValidDate(pubDate);
+
+      // Load park coordinates from CSV
+      const parkCoordinatesMap = loadQLDParkCoordinates();
+
+      // Create one hazard per affected park
+      for (const parkName of affectedParks) {
+        // Build description specific to this park
+        const fullDescription = cleanedDescription;
+
+        // Get coordinates for this specific park
+        const coordinates = getParkCoordinates(parkName, parkCoordinatesMap);
+        if (!coordinates) {
+          continue;
+        }
+
+        const { latitude, longitude } = coordinates || {};
+
+        // Create unique ID for this park using slugified park name
+        const parkSlug = parkName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        const hazardId = alertId
+          ? `${ExternalSourceId.qldPark}-${alertId}-${parkSlug}`
+          : undefined;
+
+        // Build location name for this specific park
+        const locationName = `${parkName}, Queensland, Australia`;
+
+        // Determine category and other attributes from description
+        const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+          getHazardAttributesFromDescription(
+            fullDescription,
+            availableCategories
+          );
+
+        const hazard: HazardDataWithRelations = {
+          ...(hazardId && { id: hazardId }),
+          title,
+          description: fullDescription,
+          severity,
+          severityBand,
+          category,
+          ...(category.isFireRelated && {
+            fireStatus,
+          }),
+          isAwsCompliant,
+          ...(latitude && { latitude }),
+          ...(longitude && { longitude }),
+          locationName,
+          ...(link && { link }),
+          occurredAt,
+        };
+
+        hazards.push(hazard);
+      }
+    }
+
+    return hazards;
+  } catch (error) {
+    console.error("Error in parseQLDParkToHazards:", error);
+    throw error;
+  } finally {
+    await browser.close();
+  }
+}
+
+/**
+ * Extracts park information from QLD Parks alert description
+ * @param description - Raw CDATA description from RSS item
+ * @returns Object containing cleaned description and array of affected park names
+ */
+function extractQLDParkInfo(description: string): {
+  cleanedDescription: string;
+  affectedParks: string[];
+} {
+  if (!description) {
+    return {
+      cleanedDescription: "",
+      affectedParks: [],
+    };
+  }
+
+  // Extract affected parks (format: "Affected parks: Park1; Park2; Park3")
+  const affectedParksMatch = description.match(
+    /Affected parks:\s*([^\]]+?)(?:\]\]>)?$/i
+  );
+
+  let affectedParks: string[] = [];
+  let cleanedDescription = description;
+
+  if (affectedParksMatch && affectedParksMatch[1]) {
+    // Parse park names separated by semicolons or commas
+    const parksText = affectedParksMatch[1].trim();
+    affectedParks = parksText
+      .split(/[;,]/) // Split by both semicolons and commas
+      .map((park) => park.trim())
+      .filter((park) => park.length > 0);
+
+    // Remove the "Affected parks:" section from description
+    cleanedDescription = description.replace(/Affected parks:.*$/i, "").trim();
+  }
+
+  // Clean up the description
+  cleanedDescription = cleanDescription(cleanedDescription)
+    .replace(/\*\*/g, "") // Remove markdown bold
+    .trim();
+
+  return {
+    cleanedDescription,
+    affectedParks,
+  };
+}
+
+/**
+ * Loads Queensland park coordinates from CSV file
+ * @returns Map of park name (normalized) to coordinates
+ */
+function loadQLDParkCoordinates(): Map<
+  string,
+  { latitude: number; longitude: number }
+> {
+  const parkCoordinatesMap = new Map<
+    string,
+    { latitude: number; longitude: number }
+  >();
+
+  try {
+    // TODO: Update this path to the actual CSV file location
+    const csvPath = join(process.cwd(), "data", "qld-parks-coordinates.csv");
+    const csvContent = readFileSync(csvPath, "utf-8");
+
+    // Parse CSV (skip header row)
+    const lines = csvContent.split("\n").slice(1);
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+
+      const [parkName, latitude, longitude] = line
+        .split(",")
+        .map((s) => s.trim());
+
+      if (parkName && latitude && longitude) {
+        const lat = parseFloat(latitude);
+        const lng = parseFloat(longitude);
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          // Normalize park name for matching (lowercase, remove extra spaces)
+          const normalizedName = parkName.toLowerCase().trim();
+          parkCoordinatesMap.set(normalizedName, {
+            latitude: lat,
+            longitude: lng,
+          });
+        }
+      }
+    }
+
+    console.log(
+      `Loaded coordinates for ${parkCoordinatesMap.size} Queensland parks`
+    );
+  } catch (error) {
+    console.warn(
+      "Could not load QLD park coordinates CSV, using default coordinates:",
+      error
+    );
+  }
+
+  return parkCoordinatesMap;
+}
+
+/**
+ * Finds park coordinates from the loaded map, with fuzzy matching
+ * @param parkName - Name of the park to find
+ * @param coordinatesMap - Map of park coordinates
+ * @returns Coordinates if found, otherwise null
+ */
+function getParkCoordinates(
+  parkName: string,
+  coordinatesMap: Map<string, { latitude: number; longitude: number }>
+): { latitude: number; longitude: number } | null {
+  const normalizedName = parkName.toLowerCase().trim();
+
+  // Try exact match first
+  if (coordinatesMap.has(normalizedName)) {
+    return coordinatesMap.get(normalizedName)!;
+  }
+
+  // Try partial match - check if any park in map contains the search name or vice versa
+  for (const [mapParkName, coords] of coordinatesMap.entries()) {
+    if (
+      mapParkName.includes(normalizedName) ||
+      normalizedName.includes(mapParkName)
+    ) {
+      return coords;
+    }
+  }
+
+  // Return null if no match found
+  console.log(`No coordinates found for park: ${parkName}, skipping hazard`);
+  return null;
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------------- HELPERS
