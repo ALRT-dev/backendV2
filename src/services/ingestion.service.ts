@@ -18,7 +18,6 @@ import {
   getGeocodingCacheSize,
   parseSmartravellerToHazards,
   parseWAWarningsToHazards,
-  parseBOMFeedToHazards,
   parseWAIncidentsToHazards,
   cleanupLocationExtractionCache,
   getCachedLocationExtraction,
@@ -152,19 +151,19 @@ export const syncHazardsFromDifferentSources = async ({
             dateFormat: "DD/MM/YYYY",
           }),
       },
-      ...Object.values(AustralianStates).map((state) => ({
-        id: ExternalSourceId.bom,
-        name: "BoM",
-        url: "https://www.bom.gov.au",
-        imageUrl: "",
-        apiUrl: AustralianStateBomAPIs[state],
-        parseFunction: () =>
-          parseBOMFeedToHazards({
-            url: AustralianStateBomAPIs[state],
-            availableCategories,
-            australianState: state,
-          }),
-      })),
+      // ...Object.values(AustralianStates).map((state) => ({
+      //   id: ExternalSourceId.bom,
+      //   name: "BoM",
+      //   url: "https://www.bom.gov.au",
+      //   imageUrl: "",
+      //   apiUrl: AustralianStateBomAPIs[state],
+      //   parseFunction: () =>
+      //     parseBOMFeedToHazards({
+      //       url: AustralianStateBomAPIs[state],
+      //       availableCategories,
+      //       australianState: state,
+      //     }),
+      // })),
       {
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",
