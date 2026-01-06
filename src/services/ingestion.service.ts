@@ -332,41 +332,41 @@ export const syncHazardsFromDifferentSources = async ({
           });
         },
       },
-      {
-        id: ExternalSourceId.smartraveller,
-        name: "Smartraveller",
-        url: "https://www.smartraveller.gov.au",
-        imageUrl:
-          "https://www.smartraveller.gov.au/themes/custom/smart_traveller/logo-main-st.png",
-        apiUrl: "https://www.smartraveller.gov.au/destinations-export",
-        parseFunction: (responseData: any) => {
-          const parentCategories =
-            availableCategories
-              ?.map((cat) => cat.parent)
-              ?.filter((cat) => cat !== null)
-              .reduce<HazardCategory[]>((acc, curr) => {
-                if (curr && !acc.find((c) => c.id === curr.id)) {
-                  acc.push(curr);
-                }
-                return acc;
-              }, []) || [];
+      // {
+      //   id: ExternalSourceId.smartraveller,
+      //   name: "Smartraveller",
+      //   url: "https://www.smartraveller.gov.au",
+      //   imageUrl:
+      //     "https://www.smartraveller.gov.au/themes/custom/smart_traveller/logo-main-st.png",
+      //   apiUrl: "https://www.smartraveller.gov.au/destinations-export",
+      //   parseFunction: (responseData: any) => {
+      //     const parentCategories =
+      //       availableCategories
+      //         ?.map((cat) => cat.parent)
+      //         ?.filter((cat) => cat !== null)
+      //         .reduce<HazardCategory[]>((acc, curr) => {
+      //           if (curr && !acc.find((c) => c.id === curr.id)) {
+      //             acc.push(curr);
+      //           }
+      //           return acc;
+      //         }, []) || [];
 
-          const securityAndCrimeCategory = parentCategories.find(
-            (cat: HazardCategory) => cat.id === MainCategoryId.securityAndCrime
-          );
-          if (!securityAndCrimeCategory) {
-            console.log(
-              "Security and Crime category not found, skipping Smartraveller hazards."
-            );
-            return [];
-          }
+      //     const securityAndCrimeCategory = parentCategories.find(
+      //       (cat: HazardCategory) => cat.id === MainCategoryId.securityAndCrime
+      //     );
+      //     if (!securityAndCrimeCategory) {
+      //       console.log(
+      //         "Security and Crime category not found, skipping Smartraveller hazards."
+      //       );
+      //       return [];
+      //     }
 
-          return parseSmartravellerToHazards({
-            data: responseData,
-            category: securityAndCrimeCategory,
-          });
-        },
-      },
+      //     return parseSmartravellerToHazards({
+      //       data: responseData,
+      //       category: securityAndCrimeCategory,
+      //     });
+      //   },
+      // },
       {
         id: ExternalSourceId.waDfes,
         name: "DFES WA",
