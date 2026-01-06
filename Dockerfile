@@ -14,6 +14,7 @@ RUN npx prisma generate
 
 # Copy source files
 COPY tsconfig.json ./
+COPY serviceAccountKey.json ./
 COPY src ./src
 
 # Build the application
