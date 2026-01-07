@@ -64,6 +64,10 @@ app.use("/api/admin", adminRouter);
 app.use("/api/webhook", webhookRouter);
 app.use("/api/support", supportRouter);
 
+app.get("/api/test", (req, res) => {
+  res.send("Test route is working!");
+});
+
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
 
