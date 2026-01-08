@@ -25,6 +25,9 @@ import prisma from "../utils/prisma_client.util.js";
  *
  *   # Show API key details
  *   yarn webhook-key show <key-id>
+ *
+ *   # Update rate limits
+ *   yarn webhook-key update <key-id> --max-per-minute 20 --max-per-hour 200 --max-per-day 2000
  */
 
 interface CreateOptions {
@@ -33,6 +36,12 @@ interface CreateOptions {
   maxRequestsPerHour?: number;
   maxRequestsPerDay?: number;
   expireDays?: number;
+}
+
+interface UpdateOptions {
+  maxRequestsPerMinute?: number;
+  maxRequestsPerHour?: number;
+  maxRequestsPerDay?: number;
 }
 
 async function createApiKey(name: string, options: CreateOptions = {}) {
@@ -258,6 +267,60 @@ async function deleteApiKey(keyId: string) {
   }
 }
 
+async function updateRateLimits(keyId: string, options: UpdateOptions) {
+  try {
+    console.log(`⚙️  Updating rate limits for API key ${keyId}...`);
+
+    const key = await prisma.webhookApiKey.findUnique({
+      where: { id: keyId },
+    });
+
+    if (!key) {
+      console.error(`❌ API key not found: ${keyId}`);
+      process.exit(1);
+    }
+
+    // Check if any options were provided
+    if (
+      options.maxRequestsPerMinute === undefined &&
+      options.maxRequestsPerHour === undefined &&
+      options.maxRequestsPerDay === undefined
+    ) {
+      console.error("❌ No rate limit parameters provided to update");
+      console.log("   Use --max-per-minute, --max-per-hour, or --max-per-day");
+      process.exit(1);
+    }
+
+    // Build update data object with only provided values
+    const updateData: any = {};
+    if (options.maxRequestsPerMinute !== undefined) {
+      updateData.maxRequestsPerMinute = options.maxRequestsPerMinute;
+    }
+    if (options.maxRequestsPerHour !== undefined) {
+      updateData.maxRequestsPerHour = options.maxRequestsPerHour;
+    }
+    if (options.maxRequestsPerDay !== undefined) {
+      updateData.maxRequestsPerDay = options.maxRequestsPerDay;
+    }
+
+    const updatedKey = await prisma.webhookApiKey.update({
+      where: { id: keyId },
+      data: updateData,
+    });
+
+    console.log("✅ Rate limits updated successfully!");
+    console.log(`   Name: ${updatedKey.name}`);
+    console.log("\n🔢 New Rate Limits:");
+    console.log(`   Per Minute: ${updatedKey.maxRequestsPerMinute}`);
+    console.log(`   Per Hour: ${updatedKey.maxRequestsPerHour}`);
+    console.log(`   Per Day: ${updatedKey.maxRequestsPerDay}`);
+  } catch (error) {
+    console.error("❌ Failed to update rate limits:");
+    console.error(error instanceof Error ? error.message : error);
+    process.exit(1);
+  }
+}
+
 async function showApiKey(keyId: string) {
   try {
     console.log(`🔍 Fetching API key details...\n`);
@@ -393,6 +456,9 @@ async function main() {
     console.log("  yarn tsx src/scripts/webhook-api-key.ts list");
     console.log("  yarn tsx src/scripts/webhook-api-key.ts delete <key-id>");
     console.log("  yarn tsx src/scripts/webhook-api-key.ts show <key-id>");
+    console.log(
+      "  yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]"
+    );
     console.log("\nOptions for create:");
     console.log("  --description <text>           Description of the API key");
     console.log(
@@ -405,6 +471,10 @@ async function main() {
       "  --max-per-day <number>         Max requests per day (default: 1000)"
     );
     console.log("  --expire-days <number>         Expire after N days");
+    console.log("\nOptions for update:");
+    console.log("  --max-per-minute <number>      New max requests per minute");
+    console.log("  --max-per-hour <number>        New max requests per hour");
+    console.log("  --max-per-day <number>         New max requests per day");
     console.log("\nExamples:");
     console.log(
       '  yarn tsx src/scripts/webhook-api-key.ts create "Client A" --description "N8N automation" --expire-days 365'
@@ -416,6 +486,9 @@ async function main() {
       "  yarn tsx src/scripts/webhook-api-key.ts disable abc-123-def"
     );
     console.log("  yarn tsx src/scripts/webhook-api-key.ts list");
+    console.log(
+      "  yarn tsx src/scripts/webhook-api-key.ts update abc-123-def --max-per-day 5000"
+    );
     process.exit(0);
   }
 
@@ -523,10 +596,46 @@ async function main() {
       break;
     }
 
+    case "update": {
+      const keyId = args[1];
+      if (!keyId) {
+        console.error("❌ Key ID is required for update command");
+        console.log(
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]"
+        );
+        process.exit(1);
+      }
+
+      const options: UpdateOptions = {};
+
+      for (let i = 2; i < args.length; i++) {
+        const arg = args[i];
+        if (arg === "--max-per-minute" && args[i + 1]) {
+          const value = args[++i];
+          if (value !== undefined) {
+            options.maxRequestsPerMinute = parseInt(value, 10);
+          }
+        } else if (arg === "--max-per-hour" && args[i + 1]) {
+          const value = args[++i];
+          if (value !== undefined) {
+            options.maxRequestsPerHour = parseInt(value, 10);
+          }
+        } else if (arg === "--max-per-day" && args[i + 1]) {
+          const value = args[++i];
+          if (value !== undefined) {
+            options.maxRequestsPerDay = parseInt(value, 10);
+          }
+        }
+      }
+
+      await updateRateLimits(keyId, options);
+      break;
+    }
+
     default:
       console.error(`❌ Unknown command: ${command}`);
       console.log(
-        "Available commands: create, disable, enable, list, delete, show"
+        "Available commands: create, disable, enable, list, delete, show, update"
       );
       process.exit(1);
   }
