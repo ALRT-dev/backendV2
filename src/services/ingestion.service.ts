@@ -70,6 +70,7 @@ export enum ExternalSourceId {
   openMeteo = "openMeteo",
   smartraveller = "smartraveller",
   waDfes = "waDfes",
+  nswSes = "nswSes",
   earthquakeUsgs = "earthquakeUsgs",
   qldTraffic = "qldTraffic",
   qldPark = "qldPark",

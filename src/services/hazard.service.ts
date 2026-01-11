@@ -650,6 +650,21 @@ export const getSuggestedCategory = async ({
 };
 
 /**
+ * Enum representing different hazard source licenses.
+ * Each license type corresponds to a specific set of usage rights and restrictions.
+ */
+export enum HazardSourceLicenseBadgeText {
+  ccBy4 = "CC BY 4.0",
+  ccBy3 = "CC BY 3.0",
+  oglv3 = "OGL v3.0",
+  openGov = "OPEN GOV",
+  openData = "OPEN DATA",
+  licensed = "LICENSED",
+  permission = "PERMISSION",
+  pending = "PENDING",
+}
+
+/**
  * Initialize hazard sources in the database
  * This function creates or updates hazard sources based on predefined external sources
  */
@@ -660,46 +675,152 @@ export const initializeHazardSources = async (): Promise<void> => {
       return;
     }
 
+    // Create or update hazard source licenses first
+    const hazardSourceLicenses: Prisma.HazardSourceLicenseCreateInput[] = [
+      {
+        badgeText: HazardSourceLicenseBadgeText.ccBy4,
+        licenseText: "Creative Commons Attribution 4.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://creativecommons.org/licenses/by/4.0/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.ccBy3,
+        licenseText: "Creative Commons Attribution 3.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://creativecommons.org/licenses/by/3.0/au/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.oglv3,
+        licenseText: "Open Government Licence v3.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.openGov,
+        licenseText: "Open Government License",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.openData,
+        licenseText: "Open Data License",
+        backgroundColor: "#e3f2fd",
+        foregroundColor: "#0d6efd",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.licensed,
+        licenseText: "Commercial License",
+        backgroundColor: "#e9ecef",
+        foregroundColor: "#6c757d",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.permission,
+        licenseText: "Source Permission",
+        backgroundColor: "#f8d7da",
+        foregroundColor: "#dc3545",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.pending,
+        licenseText: "Awaiting License Permission",
+        backgroundColor: "#fff3cd",
+        foregroundColor: "#856404",
+      },
+    ];
+
+    await Promise.all(
+      hazardSourceLicenses.map((license) => {
+        return prisma.hazardSourceLicense.upsert({
+          where: { badgeText: license.badgeText },
+          create: license,
+          update: license,
+        });
+      })
+    );
+
+    // Now create or update hazard sources
     const hazardSources: Prisma.HazardSourceCreateInput[] = [
       {
         id: ExternalSourceId.rfs,
         name: "NSW Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.bom,
         name: "BoM",
         url: "https://www.bom.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
       },
       {
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",
         url: "https://www.transport.nsw.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.actEs,
         name: "ACT Emergency Services",
         url: "https://www.act.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.cfs,
         name: "CFS",
         url: "https://www.cfs.sa.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.pending,
+          },
+        },
       },
       {
         id: ExternalSourceId.viceFire,
-        name: "Vice Fire Services",
+        name: "Vic Fire Services",
         url: "https://www.vicefire.com",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy3,
+          },
+        },
       },
       {
         id: ExternalSourceId.qldFire,
         name: "QLD Fire Department",
         url: "https://www.qld.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.ntFireAndRescue,
         name: "NT Fire and Rescue",
         url: "https://www.nt.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.permission,
+          },
+        },
       },
       {
         id: ExternalSourceId.waqi,
@@ -715,11 +836,31 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.smartraveller,
         name: "Smartraveller",
         url: "https://www.smartraveller.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.permission,
+          },
+        },
       },
       {
         id: ExternalSourceId.waDfes,
         name: "DFES WA",
         url: "https://emergency.wa.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.nswSes,
+        name: "NSW State Emergency Service",
+        url: "https://www.ses.nsw.gov.au",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
       },
       {
         id: ExternalSourceId.earthquakeUsgs,
