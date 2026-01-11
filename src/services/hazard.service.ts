@@ -26,6 +26,7 @@ import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { executePrompt } from "./open-ai.service.js";
 import { MainCategoryId } from "./hazard_category.service.js";
+import { ExternalSourceId } from "./ingestion.service.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -645,5 +646,112 @@ export const getSuggestedCategory = async ({
       500,
       `AI category suggestion failed: Invalid response format: ${parseError}`
     );
+  }
+};
+
+/**
+ * Initialize hazard sources in the database
+ * This function creates or updates hazard sources based on predefined external sources
+ */
+export const initializeHazardSources = async (): Promise<void> => {
+  try {
+    const count = await prisma.hazardSource.count();
+    if (count > 0) {
+      return;
+    }
+
+    const hazardSources: Prisma.HazardSourceCreateInput[] = [
+      {
+        id: ExternalSourceId.rfs,
+        name: "NSW Rural Fire Service",
+        url: "https://www.rfs.nsw.gov.au",
+      },
+      {
+        id: ExternalSourceId.bom,
+        name: "BoM",
+        url: "https://www.bom.gov.au",
+      },
+      {
+        id: ExternalSourceId.nswTransport,
+        name: "NSW Transport",
+        url: "https://www.transport.nsw.gov.au",
+      },
+      {
+        id: ExternalSourceId.actEs,
+        name: "ACT Emergency Services",
+        url: "https://www.act.gov.au",
+      },
+      {
+        id: ExternalSourceId.cfs,
+        name: "CFS",
+        url: "https://www.cfs.sa.gov.au",
+      },
+      {
+        id: ExternalSourceId.viceFire,
+        name: "Vice Fire Services",
+        url: "https://www.vicefire.com",
+      },
+      {
+        id: ExternalSourceId.qldFire,
+        name: "QLD Fire Department",
+        url: "https://www.qld.gov.au",
+      },
+      {
+        id: ExternalSourceId.ntFireAndRescue,
+        name: "NT Fire and Rescue",
+        url: "https://www.nt.gov.au",
+      },
+      {
+        id: ExternalSourceId.waqi,
+        name: "World Air Quality",
+        url: "https://www.waqi.info",
+      },
+      {
+        id: ExternalSourceId.openMeteo,
+        name: "Open-Meteo",
+        url: "https://open-meteo.com",
+      },
+      {
+        id: ExternalSourceId.smartraveller,
+        name: "Smartraveller",
+        url: "https://www.smartraveller.gov.au",
+      },
+      {
+        id: ExternalSourceId.waDfes,
+        name: "DFES WA",
+        url: "https://emergency.wa.gov.au",
+      },
+      {
+        id: ExternalSourceId.earthquakeUsgs,
+        name: "USGS Earthquake Hazards Program",
+        url: "https://earthquake.usgs.gov",
+      },
+      {
+        id: ExternalSourceId.qldTraffic,
+        name: "QLD Traffic",
+        url: "https://qldtraffic.qld.gov.au",
+      },
+      {
+        id: ExternalSourceId.qldPark,
+        name: "QLD Park Alerts",
+        url: "https://parks.qld.gov.au/park-alerts",
+      },
+    ];
+
+    await Promise.all(
+      hazardSources.map((source) => {
+        return prisma.hazardSource.upsert({
+          where: source.id ? { id: source.id } : { url: source.url },
+          create: source,
+          update: source,
+        });
+      })
+    );
+
+    console.log(
+      "---------------------------------------> Hazard sources initialized successfully"
+    );
+  } catch (error) {
+    console.error("Error initializing hazard sources:", error);
   }
 };

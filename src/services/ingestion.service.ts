@@ -22,6 +22,9 @@ import {
   cleanupLocationExtractionCache,
   getCachedLocationExtraction,
   setCachedLocationExtraction,
+  parseUSGSEarthquakeToHazards,
+  parseQLDTrafficToHazards,
+  parseQLDParkToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -41,6 +44,7 @@ import { config } from "../utils/config.js";
 import {
   getAllSubHazardCategories,
   MainCategoryId,
+  SubCategoryId,
 } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
@@ -66,14 +70,14 @@ export enum ExternalSourceId {
   openMeteo = "openMeteo",
   smartraveller = "smartraveller",
   waDfes = "waDfes",
+  earthquakeUsgs = "earthquakeUsgs",
+  qldTraffic = "qldTraffic",
+  qldPark = "qldPark",
 }
 
 // Configuration for hazard sources
 interface ExternalSource {
   id: ExternalSourceId;
-  name: string;
-  url: string;
-  imageUrl?: string;
 
   apiUrl?: string | undefined;
   apiUrls?: string[] | undefined;
@@ -138,10 +142,6 @@ export const syncHazardsFromDifferentSources = async ({
     const externalSources: ExternalSource[] = [
       {
         id: ExternalSourceId.rfs,
-        name: "NSW Rural Fire Service",
-        url: "https://www.rfs.nsw.gov.au",
-        imageUrl:
-          "https://www.rfs.nsw.gov.au/__data/assets/image/0016/961/rfs-logo-main.png?v=0.3.3",
         apiUrl: "https://www.rfs.nsw.gov.au/feeds/majorIncidents.json",
         parseFunction: (responseData: any) =>
           parseGeoJsonToHazards({
@@ -166,10 +166,6 @@ export const syncHazardsFromDifferentSources = async ({
       // })),
       {
         id: ExternalSourceId.nswTransport,
-        name: "NSW Transport",
-        url: "https://www.transport.nsw.gov.au",
-        imageUrl:
-          "https://www.transport.nsw.gov.au/themes/tfnsw_corp_theme/source/tfnsw/components/header/images/logo-TfNSW.png",
         apiUrls: [
           "https://api.transport.nsw.gov.au/v1/live/hazards/incident/open",
           "https://api.transport.nsw.gov.au/v1/live/hazards/majorevent/open",
@@ -188,10 +184,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.actEs,
-        name: "ACT Emergency Services",
-        url: "https://www.act.gov.au",
-        imageUrl:
-          "https://www.act.gov.au/__data/assets/image/0019/2541430/ACTGov_inline_black.png",
         apiUrl: "https://esa.act.gov.au/feeds/currentincidents.xml",
         parseFunction: () =>
           parseRSSFeedToHazards({
@@ -202,10 +194,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.cfs,
-        name: "CFS",
-        url: "https://www.cfs.sa.gov.au",
-        imageUrl:
-          "https://www.cfs.sa.gov.au/custom/templates_images/CFS_State_Badge.svg",
         apiUrl:
           "https://data.eso.sa.gov.au/prod/cfs/criimson/cfs_current_incidents.json",
         parseFunction: (responseData: any) =>
@@ -216,9 +204,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.viceFire,
-        name: "Vice Fire Services",
-        url: "https://www.vicefire.com",
-        imageUrl: "",
         apiUrl: "https://data.emergency.vic.gov.au/Show?pageId=getIncidentRSS",
         parseFunction: () =>
           parseRSSFeedToHazards({
@@ -229,9 +214,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.qldFire,
-        name: "QLD Fire Department",
-        url: "https://www.qld.gov.au",
-        imageUrl: "",
         apiUrl:
           "https://publiccontent.gis.psba.qld.gov.au/content/Feeds/BushfireCurrentIncidents/bushfireAlert.xml",
         parseFunction: () =>
@@ -243,9 +225,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.ntFireAndRescue,
-        name: "NT Fire and Rescue",
-        url: "https://www.nt.gov.au",
-        imageUrl: "https://nt.gov.au/_design/css/main.css/ntg-logo-mono.svg",
         apiUrl: "https://www.pfes.nt.gov.au/incidentmap/json/incidents.json",
         parseFunction: (responseData: any) =>
           parseNTFireAndRescueToHazards({
@@ -255,9 +234,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.waqi,
-        name: "World Air Quality",
-        url: "https://www.waqi.info",
-        imageUrl: "https://www.waqi.info/images/logo.png",
         apiUrl: `https://api.waqi.info/map/bounds/?latlng=${australiaBounds}&token=${config.waqiApi.apiToken}`,
         severityBandFilter: {
           minimumSeverityBands: [
@@ -289,9 +265,6 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.openMeteo,
-        name: "Open-Meteo",
-        url: "https://open-meteo.com",
-        imageUrl: "",
         apiUrls: australiaLocations.map((location) => {
           const apiUrl =
             "https://air-quality-api.open-meteo.com/v1/air-quality";
@@ -313,10 +286,10 @@ export const syncHazardsFromDifferentSources = async ({
         },
         parseFunction: (responseData: any) => {
           const pollenCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === "pollen"
+            (cat: HazardCategory) => cat.id === SubCategoryId.pollen
           );
           const uvCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === "uvAlert"
+            (cat: HazardCategory) => cat.id === SubCategoryId.uvAlert
           );
           if (!pollenCategory || !uvCategory) {
             console.log(
@@ -369,9 +342,6 @@ export const syncHazardsFromDifferentSources = async ({
       // },
       {
         id: ExternalSourceId.waDfes,
-        name: "DFES WA",
-        url: "https://emergency.wa.gov.au",
-        imageUrl: "",
         apiUrl: "https://api.emergency.wa.gov.au/v1/rss/warnings",
         parseFunction: () =>
           parseWAWarningsToHazards({
@@ -381,13 +351,50 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.waDfes,
-        name: "DFES WA",
-        url: "https://emergency.wa.gov.au",
-        imageUrl: "",
         apiUrl: "https://api.emergency.wa.gov.au/v1/rss/incidents",
         parseFunction: () =>
           parseWAIncidentsToHazards({
             url: "https://api.emergency.wa.gov.au/v1/rss/incidents",
+            availableCategories,
+          }),
+      },
+      {
+        id: ExternalSourceId.earthquakeUsgs,
+        apiUrl:
+          "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
+        parseFunction: (responseData: any) => {
+          const earthquakeCategory = availableCategories.find(
+            (cat) => cat.id === SubCategoryId.earthquake
+          );
+          if (!earthquakeCategory) {
+            console.log(
+              "Earthquake category not found, skipping USGS Earthquake hazards."
+            );
+            return [];
+          }
+
+          return parseUSGSEarthquakeToHazards({
+            data: responseData,
+            earthquakeCategory,
+          });
+        },
+      },
+      {
+        id: ExternalSourceId.qldTraffic,
+        apiUrl:
+          "https://api.qldtraffic.qld.gov.au/v2/events?apikey=3e83add325cbb69ac4d8e5bf433d770b",
+        parseFunction: (responseData: any) =>
+          parseQLDTrafficToHazards({
+            data: responseData,
+            availableCategories,
+          }),
+      },
+      {
+        id: ExternalSourceId.qldPark,
+        apiUrl: "https://parks.qld.gov.au/xml/rss/parkalerts.xml",
+        parseFunction: () =>
+          parseQLDParkToHazards({
+            url: "https://parks.qld.gov.au/xml/rss/parkalerts.xml",
             availableCategories,
           }),
       },
@@ -408,11 +415,11 @@ export const syncHazardsFromDifferentSources = async ({
           const hazards = await fetchHazardsFromSource(externalSource);
 
           console.log(
-            `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.name}`
+            `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.id}`
           );
           return hazards;
         } catch (error) {
-          console.error(`Error fetching from ${externalSource.name}:`, error);
+          console.error(`Error fetching from ${externalSource.id}:`, error);
           return [];
         }
       })
@@ -799,10 +806,7 @@ const fetchHazardsFromSource = async <T = any>(
   externalSource: ExternalSource
 ): Promise<HazardDataWithRelations[]> => {
   const {
-    id,
-    name,
-    url,
-    imageUrl,
+    id: sourceId,
     apiUrl,
     apiUrls,
     fetchOptions,
@@ -822,19 +826,15 @@ const fetchHazardsFromSource = async <T = any>(
       }
     }
 
-    const externalSourceBasicInfo = {
-      id: id,
-      name: name,
-      url: url,
-      ...(imageUrl && { imageUrl }),
-    };
-
     // Ensure the source exists before creating hazards
-    const source = await prisma.hazardSource.upsert({
-      where: { id: externalSourceBasicInfo.id },
-      create: externalSourceBasicInfo,
-      update: externalSourceBasicInfo,
+    const source = await prisma.hazardSource.findUnique({
+      where: { id: sourceId },
     });
+    if (!source) {
+      throw new Error(
+        `Hazard source with ID ${sourceId} not found in database.`
+      );
+    }
 
     // Handle single URL
     if (apiUrl) {
@@ -853,7 +853,9 @@ const fetchHazardsFromSource = async <T = any>(
       // Standard JSON API fetching
       const response = await fetch(apiUrl, fetchOptions);
       if (!response.ok) {
-        throw new Error(`Failed to fetch ${name} data: ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch ${sourceId} data: ${response.statusText}`
+        );
       }
 
       const data = await response.json();
@@ -875,7 +877,7 @@ const fetchHazardsFromSource = async <T = any>(
           const response = await fetch(singleUrl, fetchOptions);
           if (!response.ok) {
             throw new Error(
-              `Failed to fetch ${name} data from ${singleUrl}: ${response.statusText}`
+              `Failed to fetch ${sourceId} data from ${singleUrl}: ${response.statusText}`
             );
           }
 
@@ -893,7 +895,7 @@ const fetchHazardsFromSource = async <T = any>(
             id: hazard.id || generateHazardId(hazard),
           }));
         } catch (error) {
-          console.error(`Error fetching ${name} from ${singleUrl}:`, error);
+          console.error(`Error fetching ${sourceId} from ${singleUrl}:`, error);
           return [];
         }
       });
@@ -904,7 +906,7 @@ const fetchHazardsFromSource = async <T = any>(
 
     return [];
   } catch (error) {
-    console.error(`Error fetching ${name} data:`, error);
+    console.error(`Error fetching ${sourceId} data:`, error);
     return [];
   }
 };

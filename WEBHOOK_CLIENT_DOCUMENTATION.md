@@ -214,7 +214,9 @@ curl -X POST http://3.26.195.127/api/webhook/hazards \
     "hazards": [
       {
         "description": "Bushfire reported in Blue Mountains area with smoke visible from multiple locations.",
-        "sourceId": "rfs"
+        "sourceId": "rfs",
+        "latitude": -33.7092,
+        "longitude": 150.3105
       }
     ]
   }'
