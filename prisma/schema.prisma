@@ -198,6 +198,9 @@ model HazardSource {
   imageUrl  String?
   licenseId String?
 
+  advisoryText  String? // Standard advisory text associated with this source
+  copyrightText String? // Copyright information for this source
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

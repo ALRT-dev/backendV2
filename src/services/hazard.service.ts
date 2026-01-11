@@ -170,6 +170,15 @@ export const getHazardsApplyingFiltersRaw = async (
         hcp.color as "categoryParentColor",
         hs.name as "sourceName",
         hs.url as "sourceUrl",
+        hs."advisoryText" as "sourceAdvisoryText",
+        hs."copyrightText" as "sourceCopyrightText",
+        hsl.id as "licenseLicenseId",
+        hsl."badgeText" as "licenseBadgeText",
+        hsl."licenseText" as "licenseLicenseText",
+        hsl.description as "licenseDescription",
+        hsl.link as "licenseLink",
+        hsl."foregroundColor" as "licenseForegroundColor",
+        hsl."backgroundColor" as "licenseBackgroundColor",
         u.id as "reportedByUserId",
         u.name as "reportedByName",
         u.email as "reportedByEmail",
@@ -184,7 +193,8 @@ export const getHazardsApplyingFiltersRaw = async (
       FROM "Hazard" h
       LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
       LEFT JOIN "HazardCategory" hcp ON hc."parentId" = hcp.id
-      LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id  
+      LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id
+      LEFT JOIN "HazardSourceLicense" hsl ON hs."licenseId" = hsl.id
       LEFT JOIN "User" u ON h."reportedById" = u.id`;
 
   if (userId && userVoteParamIndex) {
@@ -276,6 +286,15 @@ export const getHazardsApplyingFiltersRaw = async (
       categoryParentColor,
       sourceName,
       sourceUrl,
+      sourceAdvisoryText,
+      sourceCopyrightText,
+      licenseLicenseId,
+      licenseBadgeText,
+      licenseLicenseText,
+      licenseDescription,
+      licenseLink,
+      licenseForegroundColor,
+      licenseBackgroundColor,
       userVoteType,
       medias,
       ...cleanHazard
@@ -307,6 +326,19 @@ export const getHazardsApplyingFiltersRaw = async (
             id: hazard.sourceId,
             name: sourceName,
             url: sourceUrl,
+            advisoryText: sourceAdvisoryText,
+            copyrightText: sourceCopyrightText,
+            license: licenseLicenseId
+              ? {
+                  id: licenseLicenseId,
+                  badgeText: licenseBadgeText,
+                  licenseText: licenseLicenseText,
+                  description: licenseDescription,
+                  link: licenseLink,
+                  foregroundColor: licenseForegroundColor,
+                  backgroundColor: licenseBackgroundColor,
+                }
+              : null,
           }
         : null,
       medias: medias || [],
@@ -746,6 +778,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.rfs,
         name: "NSW Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW (NSW RFS).",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.ccBy4,
@@ -756,6 +790,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.bom,
         name: "BoM",
         url: "https://www.bom.gov.au",
+        copyrightText:
+          "Reproduced by permission of the Bureau of Meteorology, © Commonwealth of Australia.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.licensed,
@@ -766,6 +802,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.nswTransport,
         name: "NSW Transport",
         url: "https://www.transport.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.ccBy4,
@@ -776,6 +814,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.actEs,
         name: "ACT Emergency Services",
         url: "https://www.act.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Australian Capital Territory.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.ccBy4,
@@ -786,6 +826,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.cfs,
         name: "CFS",
         url: "https://www.cfs.sa.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Government of South Australia.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.pending,
@@ -796,6 +838,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.viceFire,
         name: "Vic Fire Services",
         url: "https://www.vicefire.com",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Victoria.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.ccBy3,
@@ -806,6 +850,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.qldFire,
         name: "QLD Fire Department",
         url: "https://www.qld.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.ccBy4,
@@ -816,6 +862,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.ntFireAndRescue,
         name: "NT Fire and Rescue",
         url: "https://www.nt.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Northern Territory Government.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.permission,
@@ -826,6 +874,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.waqi,
         name: "World Air Quality",
         url: "https://www.waqi.info",
+        advisoryText:
+          "For official air quality health advice, consult your state EPA, Bureau of Meteorology, or Department of Health.",
       },
       {
         id: ExternalSourceId.openMeteo,
@@ -836,6 +886,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.smartraveller,
         name: "Smartraveller",
         url: "https://www.smartraveller.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Commonwealth of Australia (DFAT).",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.permission,
@@ -846,6 +898,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.waDfes,
         name: "DFES WA",
         url: "https://emergency.wa.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Western Australia.",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.licensed,
@@ -856,6 +910,8 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.nswSes,
         name: "NSW State Emergency Service",
         url: "https://www.ses.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW (NSW SES).",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.licensed,

@@ -386,7 +386,11 @@ export const buildHazardInclude = (
         parent: true, // Include parent category for hierarchical queries
       },
     },
-    source: true,
+    source: {
+      include: {
+        license: true, // Include license information
+      },
+    },
     reportedBy: true,
     medias: {
       orderBy: {
