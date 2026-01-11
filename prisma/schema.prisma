@@ -192,13 +192,17 @@ model HazardVote {
 }
 
 model HazardSource {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
-  url       String   @unique
+  url       String  @unique
   imageUrl  String?
+  licenseId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  hazards   Hazard[]
+
+  hazards Hazard[]
+  license HazardSourceLicense? @relation(fields: [licenseId], references: [id])
 }
 
 model HazardView {
@@ -451,4 +455,22 @@ model WebhookLog {
   @@index([success])
   @@index([createdAt])
   @@index([clientIp])
+}
+
+model HazardSourceLicense {
+  id          String  @id @default(uuid())
+  badgeText   String  @unique
+  licenseText String
+  description String?
+  link        String?
+
+  foregroundColor String? // Hex color code for badge text
+  backgroundColor String? // Hex color code for badge background
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hazardSources HazardSource[]
+
+  @@index([badgeText])
 }
