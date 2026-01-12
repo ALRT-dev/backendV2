@@ -74,6 +74,8 @@ export enum ExternalSourceId {
   earthquakeUsgs = "earthquakeUsgs",
   qldTraffic = "qldTraffic",
   qldPark = "qldPark",
+  canadaGovTra = "canadaGovTra",
+  gdacsGlobal = "gdacsGlobal",
 }
 
 // Configuration for hazard sources

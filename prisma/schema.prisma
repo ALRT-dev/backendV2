@@ -200,6 +200,7 @@ model HazardSource {
 
   advisoryText  String? // Standard advisory text associated with this source
   copyrightText String? // Copyright information for this source
+  copyrightLink String? // Link to copyright or attribution details
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

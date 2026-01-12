@@ -172,6 +172,7 @@ export const getHazardsApplyingFiltersRaw = async (
         hs.url as "sourceUrl",
         hs."advisoryText" as "sourceAdvisoryText",
         hs."copyrightText" as "sourceCopyrightText",
+        hs."copyrightLink" as "sourceCopyrightLink",
         hsl.id as "licenseLicenseId",
         hsl."badgeText" as "licenseBadgeText",
         hsl."licenseText" as "licenseLicenseText",
@@ -288,6 +289,7 @@ export const getHazardsApplyingFiltersRaw = async (
       sourceUrl,
       sourceAdvisoryText,
       sourceCopyrightText,
+      sourceCopyrightLink,
       licenseLicenseId,
       licenseBadgeText,
       licenseLicenseText,
@@ -328,6 +330,7 @@ export const getHazardsApplyingFiltersRaw = async (
             url: sourceUrl,
             advisoryText: sourceAdvisoryText,
             copyrightText: sourceCopyrightText,
+            copyrightLink: sourceCopyrightLink,
             license: licenseLicenseId
               ? {
                   id: licenseLicenseId,
@@ -776,7 +779,7 @@ export const initializeHazardSources = async (): Promise<void> => {
     const hazardSources: Prisma.HazardSourceCreateInput[] = [
       {
         id: ExternalSourceId.rfs,
-        name: "NSW Rural Fire Service",
+        name: "New South Wales Rural Fire Service",
         url: "https://www.rfs.nsw.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © State of NSW (NSW RFS).",
@@ -788,10 +791,12 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.bom,
-        name: "BoM",
+        name: "Bureau of Meteorology",
         url: "https://www.bom.gov.au",
         copyrightText:
           "Reproduced by permission of the Bureau of Meteorology, © Commonwealth of Australia.",
+        copyrightLink:
+          "http://www.bom.gov.au/data-access/3rd-party-attribution.shtml",
         license: {
           connect: {
             badgeText: HazardSourceLicenseBadgeText.licensed,
@@ -800,7 +805,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.nswTransport,
-        name: "NSW Transport",
+        name: "Live Traffic NSW",
         url: "https://www.transport.nsw.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © State of NSW.",
@@ -812,7 +817,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.actEs,
-        name: "ACT Emergency Services",
+        name: "ACT Emergency Services Agency",
         url: "https://www.act.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © Australian Capital Territory.",
@@ -824,7 +829,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.cfs,
-        name: "CFS",
+        name: "South Australian Country Fire Service",
         url: "https://www.cfs.sa.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © Government of South Australia.",
@@ -836,7 +841,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.viceFire,
-        name: "Vic Fire Services",
+        name: "VicEmergency",
         url: "https://www.vicefire.com",
         copyrightText:
           "Data sourced from official government feeds, © State of Victoria.",
@@ -848,7 +853,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.qldFire,
-        name: "QLD Fire Department",
+        name: "Queensland Fire Department",
         url: "https://www.qld.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © State of Queensland.",
@@ -860,7 +865,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.ntFireAndRescue,
-        name: "NT Fire and Rescue",
+        name: "Northern Territory Fire and Rescue Service",
         url: "https://www.nt.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © Northern Territory Government.",
@@ -872,7 +877,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.waqi,
-        name: "World Air Quality",
+        name: "World Air Quality Index",
         url: "https://www.waqi.info",
         advisoryText:
           "For official air quality health advice, consult your state EPA, Bureau of Meteorology, or Department of Health.",
@@ -881,6 +886,11 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.openMeteo,
         name: "Open-Meteo",
         url: "https://open-meteo.com",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.smartraveller,
@@ -896,7 +906,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.waDfes,
-        name: "DFES WA",
+        name: "Department of Fire and Emergency Services WA",
         url: "https://emergency.wa.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © State of Western Australia.",
@@ -908,7 +918,7 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
       {
         id: ExternalSourceId.nswSes,
-        name: "NSW State Emergency Service",
+        name: "New South Wales State Emergency Service",
         url: "https://www.ses.nsw.gov.au",
         copyrightText:
           "Data sourced from official government feeds, © State of NSW (NSW SES).",
@@ -922,16 +932,45 @@ export const initializeHazardSources = async (): Promise<void> => {
         id: ExternalSourceId.earthquakeUsgs,
         name: "USGS Earthquake Hazards Program",
         url: "https://earthquake.usgs.gov",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.qldTraffic,
-        name: "QLD Traffic",
+        name: "QLDTraffic",
         url: "https://qldtraffic.qld.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
       },
       {
         id: ExternalSourceId.qldPark,
-        name: "QLD Park Alerts",
+        name: "Queensland Parks and Wildlife Service",
         url: "https://parks.qld.gov.au/park-alerts",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.canadaGovTra,
+        name: "Government of Canada Travel Advice and Advisories",
+        url: "https://travel.gc.ca/travelling/advisories",
+      },
+      {
+        id: ExternalSourceId.gdacsGlobal,
+        name: "Global Disaster Alert and Coordination System",
+        url: "https://www.gdacs.org",
       },
     ];
 
