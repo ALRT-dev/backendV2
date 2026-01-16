@@ -29,10 +29,20 @@ export const createHazardViaWebhook = async (
   next: NextFunction
 ) => {
   try {
+    console.log(
+      `[Webhook] Received request to create hazards. Count: ${
+        req.body.hazards?.length || 0
+      }`
+    );
     const availableCategories = await getAllSubHazardCategories();
     const requestBody: CreateHazardsWebhookBody = req.body;
 
     const { hazards, syncOption, allowedSeverityBands } = requestBody;
+    console.log(
+      `[Webhook] Request params - syncOption: ${syncOption}, allowedSeverityBands: ${
+        allowedSeverityBands?.join(", ") || "none"
+      }`
+    );
 
     // Process all hazards to prepare data
     const validationResults = await Promise.allSettled(
@@ -60,6 +70,10 @@ export const createHazardViaWebhook = async (
             ? result.reason.message
             : "Unknown error occurred";
         const hazardData = hazards[index];
+        console.error(
+          `[Webhook] Validation failed for hazard at index ${index}:`,
+          errorMessage
+        );
         if (hazardData) {
           validationErrors.push({
             index,
@@ -70,8 +84,15 @@ export const createHazardViaWebhook = async (
       }
     });
 
+    console.log(
+      `[Webhook] Validation complete. Valid: ${validHazardDatas.length}, Errors: ${validationErrors.length}`
+    );
+
     // If all validations failed, return error
     if (validHazardDatas.length === 0) {
+      console.error(
+        `[Webhook] All ${hazards.length} hazards failed validation`
+      );
       return res.status(400).json({
         success: false,
         message: "Failed to validate any hazards",
@@ -96,27 +117,44 @@ export const createHazardViaWebhook = async (
     }
 
     // Use summarizeAndPostHazards to process all valid hazards at once
+    console.log(
+      `[Webhook] Processing ${validHazardDatas.length} valid hazards with syncOption: ${syncOption}`
+    );
     const createdHazards = await summarizeAndPostHazards({
       hazardDatas: validHazardDatas,
       syncOption,
       severityBandFilters,
     });
+    console.log(
+      `[Webhook] Successfully processed ${createdHazards.length} hazards`
+    );
 
     // Determine response status
     const partialSuccess =
       validationErrors.length > 0 ||
       createdHazards.length < validHazardDatas.length;
 
+    if (partialSuccess) {
+      console.log(
+        `[Webhook] Partial success: ${createdHazards.length}/${hazards.length} hazards processed`
+      );
+    } else {
+      console.log(
+        `[Webhook] Full success: All ${createdHazards.length} hazards processed`
+      );
+    }
+
     res.status(partialSuccess ? 207 : 201).json({
       success: true,
       hazards: createdHazards,
       count: createdHazards.length,
       message: partialSuccess
-        ? `Created ${createdHazards.length} out of ${hazards.length} hazards`
-        : `Successfully created ${createdHazards.length} hazards via webhook`,
+        ? `Processed ${createdHazards.length} out of ${hazards.length} hazards`
+        : `Successfully processed ${createdHazards.length} hazards via webhook`,
       ...(validationErrors.length > 0 && { errors: validationErrors }),
     });
   } catch (error) {
+    console.error("[Webhook] Error processing hazards via webhook:", error);
     next(error);
   }
 };

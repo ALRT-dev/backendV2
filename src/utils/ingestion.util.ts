@@ -138,10 +138,6 @@ export function parseGeoJsonToHazards({
         const mainSubCatDesc = `${mainCategory}${
           subCategory ? ` - ${subCategory}` : ""
         }`;
-        console.log(
-          "---> Refining category based on main/sub category:",
-          mainSubCatDesc
-        );
         const obtainedCategory = getCategoryFromDescription(
           mainSubCatDesc,
           availableCategories
