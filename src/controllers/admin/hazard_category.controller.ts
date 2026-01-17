@@ -10,7 +10,7 @@ import { HttpError } from "../../models/http_error.js";
 export const getCategoriesForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {}: GetCategoriesForAdminQuery = req.query;
@@ -58,7 +58,7 @@ export const getCategoriesForAdmin = async (
       const parentHazardsCount = category._count.hazards;
       const subCategoriesHazardsCount = category.subCategories.reduce(
         (total, subCategory) => total + subCategory._count.hazards,
-        0
+        0,
       );
       const totalHazardsCount = parentHazardsCount + subCategoriesHazardsCount;
 
@@ -84,13 +84,15 @@ export const getCategoriesForAdmin = async (
 export const createHazardCategoryForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
       name,
       description,
       color,
+      keywords,
+      isFireRelated,
       parentId,
     }: CreateHazardCategoryForAdminBody = req.body;
 
@@ -118,6 +120,8 @@ export const createHazardCategoryForAdmin = async (
         ...(description && { description }),
         ...(color && { color }),
         ...(parentId && { parentId }),
+        ...(keywords && { keywords }),
+        ...(isFireRelated !== undefined && { isFireRelated }),
       },
       include: {
         parent: true,
@@ -134,7 +138,7 @@ export const createHazardCategoryForAdmin = async (
 export const updateHazardCategoryForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const categoryId = req.params.categoryId;
@@ -146,6 +150,8 @@ export const updateHazardCategoryForAdmin = async (
       name,
       description,
       color,
+      keywords,
+      isFireRelated,
       parentId,
     }: UpdateHazardCategoryForAdminBody = req.body;
 
@@ -184,7 +190,7 @@ export const updateHazardCategoryForAdmin = async (
         // Check for circular dependency by checking if the current category is already a parent/ancestor of the new parent
         const checkCircularDependency = async (
           checkId: string,
-          targetId: string
+          targetId: string,
         ): Promise<boolean> => {
           if (checkId === targetId) return true;
 
@@ -203,12 +209,12 @@ export const updateHazardCategoryForAdmin = async (
 
         const hasCircularDependency = await checkCircularDependency(
           categoryId,
-          parentId
+          parentId,
         );
         if (hasCircularDependency) {
           throw new HttpError(
             400,
-            "Cannot create circular dependency in category hierarchy"
+            "Cannot create circular dependency in category hierarchy",
           );
         }
       }
@@ -217,10 +223,12 @@ export const updateHazardCategoryForAdmin = async (
     const updatedCategory = await prisma.hazardCategory.update({
       where: { id: categoryId },
       data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(color !== undefined && { color }),
-        ...(parentId !== undefined && { parentId }),
+        ...(name && { name }),
+        ...(description && { description }),
+        ...(color && { color }),
+        ...(parentId && { parentId }),
+        ...(keywords && { keywords }),
+        ...(isFireRelated !== undefined && { isFireRelated }),
       },
       include: {
         parent: true,
@@ -237,7 +245,7 @@ export const updateHazardCategoryForAdmin = async (
 export const deleteHazardCategoryForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const categoryId = req.params.categoryId;
@@ -266,7 +274,7 @@ export const deleteHazardCategoryForAdmin = async (
     if (existingCategory._count.hazards > 0) {
       throw new HttpError(
         400,
-        "Cannot delete category that has associated hazards. Please reassign or delete the hazards first."
+        "Cannot delete category that has associated hazards. Please reassign or delete the hazards first.",
       );
     }
 
@@ -274,7 +282,7 @@ export const deleteHazardCategoryForAdmin = async (
     if (existingCategory.subCategories.length > 0) {
       throw new HttpError(
         400,
-        "Cannot delete category that has subcategories. Please delete or reassign the subcategories first."
+        "Cannot delete category that has subcategories. Please delete or reassign the subcategories first.",
       );
     }
 
