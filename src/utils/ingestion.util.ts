@@ -109,7 +109,7 @@ export function parseGeoJsonToHazards({
         idPrefix === ExternalSourceId.nswTransport
           ? extractNSWTrafficDescription(properties)
           : cleanDescription(
-              properties?.description || properties?.otherAdvice || title
+              properties?.description || properties?.otherAdvice || title,
             );
 
       const hazardId =
@@ -140,7 +140,7 @@ export function parseGeoJsonToHazards({
         }`;
         const obtainedCategory = getCategoryFromDescription(
           mainSubCatDesc,
-          availableCategories
+          availableCategories,
         );
         if (obtainedCategory && obtainedCategory.id !== MainCategoryId.other) {
           finalCategory = obtainedCategory;
@@ -570,7 +570,7 @@ export async function parseBOMFeedToHazards({
       getHazardAttributesFromDescription(
         description,
         availableCategories,
-        MainCategoryId.weatherAndEnvironment
+        MainCategoryId.weatherAndEnvironment,
       );
 
     // For BOM data, we typically don't have coordinates in the RSS feed
@@ -605,7 +605,7 @@ export async function parseBOMFeedToHazards({
  */
 const parseBOMFeedToHazardsPhase2 = async (
   hazards: HazardDataWithRelations[],
-  australianState: AustralianStates
+  australianState: AustralianStates,
 ): Promise<HazardDataWithRelations[]> => {
   const allHazards = await Promise.all(
     hazards.map(async (hazard) => {
@@ -631,7 +631,7 @@ const parseBOMFeedToHazardsPhase2 = async (
             : ""
         } Australia`,
       }));
-    })
+    }),
   );
 
   // Flatten the array of arrays into a single array
@@ -698,7 +698,7 @@ export async function parseWAWarningsToHazards({
     // Extract multiple warnings from a single item
     // WA DFES items can contain multiple warnings in the description
     const warnings = extractWAWarningsFromDescription(
-      item.description || item.content || ""
+      item.description || item.content || "",
     );
 
     // If we found structured warnings, create a hazard for each
@@ -830,7 +830,7 @@ export async function parseWAIncidentsToHazards({
     const { category, fireStatus, isAwsCompliant } =
       getHazardAttributesFromDescription(
         incidentInfo.incidentType || fullDescription,
-        availableCategories
+        availableCategories,
       );
 
     const hazard: HazardDataWithRelations = {
@@ -887,13 +887,13 @@ function extractWAIncidentInfo(description?: string): {
 
   // Extract incident number from <incidentNumber> tags
   const incidentNumberMatch = description.match(
-    /<incidentNumber>([^<]+)<\/incidentNumber>/
+    /<incidentNumber>([^<]+)<\/incidentNumber>/,
   );
   const incidentNumber = incidentNumberMatch?.[1]?.trim() || null;
 
   // Extract publication time from <publicationTime> tags
   const publicationTimeMatch = description.match(
-    /<publicationTime>([^<]+)<\/publicationTime>/
+    /<publicationTime>([^<]+)<\/publicationTime>/,
   );
   const publicationTime = publicationTimeMatch?.[1]?.trim() || null;
 
@@ -977,7 +977,7 @@ function extractWAWarningsFromDescription(description: string): Array<{
       // Look for next warning (has id attribute) or major section heading
       // Major sections are identified by specific all-caps titles
       const nextSectionMatch = remainingContent.match(
-        /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i
+        /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i,
       );
 
       const endPos = nextSectionMatch
@@ -1008,7 +1008,7 @@ function extractWAWarningsFromDescription(description: string): Array<{
 
         // Look for next warning or major section heading
         const nextSectionMatch = remainingContent.match(
-          /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i
+          /<p[^>]*\bid\s*=\s*["']|<p\s+class\s*=\s*["']subtitle["'][^>]*>\s*(CYCLONE DETAILS|BUSHFIRE BEHAVIOUR|ROAD CLOSURES|WHAT FIREFIGHTERS ARE DOING|WHAT EMERGENCY SERVICES ARE DOING|ANIMAL WELFARE|EXTRA INFORMATION|KEEP UP TO DATE|END)\s*<\/p>/i,
         );
 
         const endPos = nextSectionMatch
@@ -1025,8 +1025,6 @@ function extractWAWarningsFromDescription(description: string): Array<{
       }
     }
   }
-
-  console.log(`Total warnings found: ${warnings.length}`);
 
   return warnings;
 }
@@ -1088,11 +1086,11 @@ function createWAHazardFromWarning({
   const { severity, severityBand, category, isAwsCompliant } =
     getHazardAttributesFromDescription(
       warning.warningType,
-      availableCategories
+      availableCategories,
     );
   const { fireStatus } = getHazardAttributesFromDescription(
     description,
-    availableCategories
+    availableCategories,
   );
 
   return {
@@ -1339,7 +1337,7 @@ export function parseNTFireAndRescueToHazards({
 
       // Parse notification date
       const occurredAt = parseValidDate(
-        properties?._datenotified || properties?.Notified
+        properties?._datenotified || properties?.Notified,
       );
 
       // Parse closed date for expiry if available
@@ -1373,8 +1371,8 @@ export function parseNTFireAndRescueToHazards({
     })
     .filter(
       (
-        hazard: HazardDataWithRelations | null
-      ): hazard is HazardDataWithRelations => hazard !== null
+        hazard: HazardDataWithRelations | null,
+      ): hazard is HazardDataWithRelations => hazard !== null,
     );
 }
 
@@ -1574,7 +1572,7 @@ export function parseUSGSEarthquakeToHazards({
 
       if (magnitude != null) {
         descriptionParts.push(
-          `Magnitude: ${magnitude}${magType ? ` (${magType})` : ""}`
+          `Magnitude: ${magnitude}${magType ? ` (${magType})` : ""}`,
         );
       }
 
@@ -1584,7 +1582,7 @@ export function parseUSGSEarthquakeToHazards({
 
       if (status) {
         descriptionParts.push(
-          `Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`
+          `Status: ${status.charAt(0).toUpperCase() + status.slice(1)}`,
         );
       }
 
@@ -1831,7 +1829,7 @@ export function parseQLDTrafficToHazards({
       const { severity, severityBand, category, fireStatus, isAwsCompliant } =
         getHazardAttributesFromDescription(
           fullDescription,
-          availableCategories
+          availableCategories,
         );
 
       let finalCategory = category;
@@ -1840,13 +1838,9 @@ export function parseQLDTrafficToHazards({
         const eventCategoryDesc = `${eventType || ""}${
           eventSubtype ? ` - ${eventSubtype}` : ""
         }`.trim();
-        console.log(
-          "---> Refining category based on event type/subtype:",
-          eventCategoryDesc
-        );
         const obtainedCategory = getCategoryFromDescription(
           eventCategoryDesc,
-          availableCategories
+          availableCategories,
         );
         if (obtainedCategory && obtainedCategory.id !== MainCategoryId.other) {
           finalCategory = obtainedCategory;
@@ -1931,7 +1925,7 @@ export async function parseQLDParkToHazards({
     // Set realistic viewport and user agent
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     );
 
     // Navigate to the RSS feed URL and wait for the response
@@ -1942,7 +1936,7 @@ export async function parseQLDParkToHazards({
 
     if (!response || !response.ok()) {
       throw new Error(
-        `Failed to fetch QLD Parks RSS feed: ${response?.status()} ${response?.statusText()}`
+        `Failed to fetch QLD Parks RSS feed: ${response?.status()} ${response?.statusText()}`,
       );
     }
 
@@ -2011,7 +2005,7 @@ export async function parseQLDParkToHazards({
         const { severity, severityBand, category, fireStatus, isAwsCompliant } =
           getHazardAttributesFromDescription(
             fullDescription,
-            availableCategories
+            availableCategories,
           );
 
         const hazard: HazardDataWithRelations = {
@@ -2063,7 +2057,7 @@ function extractQLDParkInfo(description: string): {
 
   // Extract affected parks (format: "Affected parks: Park1; Park2; Park3")
   const affectedParksMatch = description.match(
-    /Affected parks:\s*([^\]]+?)(?:\]\]>)?$/i
+    /Affected parks:\s*([^\]]+?)(?:\]\]>)?$/i,
   );
 
   let affectedParks: string[] = [];
@@ -2136,12 +2130,12 @@ function loadQLDParkCoordinates(): Map<
     }
 
     console.log(
-      `Loaded coordinates for ${parkCoordinatesMap.size} Queensland parks`
+      `Loaded coordinates for ${parkCoordinatesMap.size} Queensland parks`,
     );
   } catch (error) {
     console.warn(
       "Could not load QLD park coordinates CSV, using default coordinates:",
-      error
+      error,
     );
   }
 
@@ -2156,7 +2150,7 @@ function loadQLDParkCoordinates(): Map<
  */
 function getParkCoordinates(
   parkName: string,
-  coordinatesMap: Map<string, { latitude: number; longitude: number }>
+  coordinatesMap: Map<string, { latitude: number; longitude: number }>,
 ): { latitude: number; longitude: number } | null {
   const normalizedName = parkName.toLowerCase().trim();
 
@@ -2244,7 +2238,7 @@ export const cleanupGeocodingCache = (): void => {
 
   if (deletedCount > 0) {
     console.log(
-      `Cleaned up ${deletedCount} expired geocoding cache entries. Current cache size: ${geocodingCache.size}`
+      `Cleaned up ${deletedCount} expired geocoding cache entries. Current cache size: ${geocodingCache.size}`,
     );
   }
 };
@@ -2265,7 +2259,7 @@ export const cleanupLocationExtractionCache = (): void => {
  * Rate-limited geocoding wrapper
  */
 const rateLimitedGeocode = async <T>(
-  geocodeFunction: () => Promise<T>
+  geocodeFunction: () => Promise<T>,
 ): Promise<T> => {
   const now = Date.now();
   const timeSinceLastCall = now - lastGeocodingCall;
@@ -2296,7 +2290,7 @@ export const getLocationExtractionCacheSize = (): number => {
  * Gets cached location extraction result or returns undefined if not found.
  */
 export const getCachedLocationExtraction = (
-  cacheKey: string
+  cacheKey: string,
 ): { locations: string[]; timestamp: number } | undefined => {
   return locationExtractionCache.get(cacheKey);
 };
@@ -2306,7 +2300,7 @@ export const getCachedLocationExtraction = (
  */
 export const setCachedLocationExtraction = (
   cacheKey: string,
-  locations: string[]
+  locations: string[],
 ): void => {
   locationExtractionCache.set(cacheKey, {
     locations,
@@ -2320,7 +2314,7 @@ export const setCachedLocationExtraction = (
  * If locationName is missing, it uses latitude/longitude to fetch the address.
  */
 export const populateHazardWithGeocoding = async (
-  hazard: HazardDataWithRelations
+  hazard: HazardDataWithRelations,
 ): Promise<HazardDataWithRelations> => {
   // Skip geocoding if both coordinates and location are already present
   if (hazard.latitude && hazard.longitude && hazard.locationName) {
@@ -2348,7 +2342,7 @@ export const populateHazardWithGeocoding = async (
           }
         } else {
           const result: GeocodeResult | undefined = await rateLimitedGeocode(
-            () => convertAddressToLatLng(hazard.locationName!)
+            () => convertAddressToLatLng(hazard.locationName!),
           );
 
           if (result && result.geometry && result.geometry.location) {
@@ -2384,7 +2378,7 @@ export const populateHazardWithGeocoding = async (
             });
           } else {
             console.warn(
-              `Geocoding failed for hazard location: ${hazard.locationName}`
+              `Geocoding failed for hazard location: ${hazard.locationName}`,
             );
           }
         }
@@ -2400,7 +2394,7 @@ export const populateHazardWithGeocoding = async (
         hazard.locationName = cached.address;
       } else {
         const address: string | undefined = await rateLimitedGeocode(() =>
-          convertLatLngToAddress(hazard.latitude!, hazard.longitude!)
+          convertLatLngToAddress(hazard.latitude!, hazard.longitude!),
         );
         if (address) {
           hazard.locationName = address;
@@ -2414,7 +2408,7 @@ export const populateHazardWithGeocoding = async (
           });
         } else {
           console.warn(
-            `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`
+            `Reverse geocoding failed for hazard coordinates: ${hazard.latitude}, ${hazard.longitude}`,
           );
         }
       }
@@ -2600,7 +2594,7 @@ function extractFirstPoint(geometry: Geometry): number[] | null {
  */
 function parseValidDate(
   dateInput?: string | number | Date,
-  format?: "DD/MM/YYYY" | "MM/DD/YYYY"
+  format?: "DD/MM/YYYY" | "MM/DD/YYYY",
 ): Date {
   if (!dateInput) {
     return new Date();
@@ -2620,7 +2614,7 @@ function parseValidDate(
   // Handle string input
   // First check if it matches a date pattern that could be ambiguous (M/D/YYYY or D/M/YYYY)
   const datePatternMatch = dateInput.match(
-    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(.*)$/,
   );
 
   let parsedDate: Date;
@@ -2691,11 +2685,11 @@ function extractNSWTrafficDescription(properties: GeoJsonProperties): string {
     descriptionParts.push(
       `Advice: ${[adviceA, adviceB, adviceC]
         .filter((advice) => advice?.trim())
-        .join("; ")}`
+        .join("; ")}`,
     );
   if (otherAdvice?.trim())
     descriptionParts.push(
-      `Other Advice: ${cleanDescription(otherAdvice?.trim())}`
+      `Other Advice: ${cleanDescription(otherAdvice?.trim())}`,
     );
 
   return descriptionParts.join("\n");
@@ -2973,7 +2967,7 @@ function buildNTFireAndRescueDescription(properties: any): string {
   // Basic incident information
   if (properties._eventtype || properties["Fire Type"]) {
     parts.push(
-      `Event Type: ${properties._eventtype || properties["Fire Type"]}`
+      `Event Type: ${properties._eventtype || properties["Fire Type"]}`,
     );
   }
 
@@ -3027,7 +3021,7 @@ function buildNTFireAndRescueDescription(properties: any): string {
  * by connecting related category and source entities
  */
 export const convertHazardDataWithRelationsToCreateInput = (
-  hazardData: HazardDataWithRelations
+  hazardData: HazardDataWithRelations,
 ): Prisma.HazardCreateInput => {
   return {
     ...hazardData,
@@ -3049,7 +3043,7 @@ export const convertHazardDataWithRelationsToCreateInput = (
 export const getHazardAttributesFromDescription = (
   description: string,
   availableCategories: (HazardCategory & { parent: HazardCategory | null })[],
-  fallbackCategoryId?: string
+  fallbackCategoryId?: string,
 ): {
   severity: HazardSeverity;
   severityBand: HazardSeverityBand;
@@ -3061,7 +3055,7 @@ export const getHazardAttributesFromDescription = (
   const category = getCategoryFromDescription(
     description,
     availableCategories,
-    fallbackCategoryId
+    fallbackCategoryId,
   );
   const fireStatus = getFireStatusFromDescription(description);
   const isAwsCompliant =
