@@ -12,13 +12,13 @@ export const createHazardWebhookBodySchema = z.object({
   title: z
     .string()
     .min(1, "Title cannot be empty")
-    .max(100, "Title must be at most 100 characters")
+    .max(200, "Title must be at most 200 characters")
     .optional(),
 
   description: z
     .string()
     .min(1, "Description cannot be empty")
-    .max(1000, "Description must be at most 1000 characters"),
+    .max(5000, "Description must be at most 5000 characters"),
 
   aiSummary: z
     .string()
@@ -32,7 +32,7 @@ export const createHazardWebhookBodySchema = z.object({
 
   callsToAction: z
     .array(
-      z.string().max(500, "Each call to action must be at most 500 characters")
+      z.string().max(500, "Each call to action must be at most 500 characters"),
     )
     .optional(),
 
