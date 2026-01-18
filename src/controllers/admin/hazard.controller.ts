@@ -36,7 +36,7 @@ import { getAllSubHazardCategories } from "../../services/hazard_category.servic
 export const getHazardsForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
@@ -89,7 +89,7 @@ export const getHazardsForAdmin = async (
 export const createHazardForAdmin = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -99,7 +99,7 @@ export const createHazardForAdmin = async (
     const availableCategories = await getAllSubHazardCategories();
     const attributes = getHazardAttributesFromDescription(
       req.body.description,
-      availableCategories
+      availableCategories,
     );
 
     const {
@@ -143,7 +143,7 @@ export const createHazardForAdmin = async (
     ) {
       throw new HttpError(
         400,
-        "Either latitude & longitude or northeast & southwest bounds must be provided"
+        "Either latitude & longitude or northeast & southwest bounds must be provided",
       );
     }
 
@@ -187,7 +187,7 @@ export const createHazardForAdmin = async (
     } catch (error) {
       console.error(
         "Error calculating confidence score for admin created hazard:",
-        error
+        error,
       );
     }
 
@@ -230,7 +230,7 @@ export const createHazardForAdmin = async (
 export const updateHazardForAdmin = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const hazardId = req.params.hazardId;
@@ -337,7 +337,7 @@ export const updateHazardForAdmin = async (
 export const deleteHazardForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const hazardId = req.params.hazardId;
@@ -365,7 +365,7 @@ export const deleteHazardForAdmin = async (
 export const syncHazardsFromExternalSourceForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { sourceIds, syncOption }: SyncHazardsFromExternalSourceForAdminBody =
@@ -384,11 +384,14 @@ export const syncHazardsFromExternalSourceForAdmin = async (
 export const getHazardSourcesForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const sources = await prisma.hazardSource.findMany({
       orderBy: { name: "asc" },
+      include: {
+        license: true,
+      },
     });
     res.status(200).json(sources);
   } catch (error) {

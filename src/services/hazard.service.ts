@@ -39,7 +39,7 @@ export const getHazardsApplyingFilters = async (
   params: HazardSearchParams & {
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
-  }
+  },
 ): Promise<Hazard[]> => {
   const { userId, page = 1, pageSize = 20 } = params;
 
@@ -73,8 +73,8 @@ export const getHazardsApplyingFilters = async (
   // Optimize user reports status calculation by using bulk calculation
   const reporterIds = Array.from(
     new Set(
-      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[]
-    )
+      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[],
+    ),
   );
 
   // Use bulk calculation instead of individual calls for better performance
@@ -94,8 +94,8 @@ export const getHazardsApplyingFilters = async (
       ? {
           ...hazard.reportedBy,
           reportsStatus: hazard.reportedById
-            ? reportersStatusMap.get(hazard.reportedById) ??
-              UserReportsStatus.unverified
+            ? (reportersStatusMap.get(hazard.reportedById) ??
+              UserReportsStatus.unverified)
             : UserReportsStatus.unverified,
         }
       : null;
@@ -117,7 +117,7 @@ export const getHazardsApplyingFiltersRaw = async (
   params: HazardSearchParams & {
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
-  }
+  },
 ): Promise<Hazard[]> => {
   const {
     userLat,
@@ -139,7 +139,7 @@ export const getHazardsApplyingFiltersRaw = async (
       userLng,
       paramIndex,
       queryParams,
-      sortSettings
+      sortSettings,
     );
 
   // Add pagination parameters
@@ -240,7 +240,7 @@ export const getHazardsApplyingFiltersRaw = async (
 
   const hazards = (await prisma.$queryRawUnsafe(
     query,
-    ...queryParams
+    ...queryParams,
   )) as any[];
 
   // Get unique reporter IDs from hazards that have reporters
@@ -248,8 +248,8 @@ export const getHazardsApplyingFiltersRaw = async (
     new Set(
       hazards
         .map((hazard: any) => hazard.reportedByUserId)
-        .filter(Boolean) as string[]
-    )
+        .filter(Boolean) as string[],
+    ),
   );
 
   // Calculate UserReportsStatus for each unique reporter using the correct bulk method
@@ -375,7 +375,7 @@ export const reviewHazard = async ({
   const { userReportedAlertReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`]
+    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`],
   );
 
   const userContent = `Please analyze this hazard report:
@@ -482,7 +482,7 @@ export const summarizeHazard = async ({
     console.error("Failed to parse AI summary response:", parseError);
     throw new HttpError(
       500,
-      "AI summarization failed: Invalid response format"
+      "AI summarization failed: Invalid response format",
     );
   }
 };
@@ -519,7 +519,7 @@ export const getAIPromptForHazard = async ({
           ];
         console.log(
           `Found source-specific prompt for ${source.id}:`,
-          requiredPromptId
+          requiredPromptId,
         );
         return getPromptById(requiredPromptId);
       }
@@ -541,7 +541,7 @@ export const getAIPromptForHazard = async ({
           ];
         console.log(
           `Found category-specific prompt for ${category.id}:`,
-          requiredPromptId
+          requiredPromptId,
         );
         return getPromptById(requiredPromptId);
       }
@@ -552,7 +552,7 @@ export const getAIPromptForHazard = async ({
 
   // Key doesn't exist, use default prompts
   console.error(
-    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`
+    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`,
   );
   const requiredPromptId = isAwsCompliant
     ? config.officialAwsAlertSummarizationPromptId[
@@ -570,7 +570,7 @@ export const getAIPromptForHazard = async ({
  * @returns The number of hazards deleted.
  */
 export const deleteAllHazardsForSourceIds = async (
-  sourceIds: string[]
+  sourceIds: string[],
 ): Promise<number> => {
   const deleteResult = await prisma.hazard.deleteMany({
     where: {
@@ -582,8 +582,8 @@ export const deleteAllHazardsForSourceIds = async (
 
   console.log(
     `Deleted ${deleteResult.count} hazards for source IDs: ${sourceIds.join(
-      ", "
-    )}`
+      ", ",
+    )}`,
   );
 
   return deleteResult.count;
@@ -636,9 +636,9 @@ export const getSuggestedCategory = async ({
     "suggestedCategory": "${availableCategories
       .map((cat) => cat.id)
       .join("|")}", (MUST be only one.${
-    currentCategoryId &&
-    ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
-  })
+      currentCategoryId &&
+      ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+    })
   }`;
 
   const userPromptContent = `Hazard Report:
@@ -656,7 +656,7 @@ export const getSuggestedCategory = async ({
   if (!content) {
     throw new HttpError(
       500,
-      "AI category suggestion failed: Empty response from AI"
+      "AI category suggestion failed: Empty response from AI",
     );
   }
 
@@ -666,12 +666,12 @@ export const getSuggestedCategory = async ({
     };
 
     const category = availableCategories.find(
-      (cat) => cat.id === aiResponse.suggestedCategory
+      (cat) => cat.id === aiResponse.suggestedCategory,
     );
     if (!category) {
       throw new HttpError(
         500,
-        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`
+        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`,
       );
     }
 
@@ -679,7 +679,7 @@ export const getSuggestedCategory = async ({
   } catch (parseError) {
     throw new HttpError(
       500,
-      `AI category suggestion failed: Invalid response format: ${parseError}`
+      `AI category suggestion failed: Invalid response format: ${parseError}`,
     );
   }
 };
@@ -772,7 +772,7 @@ export const initializeHazardSources = async (): Promise<void> => {
           create: license,
           update: license,
         });
-      })
+      }),
     );
 
     // Now create or update hazard sources
@@ -981,11 +981,11 @@ export const initializeHazardSources = async (): Promise<void> => {
           create: source,
           update: source,
         });
-      })
+      }),
     );
 
     console.log(
-      "---------------------------------------> Hazard sources initialized successfully"
+      "---------------------------------------> Hazard sources initialized successfully",
     );
   } catch (error) {
     console.error("Error initializing hazard sources:", error);

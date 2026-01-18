@@ -34,7 +34,7 @@ ALRT is a hazard alerting platform that ingests, processes, and distributes emer
 ### Database Schema (Prisma)
 
 - **PostGIS extension** for geographic queries (`geoLocation` stored as WKT/WKB strings)
-- Key models: `Hazard`, `HazardCategory` (hierarchical with parent/subcategories), `User`, `LocationSubscription`, `AIPrompt`, `Configuration`, `WebhookApiKey`
+- Key models: `Hazard`, `HazardCategory` (hierarchical with parent/subcategories), `HazardSource` (official data sources with licensing), `User`, `LocationSubscription`, `AIPrompt`, `Configuration`, `WebhookApiKey`
 - Complex indexes on hazard queries: lat/lng + severity, expiry + review status, category + severity band
 - Migration workflow: `yarn prisma:migrate:dev` (dev) or `yarn prisma:migrate:deploy` (prod)
 
