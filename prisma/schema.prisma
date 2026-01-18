@@ -194,7 +194,7 @@ model HazardVote {
 model HazardSource {
   id        String  @id @default(uuid())
   name      String
-  url       String  @unique
+  url       String
   imageUrl  String?
   licenseId String?
 

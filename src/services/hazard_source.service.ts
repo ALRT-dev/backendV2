@@ -300,22 +300,6 @@ export const hazardSourceExists = async (
 };
 
 /**
- * Check if a hazard source URL is already taken
- */
-export const isUrlTaken = async (
-  url: string,
-  excludeSourceId?: string,
-): Promise<boolean> => {
-  const source = await prisma.hazardSource.findUnique({
-    where: { url },
-  });
-
-  if (!source) return false;
-  if (excludeSourceId && source.id === excludeSourceId) return false;
-  return true;
-};
-
-/**
  * Get a single hazard source license by ID
  */
 export const getHazardSourceLicenseById = async (

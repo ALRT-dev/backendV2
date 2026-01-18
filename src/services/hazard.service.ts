@@ -976,8 +976,14 @@ export const initializeHazardSources = async (): Promise<void> => {
 
     await Promise.all(
       hazardSources.map((source) => {
+        // Always require id for upsert since url is no longer unique
+        if (!source.id) {
+          throw new Error(
+            `HazardSource must have an id for upsert operation: ${source.name}`,
+          );
+        }
         return prisma.hazardSource.upsert({
-          where: source.id ? { id: source.id } : { url: source.url },
+          where: { id: source.id },
           create: source,
           update: source,
         });
