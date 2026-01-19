@@ -34,6 +34,8 @@ export const buildHazardsWhereClause = (
     userReported,
     reportedById,
     reviewStatus,
+    severities,
+    severityBands,
     northeastLat,
     northeastLng,
     southwestLat,
@@ -173,6 +175,32 @@ export const buildHazardsWhereClause = (
   if (reviewStatus) {
     andConditions.push({
       reviewStatus: reviewStatus,
+    });
+  }
+
+  // Apply severities filter if provided
+  if (severities) {
+    const severitiesArray = Array.isArray(severities)
+      ? severities
+      : [severities];
+
+    andConditions.push({
+      severity: {
+        in: severitiesArray,
+      },
+    });
+  }
+
+  // Apply severityBands filter if provided
+  if (severityBands) {
+    const severityBandsArray = Array.isArray(severityBands)
+      ? severityBands
+      : [severityBands];
+
+    andConditions.push({
+      severityBand: {
+        in: severityBandsArray,
+      },
     });
   }
 
@@ -423,6 +451,8 @@ export const buildHazardsWhereClauseRaw = (
     userReported,
     reportedById,
     reviewStatus,
+    severities,
+    severityBands,
     northeastLat,
     northeastLng,
     southwestLat,
@@ -547,6 +577,36 @@ export const buildHazardsWhereClauseRaw = (
     );
     queryParams.push(reviewStatus);
     paramIndex++;
+  }
+
+  // Apply severities filter if provided
+  if (severities) {
+    const severitiesArray = Array.isArray(severities)
+      ? severities
+      : [severities];
+
+    if (severitiesArray.length > 0) {
+      const severityPlaceholders = severitiesArray
+        .map(() => `$${paramIndex++}::"HazardSeverity"`)
+        .join(",");
+      whereConditions.push(`h.severity IN (${severityPlaceholders})`);
+      queryParams.push(...severitiesArray);
+    }
+  }
+
+  // Apply severityBands filter if provided
+  if (severityBands) {
+    const severityBandsArray = Array.isArray(severityBands)
+      ? severityBands
+      : [severityBands];
+
+    if (severityBandsArray.length > 0) {
+      const severityBandPlaceholders = severityBandsArray
+        .map(() => `$${paramIndex++}::"HazardSeverityBand"`)
+        .join(",");
+      whereConditions.push(`h."severityBand" IN (${severityBandPlaceholders})`);
+      queryParams.push(...severityBandsArray);
+    }
   }
 
   // Apply geographic bounds filter if provided - Using PostGIS for dramatic performance improvement

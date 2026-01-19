@@ -38,6 +38,10 @@ export const getHazardsForAdminQuerySchema = z.object({
 
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),
 
+  severities: z.array(z.enum(HazardSeverity)).optional(),
+
+  severityBands: z.array(z.enum(HazardSeverityBand)).optional(),
+
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 
   pageSize: z.string().regex(/^\d+$/, "Page size must be a number").optional(),

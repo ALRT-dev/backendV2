@@ -1,4 +1,5 @@
 import z from "zod";
+import { HazardSeverity, HazardSeverityBand } from "@prisma/client";
 
 export const createHazardDataSchema = z.object({
   title: z
@@ -136,9 +137,13 @@ export const getHazardsQuerySchema = z.object({
 
   userReported: z.enum(["true", "false"]).default("true").optional(),
 
-  reportedById: z.string().uuid().optional(),
+  reportedById: z.uuid().optional(),
 
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),
+
+  severities: z.array(z.enum(HazardSeverity)).optional(),
+
+  severityBands: z.array(z.enum(HazardSeverityBand)).optional(),
 
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 

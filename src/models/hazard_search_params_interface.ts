@@ -1,4 +1,8 @@
-import type { HazardReviewStatus, HazardSeverity } from "@prisma/client";
+import type {
+  HazardReviewStatus,
+  HazardSeverity,
+  HazardSeverityBand,
+} from "@prisma/client";
 
 export interface SortSetting {
   severityBand?: "asc" | "desc" | undefined;
@@ -24,6 +28,9 @@ export interface HazardSearchParams {
   userReported?: boolean | undefined;
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
+
+  severities?: HazardSeverity[] | undefined;
+  severityBands?: HazardSeverityBand[] | undefined;
 
   northeastLat?: number | undefined;
   northeastLng?: number | undefined;

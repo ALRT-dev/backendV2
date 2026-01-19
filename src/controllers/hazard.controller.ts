@@ -60,7 +60,7 @@ import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/haza
 export const getHazards = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
@@ -74,6 +74,8 @@ export const getHazards = async (
       userReported,
       reviewStatus,
       reportedById,
+      severities,
+      severityBands,
       northeastLat,
       northeastLng,
       southwestLat,
@@ -104,6 +106,8 @@ export const getHazards = async (
       officialNonAws: parseBoolean(officialNonAws),
       userReported: parseBoolean(userReported),
       reviewStatus,
+      severities,
+      severityBands,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
@@ -119,9 +123,8 @@ export const getHazards = async (
     });
 
     // Enrich hazards with presigned URLs for media access
-    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
-      hazards
-    );
+    const hazardsWithPresignedUrls =
+      await enrichHazardsWithPresignedUrls(hazards);
 
     res.status(200).json(hazardsWithPresignedUrls);
   } catch (error) {
@@ -133,7 +136,7 @@ export const getHazards = async (
 export const getHazardsWithSubscriptionId = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
@@ -146,6 +149,8 @@ export const getHazardsWithSubscriptionId = async (
       userReported,
       reportedById,
       reviewStatus,
+      severities,
+      severityBands,
       northeastLat,
       northeastLng,
       southwestLat,
@@ -182,6 +187,8 @@ export const getHazardsWithSubscriptionId = async (
       officialNonAws: parseBoolean(officialNonAws),
       userReported: parseBoolean(userReported),
       reviewStatus,
+      severities,
+      severityBands,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
@@ -213,9 +220,8 @@ export const getHazardsWithSubscriptionId = async (
     }
 
     // Enrich hazards with presigned URLs for media access
-    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
-      hazards
-    );
+    const hazardsWithPresignedUrls =
+      await enrichHazardsWithPresignedUrls(hazards);
 
     res.status(200).json({
       subscriptionId,
@@ -230,7 +236,7 @@ export const getHazardsWithSubscriptionId = async (
 export const getHazardById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -262,7 +268,7 @@ export const getHazardById = async (
 export const createHazard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { hazard: hazardData }: CreateHazardInput = req.body;
@@ -308,7 +314,7 @@ export const createHazard = async (
 
     // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
     const mediaModerationResult = await checkMediasForProblems(
-      uploadedFiles || []
+      uploadedFiles || [],
     );
 
     // Generate feedback message if some media was rejected
@@ -316,7 +322,9 @@ export const createHazard = async (
     if (mediaModerationResult.hasProblematicFiles) {
       const uniqueReasons = [
         ...new Set(
-          mediaModerationResult.problematicFiles.flatMap((item) => item.reasons)
+          mediaModerationResult.problematicFiles.flatMap(
+            (item) => item.reasons,
+          ),
         ),
       ];
       mediaModerationFeedback = `We have removed ${
@@ -324,7 +332,7 @@ export const createHazard = async (
       } media file${
         mediaModerationResult.problematicFiles.length > 1 ? "s" : ""
       } from the alert because of the following reason(s):\n- ${uniqueReasons.join(
-        "\n- "
+        "\n- ",
       )}`;
     }
 
@@ -335,16 +343,16 @@ export const createHazard = async (
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           mediaModerationResult.validFiles,
-          "hazards"
+          "hazards",
         );
         console.log(
-          `Successfully uploaded ${mediaUploadResults.length} valid media files to S3`
+          `Successfully uploaded ${mediaUploadResults.length} valid media files to S3`,
         );
       } catch (error) {
         console.error("Error uploading media files:", error);
         throw new HttpError(
           500,
-          "Failed to upload media files. Please try again."
+          "Failed to upload media files. Please try again.",
         );
       }
     }
@@ -492,7 +500,7 @@ export const createHazard = async (
         } catch (cleanupError) {
           console.error(
             "Error cleaning up S3 files after failed hazard creation:",
-            cleanupError
+            cleanupError,
           );
         }
       }
@@ -564,7 +572,7 @@ export const createHazard = async (
 export const updateHazard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -637,7 +645,7 @@ export const updateHazard = async (
 
     // Perform AI-based media moderation if media files are provided <--------------------------------------------------------------
     const mediaModerationResult = await checkMediasForProblems(
-      uploadedFiles || []
+      uploadedFiles || [],
     );
 
     // Generate feedback message if some media was rejected
@@ -645,7 +653,9 @@ export const updateHazard = async (
     if (mediaModerationResult.hasProblematicFiles) {
       const uniqueReasons = [
         ...new Set(
-          mediaModerationResult.problematicFiles.flatMap((item) => item.reasons)
+          mediaModerationResult.problematicFiles.flatMap(
+            (item) => item.reasons,
+          ),
         ),
       ];
       mediaModerationFeedback = `We have removed ${
@@ -653,7 +663,7 @@ export const updateHazard = async (
       } media file${
         mediaModerationResult.problematicFiles.length > 1 ? "s" : ""
       } from the alert because of the following reason(s):\n- ${uniqueReasons.join(
-        "\n- "
+        "\n- ",
       )}`;
     }
 
@@ -663,16 +673,16 @@ export const updateHazard = async (
       try {
         mediaUploadResults = await uploadMultipleFilesToS3(
           mediaModerationResult.validFiles,
-          "hazards"
+          "hazards",
         );
         console.log(
-          `Successfully uploaded ${mediaUploadResults.length} new valid media files to S3`
+          `Successfully uploaded ${mediaUploadResults.length} new valid media files to S3`,
         );
       } catch (error) {
         console.error("Error uploading new media files:", error);
         throw new HttpError(
           500,
-          "Failed to upload media files. Please try again."
+          "Failed to upload media files. Please try again.",
         );
       }
     }
@@ -688,7 +698,7 @@ export const updateHazard = async (
         longitude: longitude || existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
         severityBand: getSeverityBandFromDescription(
-          description || existingHazard.description
+          description || existingHazard.description,
         ),
       });
     } catch (error) {
@@ -752,7 +762,7 @@ export const updateHazard = async (
       if (mediaUploadResults.length > 0) {
         // If this is the first media being added, mark it as primary
         const hasPrimaryMedia = existingHazard.medias?.some(
-          (media) => media.isPrimary
+          (media) => media.isPrimary,
         );
 
         const mediaPromises = mediaUploadResults.map((mediaResult, index) => {
@@ -787,7 +797,7 @@ export const updateHazard = async (
       // Delete removed media files from S3 and database
       if (removedMediaIds && removedMediaIds.length > 0) {
         const mediaToRemove = existingHazard.medias.filter((media) =>
-          removedMediaIds.includes(media.id)
+          removedMediaIds.includes(media.id),
         );
 
         // Delete media files from S3
@@ -800,7 +810,7 @@ export const updateHazard = async (
           } catch (cleanupError) {
             console.error(
               "Error cleaning up S3 files after failed hazard update:",
-              cleanupError
+              cleanupError,
             );
           }
 
@@ -837,7 +847,7 @@ export const updateHazard = async (
         } catch (cleanupError) {
           console.error(
             "Error cleaning up S3 files after failed hazard update:",
-            cleanupError
+            cleanupError,
           );
         }
       }
@@ -862,7 +872,7 @@ export const updateHazard = async (
 export const deleteHazard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -918,7 +928,7 @@ export const deleteHazard = async (
       try {
         await deleteMultipleFilesFromS3(s3KeysToDelete);
         console.log(
-          `Successfully deleted ${s3KeysToDelete.length} media files from S3`
+          `Successfully deleted ${s3KeysToDelete.length} media files from S3`,
         );
       } catch (s3Error) {
         console.error("Error deleting media files from S3:", s3Error);
@@ -943,7 +953,7 @@ export const deleteHazard = async (
 export const voteHazard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id: hazardId } = req.params;
@@ -1188,7 +1198,7 @@ export const voteHazard = async (
       } catch (error) {
         console.error(
           "Error recalculating confidence score after vote:",
-          error
+          error,
         );
         // Don't fail the request if confidence score calculation fails
       }
@@ -1209,7 +1219,7 @@ export const voteHazard = async (
 export const viewHazard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -1280,7 +1290,7 @@ export const viewHazard = async (
 export const deleteAllHazards = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     // Delete all hazards
