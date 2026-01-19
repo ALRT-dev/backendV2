@@ -93,7 +93,7 @@ interface ExternalSource {
     | undefined;
 
   parseFunction: (
-    responseData?: any
+    responseData?: any,
   ) => HazardDataWithRelations[] | Promise<HazardDataWithRelations[]>;
 
   /**
@@ -251,11 +251,11 @@ export const syncHazardsFromDifferentSources = async ({
           }
 
           const airQualityAlertCategory = availableCategories.find(
-            (cat) => cat.id === "airQualityAlert"
+            (cat) => cat.id === "airQualityAlert",
           );
           if (!airQualityAlertCategory) {
             console.log(
-              "Air Quality Alert category not found, skipping WAQI hazards."
+              "Air Quality Alert category not found, skipping WAQI hazards.",
             );
             return [];
           }
@@ -289,14 +289,14 @@ export const syncHazardsFromDifferentSources = async ({
         },
         parseFunction: (responseData: any) => {
           const pollenCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === SubCategoryId.pollen
+            (cat: HazardCategory) => cat.id === SubCategoryId.pollen,
           );
           const uvCategory = availableCategories.find(
-            (cat: HazardCategory) => cat.id === SubCategoryId.uvAlert
+            (cat: HazardCategory) => cat.id === SubCategoryId.uvAlert,
           );
           if (!pollenCategory || !uvCategory) {
             console.log(
-              "Pollen or UV Index category not found, skipping Open-Meteo hazards."
+              "Pollen or UV Index category not found, skipping Open-Meteo hazards.",
             );
             return [];
           }
@@ -367,11 +367,11 @@ export const syncHazardsFromDifferentSources = async ({
           "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson",
         parseFunction: (responseData: any) => {
           const earthquakeCategory = availableCategories.find(
-            (cat) => cat.id === SubCategoryId.earthquake
+            (cat) => cat.id === SubCategoryId.earthquake,
           );
           if (!earthquakeCategory) {
             console.log(
-              "Earthquake category not found, skipping USGS Earthquake hazards."
+              "Earthquake category not found, skipping USGS Earthquake hazards.",
             );
             return [];
           }
@@ -404,12 +404,12 @@ export const syncHazardsFromDifferentSources = async ({
     ].filter((sourceConfig) =>
       sourceIds && sourceIds.length > 0
         ? sourceIds.includes(sourceConfig.id)
-        : true
+        : true,
     );
 
     // Step 1: Fetch all hazards from all sources simultaneously
     console.log(
-      `---------------------------------------> Fetching hazards from ${externalSources.length} sources...`
+      `---------------------------------------> Fetching hazards from ${externalSources.length} sources...`,
     );
 
     const allHazardData = await Promise.all(
@@ -418,23 +418,23 @@ export const syncHazardsFromDifferentSources = async ({
           const hazards = await fetchHazardsFromSource(externalSource);
 
           console.log(
-            `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.id}`
+            `---------------------------------------> Fetched ${hazards.length} hazards from ${externalSource.id}`,
           );
           return hazards;
         } catch (error) {
           console.error(`Error fetching from ${externalSource.id}:`, error);
           return [];
         }
-      })
+      }),
     ).then((results) => results.flat());
 
     console.log(
-      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`
+      `---------------------------------------> Total hazards fetched from all sources: ${allHazardData.length}`,
     );
 
     if (allHazardData.length === 0) {
       console.log(
-        "---------------------------------------> No hazards to process"
+        "---------------------------------------> No hazards to process",
       );
       return [];
     }
@@ -448,7 +448,7 @@ export const syncHazardsFromDifferentSources = async ({
       if (source.severityBandFilter) {
         severityBandFilters.set(
           source.id,
-          source.severityBandFilter.minimumSeverityBands
+          source.severityBandFilter.minimumSeverityBands,
         );
       }
     });
@@ -462,7 +462,7 @@ export const syncHazardsFromDifferentSources = async ({
     console.log(
       `---------------------------------------> Successfully processed ${
         createdHazards.length
-      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`
+      } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
     );
     return createdHazards;
     return [];
@@ -479,20 +479,23 @@ export const syncHazardsFromDifferentSources = async ({
  * @param hazardDatas Array of hazard data to be summarized and posted.
  * @param syncOption The sync option to use for existing hazards.
  * @param severityBandFilters Map of source IDs to their severity band filter configurations.
+ * @param calledFromWebhook Optional flag to indicate if called from webhook for enhanced logging.
  * @returns Array of created Hazard objects.
  */
 export const summarizeAndPostHazards = async ({
   hazardDatas,
   syncOption,
   severityBandFilters,
+  calledFromWebhook = false,
 }: {
   hazardDatas: HazardDataWithRelations[];
   syncOption: SyncHazardsFromExternalSourceOption;
   severityBandFilters: Map<ExternalSourceId, HazardSeverityBand[]>;
+  calledFromWebhook?: boolean;
 }): Promise<Hazard[]> => {
   try {
     console.log(
-      `---------------------------------------> Processing ${hazardDatas.length} hazards with rate limiting...`
+      `---------------------------------------> Processing ${hazardDatas.length} hazards with rate limiting...`,
     );
 
     // Step 1: Check for existing hazards and prepare for geocoding based on sync option
@@ -527,7 +530,7 @@ export const summarizeAndPostHazards = async ({
           if (!existing && !meetsMinimumSeverity) {
             console.log(
               `[${hazardData.source?.id}] Skipping hazard with severity ${currentSeverityBand} (below minimum):`,
-              hazardData.title
+              hazardData.title,
             );
             continue;
           }
@@ -537,14 +540,14 @@ export const summarizeAndPostHazards = async ({
             if (currentSeverityBand === existing.severityBand) {
               console.log(
                 `[${hazardData.source?.id}] Skipping hazard with severity ${currentSeverityBand} (below minimum):`,
-                hazardData.title
+                hazardData.title,
               );
               continue;
             }
 
             console.log(
               `[${hazardData.source?.id}] Hazard severity downgraded to ${currentSeverityBand}, expiring:`,
-              hazardData.title
+              hazardData.title,
             );
             await prisma.hazard.update({
               where: { id: existing.id },
@@ -568,16 +571,29 @@ export const summarizeAndPostHazards = async ({
                 `${
                   hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
                 }Hazard already exists, ignoring:`,
-                hazardData.title
+                hazardData.title,
               );
               continue;
             }
-            console.log(
-              `${
-                hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
-              }Hazard content changed, updating:`,
-              hazardData.title
-            );
+
+            if (calledFromWebhook) {
+              console.log(
+                `${
+                  hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+                }[Webhook] Hazard content changed, updating:`,
+                hazardData.title,
+              );
+              console.log("---> Old description:", existing.description);
+              console.log("---> New description:", hazardData.description);
+            } else {
+              console.log(
+                `${
+                  hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
+                }Hazard content changed, updating:`,
+                hazardData.title,
+              );
+            }
+
             hazardsToProcess.push({
               hazardData,
               isUpdate: true,
@@ -589,7 +605,7 @@ export const summarizeAndPostHazards = async ({
               `${
                 hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
               }Deleting existing hazard to recreate:`,
-              hazardData.title
+              hazardData.title,
             );
             await prisma.hazard.delete({
               where: { id: hazardData.id },
@@ -605,7 +621,7 @@ export const summarizeAndPostHazards = async ({
               `${
                 hasSeverityFilter ? `[${hazardData.source?.id}] ` : ""
               }Replacing existing hazard:`,
-              hazardData.title
+              hazardData.title,
             );
             hazardsToProcess.push({
               hazardData,
@@ -620,7 +636,7 @@ export const summarizeAndPostHazards = async ({
                 ? `[${hazardData.source?.id}] Creating new hazard with severity ${currentSeverityBand}:`
                 : "Creating new hazard:"
             }`,
-            hazardData.title
+            hazardData.title,
           );
           hazardsToProcess.push({
             hazardData,
@@ -649,7 +665,7 @@ export const summarizeAndPostHazards = async ({
         if (!populatedHazard.latitude || !populatedHazard.longitude) {
           console.log(
             "Hazard missing coordinates after geocoding, skipping:",
-            populatedHazard.title
+            populatedHazard.title,
           );
           continue;
         }
@@ -701,7 +717,7 @@ export const summarizeAndPostHazards = async ({
           } catch (error) {
             console.error(
               "Error calculating confidence score for ingested hazard:",
-              error
+              error,
             );
             confidenceScore = 75; // Fallback for official sources
           }
@@ -710,7 +726,7 @@ export const summarizeAndPostHazards = async ({
           if (!expiresAt) {
             // If no expiry provided, set based on severity
             expiresAt = getHazardExpiryDateFromSeverity(
-              hazardData.severity || HazardSeverity.unknown
+              hazardData.severity || HazardSeverity.unknown,
             );
           }
           if (hazardData.source?.id === ExternalSourceId.smartraveller) {
@@ -748,7 +764,7 @@ export const summarizeAndPostHazards = async ({
             // so we should create a new one
             createdHazard = await prisma.hazard.create({
               data: convertHazardDataWithRelationsToCreateInput(
-                finalHazardData
+                finalHazardData,
               ),
               include: buildHazardInclude(),
             });
@@ -766,7 +782,7 @@ export const summarizeAndPostHazards = async ({
 
           console.log(
             `${isUpdate ? "Updated" : "Created"} hazard:`,
-            finalHazardData.title
+            finalHazardData.title,
           );
 
           // Send push notifications to users who subscribed to this area when a new hazard is created
@@ -785,12 +801,12 @@ export const summarizeAndPostHazards = async ({
         }
       },
       25, // Process 25 at a time
-      2000 // Wait 2 seconds between batches
+      2000, // Wait 2 seconds between batches
     );
 
     // Filter out null results to get the final list of created hazards
     const validCreatedHazards = createdHazards.filter(
-      (h): h is NonNullable<typeof h> => h !== null
+      (h): h is NonNullable<typeof h> => h !== null,
     );
 
     console.log(`Successfully processed ${validCreatedHazards.length} hazards`);
@@ -806,7 +822,7 @@ export const summarizeAndPostHazards = async ({
  * Handles common patterns: upsert source, fetch data, parse, and map with IDs.
  */
 const fetchHazardsFromSource = async <T = any>(
-  externalSource: ExternalSource
+  externalSource: ExternalSource,
 ): Promise<HazardDataWithRelations[]> => {
   const {
     id: sourceId,
@@ -835,7 +851,7 @@ const fetchHazardsFromSource = async <T = any>(
     });
     if (!source) {
       throw new Error(
-        `Hazard source with ID ${sourceId} not found in database.`
+        `Hazard source with ID ${sourceId} not found in database.`,
       );
     }
 
@@ -857,13 +873,13 @@ const fetchHazardsFromSource = async <T = any>(
       const response = await fetch(apiUrl, fetchOptions);
       if (!response.ok) {
         throw new Error(
-          `Failed to fetch ${sourceId} data: ${response.statusText}`
+          `Failed to fetch ${sourceId} data: ${response.statusText}`,
         );
       }
 
       const data = await response.json();
       const hazards = (parseFunction as (data: T) => HazardDataWithRelations[])(
-        data
+        data,
       );
 
       return hazards.map((hazard) => ({
@@ -880,7 +896,7 @@ const fetchHazardsFromSource = async <T = any>(
           const response = await fetch(singleUrl, fetchOptions);
           if (!response.ok) {
             throw new Error(
-              `Failed to fetch ${sourceId} data from ${singleUrl}: ${response.statusText}`
+              `Failed to fetch ${sourceId} data from ${singleUrl}: ${response.statusText}`,
             );
           }
 
@@ -888,7 +904,7 @@ const fetchHazardsFromSource = async <T = any>(
           const hazards = (
             parseFunction as (
               data: T,
-              source?: any
+              source?: any,
             ) => HazardDataWithRelations[]
           )(data, source);
 
@@ -954,7 +970,7 @@ export const getLocationsFromText = async (text: string): Promise<string[]> => {
 
   const { extractLocationPromptId } = await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    extractLocationPromptId
+    extractLocationPromptId,
   );
 
   const userContent = `Extract locations from this text: "${text}"`;
@@ -980,11 +996,11 @@ export const getLocationsFromText = async (text: string): Promise<string[]> => {
   } catch (parseError) {
     console.error(
       "Failed to parse AI location extraction response:",
-      parseError
+      parseError,
     );
     throw new HttpError(
       500,
-      "AI location extraction failed: Invalid response format"
+      "AI location extraction failed: Invalid response format",
     );
   }
 };

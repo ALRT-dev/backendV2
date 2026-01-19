@@ -26,13 +26,13 @@ import type { HazardDataWithRelations } from "../models/hazard_data_with_relatio
 export const createHazardViaWebhook = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     console.log(
       `[Webhook] Received request to create hazards. Count: ${
         req.body.hazards?.length || 0
-      }`
+      }`,
     );
     const availableCategories = await getAllSubHazardCategories();
     const requestBody: CreateHazardsWebhookBody = req.body;
@@ -41,14 +41,14 @@ export const createHazardViaWebhook = async (
     console.log(
       `[Webhook] Request params - syncOption: ${syncOption}, allowedSeverityBands: ${
         allowedSeverityBands?.join(", ") || "none"
-      }`
+      }`,
     );
 
     // Process all hazards to prepare data
     const validationResults = await Promise.allSettled(
       hazards.map((hazardData) =>
-        processSingleHazard(hazardData, availableCategories)
-      )
+        processSingleHazard(hazardData, availableCategories),
+      ),
     );
 
     // Separate valid hazards from errors
@@ -72,7 +72,7 @@ export const createHazardViaWebhook = async (
         const hazardData = hazards[index];
         console.error(
           `[Webhook] Validation failed for hazard at index ${index}:`,
-          errorMessage
+          errorMessage,
         );
         if (hazardData) {
           validationErrors.push({
@@ -85,13 +85,13 @@ export const createHazardViaWebhook = async (
     });
 
     console.log(
-      `[Webhook] Validation complete. Valid: ${validHazardDatas.length}, Errors: ${validationErrors.length}`
+      `[Webhook] Validation complete. Valid: ${validHazardDatas.length}, Errors: ${validationErrors.length}`,
     );
 
     // If all validations failed, return error
     if (validHazardDatas.length === 0) {
       console.error(
-        `[Webhook] All ${hazards.length} hazards failed validation`
+        `[Webhook] All ${hazards.length} hazards failed validation`,
       );
       return res.status(400).json({
         success: false,
@@ -111,22 +111,23 @@ export const createHazardViaWebhook = async (
       sourceIds.forEach((sourceId) => {
         severityBandFilters.set(
           sourceId as ExternalSourceId,
-          allowedSeverityBands
+          allowedSeverityBands,
         );
       });
     }
 
     // Use summarizeAndPostHazards to process all valid hazards at once
     console.log(
-      `[Webhook] Processing ${validHazardDatas.length} valid hazards with syncOption: ${syncOption}`
+      `[Webhook] Processing ${validHazardDatas.length} valid hazards with syncOption: ${syncOption}`,
     );
     const createdHazards = await summarizeAndPostHazards({
       hazardDatas: validHazardDatas,
       syncOption,
       severityBandFilters,
+      calledFromWebhook: true,
     });
     console.log(
-      `[Webhook] Successfully processed ${createdHazards.length} hazards`
+      `[Webhook] Successfully processed ${createdHazards.length} hazards`,
     );
 
     // Determine response status
@@ -136,11 +137,11 @@ export const createHazardViaWebhook = async (
 
     if (partialSuccess) {
       console.log(
-        `[Webhook] Partial success: ${createdHazards.length}/${hazards.length} hazards processed`
+        `[Webhook] Partial success: ${createdHazards.length}/${hazards.length} hazards processed`,
       );
     } else {
       console.log(
-        `[Webhook] Full success: All ${createdHazards.length} hazards processed`
+        `[Webhook] Full success: All ${createdHazards.length} hazards processed`,
       );
     }
 
@@ -165,12 +166,12 @@ export const createHazardViaWebhook = async (
  */
 const processSingleHazard = async (
   hazardData: CreateHazardWebhookBody,
-  availableCategories: (HazardCategory & { parent: HazardCategory | null })[]
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[],
 ): Promise<HazardDataWithRelations> => {
   // Step 1: Extract attributes from description
   const attributes = getHazardAttributesFromDescription(
     hazardData.description,
-    availableCategories
+    availableCategories,
   );
 
   const {
@@ -209,7 +210,7 @@ const processSingleHazard = async (
   if ((latitude === undefined || longitude === undefined) && !locationName) {
     throw new HttpError(
       400,
-      "Either latitude & longitude or locationName must be provided"
+      "Either latitude & longitude or locationName must be provided",
     );
   }
 
