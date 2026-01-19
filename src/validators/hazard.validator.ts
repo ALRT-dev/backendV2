@@ -168,7 +168,7 @@ export const getHazardsQuerySchema = z.object({
     .string()
     .regex(
       /^(true|false)$/,
-      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+      "ignoreHazardLatLngBounds must be 'true' or 'false'",
     )
     .optional(),
 
@@ -183,8 +183,9 @@ export const getHazardsQuerySchema = z.object({
         severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
+        updatedAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),
-      })
+      }),
     )
     .optional(),
 });

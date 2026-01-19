@@ -64,7 +64,7 @@ export const getHazardsForAdminQuerySchema = z.object({
     .string()
     .regex(
       /^(true|false)$/,
-      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+      "ignoreHazardLatLngBounds must be 'true' or 'false'",
     )
     .optional(),
 
@@ -79,8 +79,9 @@ export const getHazardsForAdminQuerySchema = z.object({
         severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
+        updatedAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),
-      })
+      }),
     )
     .optional(),
 });
@@ -116,7 +117,7 @@ export const createHazardForAdminBodySchema = z.object({
       z
         .string()
         .min(1, "Call to action item cannot be empty")
-        .max(500, "Each call to action must be at most 500 characters")
+        .max(500, "Each call to action must be at most 500 characters"),
     )
     .min(1, "At least one call to action is required")
     .max(10, "Maximum 10 calls to action allowed")
@@ -205,7 +206,7 @@ export const updateHazardForAdminBodySchema = z.object({
       z
         .string()
         .min(1, "Call to action item cannot be empty")
-        .max(500, "Each call to action must be at most 500 characters")
+        .max(500, "Each call to action must be at most 500 characters"),
     )
     .min(1, "At least one call to action is required")
     .max(10, "Maximum 10 calls to action allowed")
