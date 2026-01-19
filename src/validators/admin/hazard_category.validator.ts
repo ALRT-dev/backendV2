@@ -7,6 +7,16 @@ export type GetCategoriesForAdminQuery = z.infer<
 >;
 
 export const createHazardCategoryForAdminBodySchema = z.object({
+  id: z
+    .string()
+    .min(1, "ID is required")
+    .max(50, "ID must be at most 50 characters")
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      "ID must contain only alphanumeric characters, underscores, and hyphens",
+    )
+    .optional(),
+
   name: z
     .string()
     .min(1, "Name is required")
@@ -46,6 +56,7 @@ export const updateHazardCategoryForAdminBodySchema = z.object({
   description: z
     .string()
     .max(500, "Description must be at most 500 characters")
+    .nullable()
     .optional(),
 
   color: z
@@ -54,13 +65,14 @@ export const updateHazardCategoryForAdminBodySchema = z.object({
       /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/,
       "Color must be a valid hex color code",
     )
+    .nullable()
     .optional(),
 
   keywords: z.array(z.string().min(1).max(100)).optional(),
 
   isFireRelated: z.boolean().optional(),
 
-  parentId: z.string().optional(),
+  parentId: z.string().nullable().optional(),
 });
 
 export type UpdateHazardCategoryForAdminBody = z.infer<

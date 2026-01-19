@@ -82,7 +82,13 @@ export const getHazardSources = async (params: GetHazardSourcesParams) => {
       license: true,
       _count: {
         select: {
-          hazards: true,
+          hazards: {
+            where: {
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+          },
         },
       },
     },
@@ -110,7 +116,13 @@ export const getHazardSourceById = async (sourceId: string) => {
       license: true,
       _count: {
         select: {
-          hazards: true,
+          hazards: {
+            where: {
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+          },
         },
       },
     },
@@ -168,7 +180,13 @@ export const createHazardSource = async (data: CreateHazardSourceData) => {
       license: true,
       _count: {
         select: {
-          hazards: true,
+          hazards: {
+            where: {
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+          },
         },
       },
     },
@@ -229,7 +247,13 @@ export const updateHazardSource = async (
       license: true,
       _count: {
         select: {
-          hazards: true,
+          hazards: {
+            where: {
+              expiresAt: {
+                gt: new Date(),
+              },
+            },
+          },
         },
       },
     },
@@ -263,7 +287,7 @@ export const deleteHazardSource = async (sourceId: string) => {
   if (hazardsCount > 0) {
     throw new HttpError(
       400,
-      `Cannot delete hazard source with ${hazardsCount} associated hazards. Please delete or reassign the hazards first.`,
+      `Cannot delete hazard source with ${hazardsCount} associated hazards (active + expired). Please delete or reassign the hazards first.`,
     );
   }
 

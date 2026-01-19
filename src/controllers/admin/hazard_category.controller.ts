@@ -88,6 +88,7 @@ export const createHazardCategoryForAdmin = async (
 ) => {
   try {
     const {
+      id,
       name,
       description,
       color,
@@ -95,6 +96,16 @@ export const createHazardCategoryForAdmin = async (
       isFireRelated,
       parentId,
     }: CreateHazardCategoryForAdminBody = req.body;
+
+    // If ID is provided, check if it already exists
+    if (id) {
+      const existingById = await prisma.hazardCategory.findUnique({
+        where: { id },
+      });
+      if (existingById) {
+        throw new HttpError(400, `Category with ID '${id}' already exists`);
+      }
+    }
 
     // Check if category with same name already exists
     const existingCategory = await prisma.hazardCategory.findUnique({
@@ -116,6 +127,7 @@ export const createHazardCategoryForAdmin = async (
 
     const createdCategory = await prisma.hazardCategory.create({
       data: {
+        ...(id && { id }),
         name,
         ...(description && { description }),
         ...(color && { color }),
@@ -224,9 +236,9 @@ export const updateHazardCategoryForAdmin = async (
       where: { id: categoryId },
       data: {
         ...(name && { name }),
-        ...(description && { description }),
-        ...(color && { color }),
-        ...(parentId && { parentId }),
+        ...(description !== undefined && { description }),
+        ...(color !== undefined && { color }),
+        ...(parentId !== undefined && { parentId }),
         ...(keywords && { keywords }),
         ...(isFireRelated !== undefined && { isFireRelated }),
       },
