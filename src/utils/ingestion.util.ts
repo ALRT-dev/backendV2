@@ -906,6 +906,445 @@ function extractWAIncidentInfo(description?: string): {
 }
 
 /**
+ * Converts NSW SES CAP-AU (Common Alerting Protocol - Australia) Atom feed into Hazard objects
+ *
+ * @param url - URL of the NSW SES CAP-AU Atom feed
+ * @param availableCategories - Array of available hazard categories
+ * @returns Promise resolving to an array of HazardDataWithRelations objects
+ *
+ * @description
+ * Parses NSW SES Atom feed which contains CAP-AU formatted emergency alerts.
+ * The feed includes:
+ * - Flooding warnings and advice
+ * - Australian Warning System compliant severity levels (Advice, Watch and Act, Emergency Warning)
+ * - GeoRSS polygon data for affected areas
+ * - Structured CAP-AU alert information with instructions and calls to action
+ * - Multiple affected locations per alert
+ *
+ * @example
+ * ```typescript
+ * const url = "https://hazardwatch.gov.au/feed/v1/nswses-cap-au-active-warnings.atom.xml";
+ * const hazards = await parseSESToHazards({
+ *   url,
+ *   availableCategories
+ * });
+ * ```
+ */
+export async function parseSESToHazards({
+  url,
+  availableCategories,
+}: {
+  url: string;
+  availableCategories: (HazardCategory & { parent: HazardCategory | null })[];
+}): Promise<HazardDataWithRelations[]> {
+  const parser = new Parser({
+    customFields: {
+      item: ["updated", "content", "content:encoded", "id"],
+    },
+  });
+
+  const feed = await parser.parseURL(url);
+
+  if (!feed.items?.length) return [];
+
+  const hazards: HazardDataWithRelations[] = [];
+
+  for (const item of feed.items) {
+    try {
+      // Parse the embedded CAP-AU alert from the content field
+      // Try different content field names as Atom feeds can vary
+      const contentData =
+        (item as any).content ||
+        (item as any)["content:encoded"] ||
+        (item as any).contentData;
+      const alertData = extractCAPAUAlertFromContent(contentData);
+
+      if (!alertData) {
+        console.warn(
+          `Could not extract CAP-AU alert data from item: ${item.title}`,
+        );
+        continue;
+      }
+
+      // Extract coordinates and bounding box from polygon
+      const {
+        latitude,
+        longitude,
+        northeastLat,
+        northeastLng,
+        southwestLat,
+        southwestLng,
+      } = extractCoordinatesFromPolygon(alertData.polygon);
+
+      // Skip if no coordinates
+      if (!latitude || !longitude) {
+        console.warn(`No coordinates found for SES alert: ${item.title}`);
+        continue;
+      }
+
+      // Build description from CAP-AU fields
+      const descriptionParts: string[] = [];
+
+      if (alertData.event) {
+        descriptionParts.push(`Event: ${alertData.event}`);
+      }
+
+      if (alertData.description) {
+        descriptionParts.push(cleanDescription(alertData.description));
+      }
+
+      const description = descriptionParts.join("\n\n");
+
+      // Build title from headline and affected location
+      const title =
+        item.title?.replaceAll("\n", " ").replace(/\s+/g, " ") ||
+        "NSW SES Alert";
+
+      // Extract calls to action from instruction field
+      const callsToAction = alertData.instruction
+        ? extractCallsToActionFromInstruction(alertData.instruction)
+        : undefined;
+
+      const descriptionPartsForAttributes: string[] = [];
+      if (alertData.event) {
+        descriptionPartsForAttributes.push(`Event: ${alertData.event}`);
+      }
+      if (alertData.awsWarningLevel) {
+        descriptionPartsForAttributes.push(
+          "AWS Level: " + alertData.awsWarningLevel,
+        );
+      }
+      const descriptionForAttributes = descriptionPartsForAttributes.join("\n");
+
+      // Determine hazard attributes from description and AWS warning level
+      const { severity, severityBand, category, fireStatus, isAwsCompliant } =
+        getHazardAttributesFromDescription(
+          descriptionForAttributes,
+          availableCategories,
+          MainCategoryId.weatherAndEnvironment,
+        );
+
+      // Generate hazard ID from alert identifier
+      const hazardId = `${ExternalSourceId.nswSes}-${alertData.identifier}`;
+
+      // check if item.id is a valid URL, if so use it as link
+      const link = isValidURL(item.id) ? item.id : null;
+
+      // Parse dates
+      const occurredAt = parseValidDate(alertData.sent || item.pubDate);
+
+      const hazard: HazardDataWithRelations = {
+        id: hazardId,
+        title,
+        description,
+        severity,
+        severityBand,
+        category,
+        ...(category.isFireRelated && fireStatus && { fireStatus }),
+        isAwsCompliant,
+        latitude,
+        longitude,
+        ...(northeastLat &&
+          northeastLng &&
+          southwestLat &&
+          southwestLng && {
+            northeastLat,
+            northeastLng,
+            southwestLat,
+            southwestLng,
+          }),
+        locationName:
+          alertData.affectedLocation?.replaceAll("&amp;", "&") || null,
+        ...(callsToAction && callsToAction.length > 0 && { callsToAction }),
+        link,
+        occurredAt,
+      };
+
+      hazards.push(hazard);
+    } catch (error) {
+      console.error(`Error parsing SES alert item:`, error);
+      continue;
+    }
+  }
+
+  return hazards;
+}
+
+/**
+ * Extracts CAP-AU alert data from the content field of an Atom feed entry
+ * @param contentData - The content field containing embedded XML alert
+ * @returns Object containing extracted CAP-AU alert fields
+ */
+function extractCAPAUAlertFromContent(contentData: any): {
+  identifier: string;
+  sent: string | null;
+  event: string | null;
+  headline: string | null;
+  description: string | null;
+  instruction: string | null;
+  web: string | null;
+  polygon: string | null;
+  awsCallToAction: string | null;
+  awsWarningLevel: string | null;
+  affectedLocation: string | null;
+  nextUpdateDate: string | null;
+} | null {
+  if (!contentData) return null;
+
+  // The content field contains an <alert> XML structure
+  // Handle different content field structures (string, object with $, etc.)
+  let contentStr = "";
+
+  if (typeof contentData === "string") {
+    contentStr = contentData;
+  } else if (contentData?.$) {
+    // RSS parser sometimes wraps content in an object with $ property
+    contentStr = contentData.$;
+  } else if (contentData?._) {
+    // Some parsers use _ property
+    contentStr = contentData._;
+  } else if (typeof contentData === "object") {
+    contentStr = JSON.stringify(contentData);
+  }
+
+  if (!contentStr) {
+    return null;
+  }
+
+  // Extract identifier
+  const identifierMatch = contentStr.match(/<identifier>([^<]+)<\/identifier>/);
+  const identifier = identifierMatch?.[1]?.trim() || "";
+
+  if (!identifier) {
+    return null;
+  }
+
+  // Extract sent timestamp
+  const sentMatch = contentStr.match(/<sent>([^<]+)<\/sent>/);
+  const sent = sentMatch?.[1]?.trim() || null;
+
+  // Extract event type
+  const eventMatch = contentStr.match(/<event>([^<]+)<\/event>/);
+  const event = eventMatch?.[1]?.trim() || null;
+
+  // Extract headline
+  const headlineMatch = contentStr.match(/<headline>([^<]+)<\/headline>/);
+  const headline = headlineMatch?.[1]?.trim() || null;
+
+  // Extract description (try both CDATA and non-CDATA formats)
+  let description: string | null = null;
+  // Try CDATA format first
+  let descriptionMatch = contentStr.match(
+    /<description>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/description>/,
+  );
+  if (descriptionMatch?.[1]) {
+    description = descriptionMatch[1].trim();
+  } else {
+    // Try non-CDATA format
+    descriptionMatch = contentStr.match(
+      /<description>([\s\S]*?)<\/description>/,
+    );
+    if (descriptionMatch?.[1]) {
+      description = descriptionMatch[1].trim();
+    }
+  }
+
+  // Extract instruction (try both CDATA and non-CDATA formats)
+  let instruction: string | null = null;
+  // Try CDATA format first
+  let instructionMatch = contentStr.match(
+    /<instruction>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/instruction>/,
+  );
+  if (instructionMatch?.[1]) {
+    instruction = instructionMatch[1].trim();
+  } else {
+    // Try non-CDATA format
+    instructionMatch = contentStr.match(
+      /<instruction>([\s\S]*?)<\/instruction>/,
+    );
+    if (instructionMatch?.[1]) {
+      instruction = instructionMatch[1].trim();
+    }
+  }
+
+  // Extract web URL
+  const webMatch = contentStr.match(/<web>([^<]+)<\/web>/);
+  const web = webMatch?.[1]?.trim() || null;
+
+  // Extract polygon coordinates
+  const polygonMatch = contentStr.match(/<polygon>([^<]+)<\/polygon>/);
+  const polygon = polygonMatch?.[1]?.trim() || null;
+
+  // Extract AWS (Australian Warning System) parameters
+  const awsCallToActionMatch = contentStr.match(
+    /<valueName>AustralianWarningSystem:CallToAction<\/valueName>\s*<value>([^<]+)<\/value>/,
+  );
+  const awsCallToAction = awsCallToActionMatch?.[1]?.trim() || null;
+
+  const awsWarningLevelMatch = contentStr.match(
+    /<valueName>AustralianWarningSystem:WarningLevel<\/valueName>\s*<value>([^<]+)<\/value>/,
+  );
+  const awsWarningLevel = awsWarningLevelMatch?.[1]?.trim() || null;
+
+  const affectedLocationMatch = contentStr.match(
+    /<valueName>AffectedLocation<\/valueName>\s*<value>([^<]+)<\/value>/,
+  );
+  const affectedLocation = affectedLocationMatch?.[1]?.trim() || null;
+
+  const nextUpdateDateMatch = contentStr.match(
+    /<valueName>NextUpdateDate<\/valueName>\s*<value>([^<]+)<\/value>/,
+  );
+  const nextUpdateDate = nextUpdateDateMatch?.[1]?.trim() || null;
+
+  // Debug logging
+  console.log("Extracted CAP-AU Alert Data:", {
+    identifier,
+    hasDescription: !!description,
+    descriptionLength: description?.length || 0,
+    hasInstruction: !!instruction,
+    hasPolygon: !!polygon,
+  });
+
+  return {
+    identifier,
+    sent,
+    event,
+    headline,
+    description,
+    instruction,
+    web,
+    polygon,
+    awsCallToAction,
+    awsWarningLevel,
+    affectedLocation,
+    nextUpdateDate,
+  };
+}
+
+/**
+ * Extracts coordinates and bounding box from a polygon string
+ * Polygon format: "lat1,lng1 lat2,lng2 lat3,lng3 ..."
+ * @param polygon - Space-separated coordinate pairs string
+ * @returns Object with center coordinates and bounding box
+ */
+function extractCoordinatesFromPolygon(polygon: string | null): {
+  latitude: number | null;
+  longitude: number | null;
+  northeastLat: number | null;
+  northeastLng: number | null;
+  southwestLat: number | null;
+  southwestLng: number | null;
+} {
+  if (!polygon) {
+    return {
+      latitude: null,
+      longitude: null,
+      northeastLat: null,
+      northeastLng: null,
+      southwestLat: null,
+      southwestLng: null,
+    };
+  }
+
+  try {
+    // Parse polygon coordinates: "lat1,lng1 lat2,lng2 ..."
+    const coordPairs = polygon.trim().split(/\s+/);
+    const coordinates: Array<{ lat: number; lng: number }> = [];
+
+    for (const pair of coordPairs) {
+      const [latStr, lngStr] = pair.split(",");
+      const lat = parseFloat(latStr || "");
+      const lng = parseFloat(lngStr || "");
+
+      if (!isNaN(lat) && !isNaN(lng)) {
+        coordinates.push({ lat, lng });
+      }
+    }
+
+    if (coordinates.length === 0) {
+      return {
+        latitude: null,
+        longitude: null,
+        northeastLat: null,
+        northeastLng: null,
+        southwestLat: null,
+        southwestLng: null,
+      };
+    }
+
+    // Calculate center point (centroid)
+    const sumLat = coordinates.reduce((sum, coord) => sum + coord.lat, 0);
+    const sumLng = coordinates.reduce((sum, coord) => sum + coord.lng, 0);
+    const latitude = sumLat / coordinates.length;
+    const longitude = sumLng / coordinates.length;
+
+    // Calculate bounding box
+    const lats = coordinates.map((c) => c.lat);
+    const lngs = coordinates.map((c) => c.lng);
+
+    const northeastLat = Math.max(...lats);
+    const northeastLng = Math.max(...lngs);
+    const southwestLat = Math.min(...lats);
+    const southwestLng = Math.min(...lngs);
+
+    return {
+      latitude,
+      longitude,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
+    };
+  } catch (error) {
+    console.error("Error parsing polygon coordinates:", error);
+    return {
+      latitude: null,
+      longitude: null,
+      northeastLat: null,
+      northeastLng: null,
+      southwestLat: null,
+      southwestLng: null,
+    };
+  }
+}
+
+/**
+ * Extracts actionable items from the instruction HTML content
+ * Only extracts from the first <ul> section and stops before "For more information"
+ * @param instruction - HTML instruction content with lists
+ * @returns Array of call to action strings
+ */
+function extractCallsToActionFromInstruction(instruction: string): string[] {
+  if (!instruction) return [];
+
+  // Decode HTML entities first so regex patterns can match
+  const decoded = decodeHtmlEntities(instruction);
+
+  // First, extract only content before "For more information" heading
+  const beforeInfoSection = decoded.split(/<h3[^>]*>For more information:/i)[0];
+  if (!beforeInfoSection) return [];
+
+  // Extract only the first <ul> section
+  const firstUlMatch = beforeInfoSection.match(/<ul[^>]*>([\s\S]*?)<\/ul>/i);
+  if (!firstUlMatch) return [];
+
+  const firstUlContent = firstUlMatch[1];
+
+  // Clean HTML and extract bullet points
+  const cleaned = cleanDescription(firstUlContent);
+
+  // Split by bullet points and filter
+  const items = cleaned
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("•"))
+    .map((line) => line.substring(1).trim())
+    .filter((line) => line.length > 0 && line.length < 500); // Reasonable length for calls to action
+
+  return items;
+}
+
+/**
  * Cleans WA incident title by extracting incident type and location
  * @param title - Raw title from RSS item
  * @returns Cleaned title string
@@ -2457,11 +2896,41 @@ function getAirQualitySeverity(category?: string): HazardSeverity {
 /**
  * Removes HTML tags and converts <br> to line breaks
  */
+/**
+ * Decodes HTML entities in a string
+ * @param text - Text with HTML entities
+ * @returns Decoded text
+ */
+function decodeHtmlEntities(text: string): string {
+  if (!text) return "";
+
+  return text
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(dec))
+    .replace(/&#x([0-9a-f]+);/gi, (match, hex) =>
+      String.fromCharCode(parseInt(hex, 16)),
+    );
+}
+
+/**
+ * Cleans HTML from description strings, converting to readable plain text
+ * @param html - HTML string to clean
+ * @returns Plain text with proper formatting
+ */
 function cleanDescription(html?: string): string {
   if (!html) return "";
 
+  // First decode HTML entities
+  const decoded = decodeHtmlEntities(html);
+
   return (
-    html
+    decoded
       // Convert list items to proper line breaks with bullets
       .replace(/<li[^>]*>\s*<p>/gi, "\n• ")
       .replace(/<li[^>]*>/gi, "\n• ")
@@ -3013,6 +3482,21 @@ function buildNTFireAndRescueDescription(properties: any): string {
 
   return parts.join("\n");
 }
+
+/**
+ * Validates if a string is a well-formed URL
+ *
+ * @param str - The string to validate
+ * @returns True if valid URL, false otherwise
+ */
+const isValidURL = (str: string): boolean => {
+  try {
+    new URL(str);
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Converts HazardDataWithRelations to Prisma HazardCreateInput

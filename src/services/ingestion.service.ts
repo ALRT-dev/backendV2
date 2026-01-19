@@ -16,7 +16,6 @@ import {
   parseWAQIToHazards,
   parseUVIndexAndPollenToHazards,
   getGeocodingCacheSize,
-  parseSmartravellerToHazards,
   parseWAWarningsToHazards,
   parseWAIncidentsToHazards,
   cleanupLocationExtractionCache,
@@ -25,6 +24,7 @@ import {
   parseUSGSEarthquakeToHazards,
   parseQLDTrafficToHazards,
   parseQLDParkToHazards,
+  parseSESToHazards,
 } from "../utils/ingestion.util.js";
 import * as crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
@@ -43,7 +43,6 @@ import {
 import { config } from "../utils/config.js";
 import {
   getAllSubHazardCategories,
-  MainCategoryId,
   SubCategoryId,
 } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
@@ -52,10 +51,6 @@ import { executePrompt, processBatchWithRateLimit } from "./open-ai.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
-import {
-  AustralianStateBomAPIs,
-  AustralianStates,
-} from "../enums/australian_state_types.js";
 
 export enum ExternalSourceId {
   rfs = "rfs",
@@ -358,6 +353,16 @@ export const syncHazardsFromDifferentSources = async ({
         parseFunction: () =>
           parseWAIncidentsToHazards({
             url: "https://api.emergency.wa.gov.au/v1/rss/incidents",
+            availableCategories,
+          }),
+      },
+      {
+        id: ExternalSourceId.nswSes,
+        apiUrl:
+          "https://hazardwatch.gov.au/feed/v1/nswses-cap-au-active-warnings.atom.xml",
+        parseFunction: () =>
+          parseSESToHazards({
+            url: "https://hazardwatch.gov.au/feed/v1/nswses-cap-au-active-warnings.atom.xml",
             availableCategories,
           }),
       },

@@ -30,7 +30,7 @@ const app = express();
 
 // Configure Express to use qs for parsing query strings with nested objects
 app.set("query parser", (str: string) =>
-  qs.parse(str, { allowDots: true, arrayLimit: 100 })
+  qs.parse(str, { allowDots: true, arrayLimit: 100 }),
 );
 
 const server = http.createServer(app);
@@ -49,7 +49,7 @@ app.use(
     credentials: true, // Allow cookies and authorization headers
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 app.use(express.json());
 
@@ -73,7 +73,7 @@ app.use(unknownRouteMiddleware);
 
 server.listen(config.port, async () => {
   console.log(
-    `${config.env.toUpperCase()} server is running at PORT:${config.port}`
+    `${config.env.toUpperCase()} server is running at PORT:${config.port}`,
   );
 
   // Initialize database and required data
