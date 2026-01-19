@@ -7,6 +7,8 @@ export const getHazardsForAdminQuerySchema = z.object({
 
   categoryIds: z.string().optional(),
 
+  sourceIds: z.string().optional(),
+
   awsEmergency: z
     .string()
     .regex(/^(true|false)$/, "awsEmergency must be 'true' or 'false'")
