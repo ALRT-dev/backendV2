@@ -1724,7 +1724,6 @@ export function parseQLDTrafficToHazards({
       const eventPriority = properties.event_priority; // "Low", "Medium", "High"
       const description = properties.description;
       const advice = properties.advice;
-      const url = properties.url;
 
       // Extract impact information
       const impact = properties.impact;
@@ -1861,7 +1860,6 @@ export function parseQLDTrafficToHazards({
         latitude,
         longitude,
         locationName,
-        ...(url && { link: url }),
         occurredAt,
         ...(expiresAt && { expiresAt }),
       };
