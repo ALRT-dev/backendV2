@@ -1,8 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
 import { HttpError } from "../models/http_error.js";
 import {
+  cancelAccountDeletion,
+  getAccountDeletionStatus,
   getUserById,
   getUserPushNotificationSettings,
+  requestAccountDeletion,
   updateUserPushNotificationSettings,
 } from "../services/user.service.js";
 import prisma from "../utils/prisma_client.util.js";
@@ -31,7 +34,7 @@ import {
 export const getUserProfile = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -55,7 +58,7 @@ export const getUserProfile = async (
 export const updateUserProfile = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -69,7 +72,7 @@ export const updateUserProfile = async (
     if (!name && !latitude && !longitude && !locationName) {
       throw new HttpError(
         400,
-        "Nothing to update. Provide at least one field to update."
+        "Nothing to update. Provide at least one field to update.",
       );
     }
 
@@ -109,7 +112,7 @@ export const updateUserProfile = async (
 export const updateUserProfilePicture = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -175,7 +178,7 @@ export const updateUserProfilePicture = async (
 export const subscribeToLocation = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -212,7 +215,7 @@ export const subscribeToLocation = async (
 export const unsubscribeFromLocation = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -246,7 +249,7 @@ export const unsubscribeFromLocation = async (
 export const updateUserOwnLocationSubscriptionController = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -277,7 +280,7 @@ export const updateUserOwnLocationSubscriptionController = async (
 export const updateUserOwnLocationSubscriptionRadiusController = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -289,7 +292,7 @@ export const updateUserOwnLocationSubscriptionRadiusController = async (
 
     const newSubscription = await updateUserOwnLocationSubscriptionRadius(
       userId,
-      radiusKm
+      radiusKm,
     );
 
     res.status(200).json(newSubscription);
@@ -302,7 +305,7 @@ export const updateUserOwnLocationSubscriptionRadiusController = async (
 export const getUserSubscriptions = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -322,7 +325,7 @@ export const getUserSubscriptions = async (
 export const getUserPushNotificationSettingsController = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -342,7 +345,7 @@ export const getUserPushNotificationSettingsController = async (
 export const updateUserNotificationSettingsController = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
@@ -354,10 +357,90 @@ export const updateUserNotificationSettingsController = async (
 
     const settings = await updateUserPushNotificationSettings(
       userId,
-      settingsToUpdate
+      settingsToUpdate,
     );
 
     res.status(200).json(settings);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to request account deletion (starts grace period)
+export const requestAccountDeletionController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const result = await requestAccountDeletion(userId);
+
+    res.status(200).json({
+      message:
+        "Account deletion scheduled. Your account and data will be permanently deleted in 30 days. You can cancel this request anytime before the deletion date.",
+      deletionRequestedAt: result.deletionRequestedAt,
+      scheduledDeletionAt: result.scheduledDeletionAt,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to cancel a scheduled account deletion
+export const cancelAccountDeletionController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    // Check if deletion is scheduled
+    const existingDeletionStatus = await getAccountDeletionStatus(userId);
+    if (!existingDeletionStatus) {
+      throw new HttpError(400, "No account deletion is scheduled");
+    }
+
+    await cancelAccountDeletion(userId);
+
+    res.status(200).json({
+      message: "Account deletion cancelled successfully",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to get account deletion status
+export const getAccountDeletionStatusController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const status = await getAccountDeletionStatus(userId);
+
+    res.status(200).json({
+      isScheduledForDeletion: status !== null,
+      ...(status && {
+        deletionRequestedAt: status.deletionRequestedAt,
+        scheduledDeletionAt: status.scheduledDeletionAt,
+        daysRemaining: status.daysRemaining,
+      }),
+    });
   } catch (error) {
     next(error);
   }

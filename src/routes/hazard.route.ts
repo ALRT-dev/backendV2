@@ -8,7 +8,6 @@ import {
   voteHazard,
   viewHazard,
   updateHazard,
-  deleteAllHazards,
 } from "../controllers/hazard.controller.js";
 import {
   deleteHazardMedia,
@@ -35,7 +34,7 @@ hazardRouter.get(
   "/hazards-with-subscription-id",
   requireAuth,
   validate(getHazardsQuerySchema),
-  getHazardsWithSubscriptionId
+  getHazardsWithSubscriptionId,
 );
 hazardRouter.get("/:id", requireAuth, getHazardById);
 
@@ -45,7 +44,7 @@ hazardRouter.post(
   uploadMultiple,
   handleMulterError,
   validate(createHazardSchema),
-  createHazard
+  createHazard,
 );
 hazardRouter.put(
   "/:id",
@@ -53,13 +52,13 @@ hazardRouter.put(
   uploadMultiple,
   handleMulterError,
   validate(updateHazardSchema),
-  updateHazard
+  updateHazard,
 );
 hazardRouter.post(
   "/:id/vote",
   requireAuth,
   validate(voteHazardSchema),
-  voteHazard
+  voteHazard,
 );
 hazardRouter.post("/:id/view", requireAuth, viewHazard);
 hazardRouter.delete("/:id", requireAuth, deleteHazard);
@@ -67,11 +66,8 @@ hazardRouter.delete("/:id", requireAuth, deleteHazard);
 hazardRouter.delete(
   "/:hazardId/media/:mediaId",
   requireAuth,
-  deleteHazardMedia
+  deleteHazardMedia,
 );
 hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
-
-// admin
-hazardRouter.post("/delete-all", deleteAllHazards);
 
 export default hazardRouter;

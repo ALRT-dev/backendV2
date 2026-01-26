@@ -33,6 +33,10 @@ model User {
 
   profilePictureUrl String? // S3 URL for user's profile picture
 
+  // Account deletion fields
+  deletionRequestedAt DateTime? // When the user requested account deletion
+  scheduledDeletionAt DateTime? // When the account will be permanently deleted (Usually 30 days after request)
+
   locationSubscriptions    LocationSubscription[]
   devices                  UserDevice[]
   hazardsReported          Hazard[]
@@ -47,6 +51,7 @@ model User {
   // Performance indexes
   @@index([xpPoints]) // For reputation/scoring queries
   @@index([reliabilityScore]) // For reliability-based filtering
+  @@index([scheduledDeletionAt]) // For filtering users with pending account deletion
 }
 
 model HazardCategory {

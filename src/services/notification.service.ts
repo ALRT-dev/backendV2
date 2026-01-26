@@ -9,6 +9,7 @@ import {
 
 /**
  * A function to get user push notification tokens of a specific user by their user ID.
+ * Returns empty array if user has initiated account deletion (scheduledDeletionAt is set).
  */
 const getUserPushNotificationTokens = async (
   userId: string
@@ -16,11 +17,23 @@ const getUserPushNotificationTokens = async (
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { devices: { select: { deviceToken: true } } },
+      select: {
+        scheduledDeletionAt: true,
+        devices: { select: { deviceToken: true } },
+      },
     });
 
     if (!user) {
       console.log("User not found:", userId);
+      return [];
+    }
+
+    // Don't send notifications to users who have initiated account deletion
+    if (user.scheduledDeletionAt) {
+      console.log(
+        "User has initiated account deletion, skipping notifications:",
+        userId
+      );
       return [];
     }
 
@@ -139,7 +152,9 @@ const getUserPushNotificationTokensSubscribedToHazard = async (
 
         // Only get subscriptions for users who have notifications enabled for this hazard type
         // AND have at least one category subscribed (subscribedCategoryIds not empty)
+        // AND have NOT initiated account deletion (scheduledDeletionAt is null)
         user: {
+          scheduledDeletionAt: null, // Exclude users who have initiated account deletion
           pushNotificationSettings: {
             some: {
               ...notificationFilter,

@@ -1285,23 +1285,3 @@ export const viewHazard = async (
     next(error);
   }
 };
-
-// Controller to delete all hazards (for admin/testing purposes)
-export const deleteAllHazards = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  try {
-    // Delete all hazards
-    const deletedHazards = await prisma.hazard.deleteMany({});
-    console.log("Deleted hazards count:", deletedHazards.count);
-
-    res.status(200).json({
-      message: "All hazards deleted",
-      deletedCount: deletedHazards.count,
-    });
-  } catch (error) {
-    next(error);
-  }
-};
