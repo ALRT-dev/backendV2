@@ -2,6 +2,7 @@ import { initializeHazardCategories } from "./hazard_category.service.js";
 import { initializeAIPrompts } from "./ai-prompt.service.js";
 import { initializeDefaultConfigurations } from "./configuration.service.js";
 import { activateSuperAdmin } from "./user.admin.service.js";
+import { initializeHazardSources } from "./hazard.service.js";
 
 /**
  * Initialize all database-dependent services and data
@@ -12,6 +13,7 @@ export const initializeDatabase = async (): Promise<void> => {
     await activateSuperAdmin();
 
     await Promise.all([
+      initializeHazardSources(),
       initializeHazardCategories(),
       initializeAIPrompts().then(() => initializeDefaultConfigurations()),
     ]);

@@ -1,10 +1,20 @@
 services:
-  app:
-    container_name: app
+  app_blue:
+    container_name: app_blue
     build: .
     env_file:
       - .env.prod
     ports:
-      - "3000:9000"
+      - "127.0.0.1:3001:9000"
+    command: sh -c "npx prisma migrate deploy && yarn start"
+    restart: unless-stopped
+
+  app_green:
+    container_name: app_green
+    build: .
+    env_file:
+      - .env.prod
+    ports:
+      - "127.0.0.1:3002:9000"
     command: sh -c "npx prisma migrate deploy && yarn start"
     restart: unless-stopped

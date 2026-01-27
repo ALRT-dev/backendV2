@@ -1,4 +1,5 @@
 import z from "zod";
+import { HazardSeverity, HazardSeverityBand } from "@prisma/client";
 
 export const createHazardDataSchema = z.object({
   title: z
@@ -136,9 +137,13 @@ export const getHazardsQuerySchema = z.object({
 
   userReported: z.enum(["true", "false"]).default("true").optional(),
 
-  reportedById: z.string().uuid().optional(),
+  reportedById: z.uuid().optional(),
 
   reviewStatus: z.enum(["accepted", "rejected"]).optional(),
+
+  severities: z.array(z.enum(HazardSeverity)).optional(),
+
+  severityBands: z.array(z.enum(HazardSeverityBand)).optional(),
 
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 
@@ -168,7 +173,7 @@ export const getHazardsQuerySchema = z.object({
     .string()
     .regex(
       /^(true|false)$/,
-      "ignoreHazardLatLngBounds must be 'true' or 'false'"
+      "ignoreHazardLatLngBounds must be 'true' or 'false'",
     )
     .optional(),
 
@@ -183,8 +188,9 @@ export const getHazardsQuerySchema = z.object({
         severityBand: z.enum(["asc", "desc"]).optional(),
         distance: z.enum(["asc", "desc"]).optional(),
         createdAt: z.enum(["asc", "desc"]).optional(),
+        updatedAt: z.enum(["asc", "desc"]).optional(),
         confidenceScore: z.enum(["asc", "desc"]).optional(),
-      })
+      }),
     )
     .optional(),
 });

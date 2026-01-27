@@ -100,14 +100,14 @@ enum FireStatus {
 }
 
 model Hazard {
-  id           String             @id @default(uuid())
-  title        String
-  description  String
-  aiSummary    String?
-  aiConfidence AIConfidence?
-  severity     HazardSeverity     @default(unknown)
-  severityBand HazardSeverityBand @default(info)
-  callToAction String?
+  id            String             @id @default(uuid())
+  title         String
+  description   String
+  aiSummary     String?
+  aiConfidence  AIConfidence?
+  severity      HazardSeverity     @default(unknown)
+  severityBand  HazardSeverityBand @default(info)
+  callsToAction String[]           @default([])
 
   fireStatus FireStatus? // Only applies to fire-related hazards
 
@@ -192,13 +192,21 @@ model HazardVote {
 }
 
 model HazardSource {
-  id        String   @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
-  url       String   @unique
+  url       String
   imageUrl  String?
+  licenseId String?
+
+  advisoryText  String? // Standard advisory text associated with this source
+  copyrightText String? // Copyright information for this source
+  copyrightLink String? // Link to copyright or attribution details
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  hazards   Hazard[]
+
+  hazards Hazard[]
+  license HazardSourceLicense? @relation(fields: [licenseId], references: [id])
 }
 
 model HazardView {
@@ -313,6 +321,7 @@ model Admin {
   role         AdminRole @default(admin)
   isActive     Boolean   @default(true)
 
+  mustChangePassword  Boolean   @default(true) // Flag to require password change on next login
   lastLoginAt         DateTime?
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
@@ -322,6 +331,7 @@ model Admin {
   promptsUpdated        AIPrompt[]      @relation("AIPromptUpdatedBy")
   configurationsCreated Configuration[] @relation("ConfigurationCreatedBy")
   configurationsUpdated Configuration[] @relation("ConfigurationUpdatedBy")
+  webhookApiKeysCreated WebhookApiKey[] @relation("WebhookApiKeyCreatedBy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -336,6 +346,18 @@ enum AdminRole {
   moderator
 }
 
+model AIPromptGroup {
+  id          String     @id @default(uuid())
+  name        String     @unique // e.g., "User Reported Alerts", "Official Alerts"
+  description String? // Human-readable description of the group
+  prompts     AIPrompt[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
 model AIPrompt {
   id          String  @id @default(uuid())
   name        String  @unique // e.g., "review_and_summarize", "summarize", "severity_assessment"
@@ -343,6 +365,9 @@ model AIPrompt {
   content     String // The actual prompt content with placeholder variables
   variables   Json // JSON array of variable names expected in the prompt
   model       String // e.g., "gpt-4o-mini", "gpt-5-nano", "gpt-3.5-turbo"
+
+  groupId String?
+  group   AIPromptGroup? @relation(fields: [groupId], references: [id])
 
   createdById String
   updatedById String?
@@ -353,6 +378,7 @@ model AIPrompt {
   updatedAt DateTime @updatedAt
 
   @@index([name])
+  @@index([groupId])
 }
 
 enum ConfigurationKey {
@@ -373,4 +399,82 @@ model Configuration {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model WebhookApiKey {
+  id          String  @id @default(uuid())
+  name        String // e.g., "Client A - N8N", "Partner B - Automation"
+  description String? // Purpose or notes about this key
+  keyHash     String  @unique // Bcrypt hash of the API key for security
+
+  isActive Boolean @default(true) // Can be disabled to block access
+
+  // Rate limiting per key
+  maxRequestsPerMinute Int @default(10) // Burst protection
+  maxRequestsPerHour   Int @default(100) // Rate limit
+  maxRequestsPerDay    Int @default(1000) // Daily quota
+
+  // Usage tracking
+  totalRequests Int       @default(0)
+  lastUsedAt    DateTime?
+  lastUsedIp    String?
+
+  // Metadata
+  createdById String?
+  createdBy   Admin?  @relation("WebhookApiKeyCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime? // Optional expiration date
+
+  logs WebhookLog[]
+
+  @@index([keyHash])
+  @@index([isActive])
+  @@index([createdAt])
+}
+
+model WebhookLog {
+  id String @id @default(uuid())
+
+  apiKeyId String?
+  apiKey   WebhookApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  success    Boolean
+  statusCode Int
+  reason     String? // Error reason if failed
+
+  clientIp String
+  endpoint String
+  method   String @default("POST")
+
+  requestBody  Json? // Optional: store request data
+  responseTime Int? // Response time in milliseconds
+
+  hazardId String? // If successfully created a hazard
+
+  createdAt DateTime @default(now())
+
+  @@index([apiKeyId])
+  @@index([success])
+  @@index([createdAt])
+  @@index([clientIp])
+}
+
+model HazardSourceLicense {
+  id          String  @id @default(uuid())
+  badgeText   String  @unique
+  licenseText String
+  description String?
+  link        String?
+
+  foregroundColor String? // Hex color code for badge text
+  backgroundColor String? // Hex color code for badge background
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  hazardSources HazardSource[]
+
+  @@index([badgeText])
 }

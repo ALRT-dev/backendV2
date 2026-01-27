@@ -46,6 +46,36 @@ export const uploadProfilePicture = upload.single("profilePictureFile");
 // Middleware for multiple file upload
 export const uploadMultiple = upload.array("mediaFiles", 10);
 
+// File filter for support attachments (images only)
+const supportAttachmentFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  const allowedMimeTypes = ["image/jpeg", "image/jpg", "image/png"];
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Invalid file type. Only JPG and PNG images are allowed."));
+  }
+};
+
+// Configure multer for support attachments
+const supportAttachmentUpload = multer({
+  storage,
+  fileFilter: supportAttachmentFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit per file
+    files: 5, // Maximum 5 files per request
+  },
+});
+
+// Middleware for support attachment upload (multiple images)
+export const uploadSupportAttachments = supportAttachmentUpload.array(
+  "attachments",
+  5
+);
+
 // Error handling middleware for multer errors
 export const handleMulterError = (
   error: any,

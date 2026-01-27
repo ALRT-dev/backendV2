@@ -19,9 +19,7 @@ export const validate =
 
         throw new HttpError(
           400,
-          `Validation failed: ${errors
-            .map((e: any) => `${e.path}: ${e.message}`)
-            .join(", ")}`
+          `${errors.map((e: any) => e.message).join(", ")}`
         );
       }
       next(error);

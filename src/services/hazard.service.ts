@@ -26,6 +26,7 @@ import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { executePrompt } from "./open-ai.service.js";
 import { MainCategoryId } from "./hazard_category.service.js";
+import { ExternalSourceId } from "./ingestion.service.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -38,7 +39,7 @@ export const getHazardsApplyingFilters = async (
   params: HazardSearchParams & {
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
-  }
+  },
 ): Promise<Hazard[]> => {
   const { userId, page = 1, pageSize = 20 } = params;
 
@@ -72,8 +73,8 @@ export const getHazardsApplyingFilters = async (
   // Optimize user reports status calculation by using bulk calculation
   const reporterIds = Array.from(
     new Set(
-      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[]
-    )
+      hazards.map((hazard) => hazard.reportedById).filter(Boolean) as string[],
+    ),
   );
 
   // Use bulk calculation instead of individual calls for better performance
@@ -93,8 +94,8 @@ export const getHazardsApplyingFilters = async (
       ? {
           ...hazard.reportedBy,
           reportsStatus: hazard.reportedById
-            ? reportersStatusMap.get(hazard.reportedById) ??
-              UserReportsStatus.unverified
+            ? (reportersStatusMap.get(hazard.reportedById) ??
+              UserReportsStatus.unverified)
             : UserReportsStatus.unverified,
         }
       : null;
@@ -116,7 +117,7 @@ export const getHazardsApplyingFiltersRaw = async (
   params: HazardSearchParams & {
     userId?: string | undefined;
     subscriptions?: LocationSubscription[] | undefined;
-  }
+  },
 ): Promise<Hazard[]> => {
   const {
     userLat,
@@ -138,7 +139,7 @@ export const getHazardsApplyingFiltersRaw = async (
       userLng,
       paramIndex,
       queryParams,
-      sortSettings
+      sortSettings,
     );
 
   // Add pagination parameters
@@ -169,6 +170,16 @@ export const getHazardsApplyingFiltersRaw = async (
         hcp.color as "categoryParentColor",
         hs.name as "sourceName",
         hs.url as "sourceUrl",
+        hs."advisoryText" as "sourceAdvisoryText",
+        hs."copyrightText" as "sourceCopyrightText",
+        hs."copyrightLink" as "sourceCopyrightLink",
+        hsl.id as "licenseLicenseId",
+        hsl."badgeText" as "licenseBadgeText",
+        hsl."licenseText" as "licenseLicenseText",
+        hsl.description as "licenseDescription",
+        hsl.link as "licenseLink",
+        hsl."foregroundColor" as "licenseForegroundColor",
+        hsl."backgroundColor" as "licenseBackgroundColor",
         u.id as "reportedByUserId",
         u.name as "reportedByName",
         u.email as "reportedByEmail",
@@ -183,7 +194,8 @@ export const getHazardsApplyingFiltersRaw = async (
       FROM "Hazard" h
       LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
       LEFT JOIN "HazardCategory" hcp ON hc."parentId" = hcp.id
-      LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id  
+      LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id
+      LEFT JOIN "HazardSourceLicense" hsl ON hs."licenseId" = hsl.id
       LEFT JOIN "User" u ON h."reportedById" = u.id`;
 
   if (userId && userVoteParamIndex) {
@@ -228,7 +240,7 @@ export const getHazardsApplyingFiltersRaw = async (
 
   const hazards = (await prisma.$queryRawUnsafe(
     query,
-    ...queryParams
+    ...queryParams,
   )) as any[];
 
   // Get unique reporter IDs from hazards that have reporters
@@ -236,8 +248,8 @@ export const getHazardsApplyingFiltersRaw = async (
     new Set(
       hazards
         .map((hazard: any) => hazard.reportedByUserId)
-        .filter(Boolean) as string[]
-    )
+        .filter(Boolean) as string[],
+    ),
   );
 
   // Calculate UserReportsStatus for each unique reporter using the correct bulk method
@@ -275,6 +287,16 @@ export const getHazardsApplyingFiltersRaw = async (
       categoryParentColor,
       sourceName,
       sourceUrl,
+      sourceAdvisoryText,
+      sourceCopyrightText,
+      sourceCopyrightLink,
+      licenseLicenseId,
+      licenseBadgeText,
+      licenseLicenseText,
+      licenseDescription,
+      licenseLink,
+      licenseForegroundColor,
+      licenseBackgroundColor,
       userVoteType,
       medias,
       ...cleanHazard
@@ -306,6 +328,20 @@ export const getHazardsApplyingFiltersRaw = async (
             id: hazard.sourceId,
             name: sourceName,
             url: sourceUrl,
+            advisoryText: sourceAdvisoryText,
+            copyrightText: sourceCopyrightText,
+            copyrightLink: sourceCopyrightLink,
+            license: licenseLicenseId
+              ? {
+                  id: licenseLicenseId,
+                  badgeText: licenseBadgeText,
+                  licenseText: licenseLicenseText,
+                  description: licenseDescription,
+                  link: licenseLink,
+                  foregroundColor: licenseForegroundColor,
+                  backgroundColor: licenseBackgroundColor,
+                }
+              : null,
           }
         : null,
       medias: medias || [],
@@ -339,7 +375,7 @@ export const reviewHazard = async ({
   const { userReportedAlertReviewAndSummarizePromptId } =
     await getAIPromptConfiguration();
   const { content: promptContent, model } = await getPromptById(
-    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`]
+    userReportedAlertReviewAndSummarizePromptId[`${severityBand}PromptId`],
   );
 
   const userContent = `Please analyze this hazard report:
@@ -363,7 +399,7 @@ export const reviewHazard = async ({
     const aiReview = JSON.parse(content) as {
       title: string;
       summary: string;
-      callToAction: string;
+      callsToAction: string[];
       confidence: "high" | "medium" | "low";
     };
 
@@ -371,7 +407,7 @@ export const reviewHazard = async ({
       reviewStatus: HazardReviewStatus.accepted,
       title: aiReview.title,
       summary: aiReview.summary,
-      callToAction: aiReview.callToAction,
+      callsToAction: aiReview.callsToAction,
       confidence: aiReview.confidence,
     };
   } catch (parseError) {
@@ -381,15 +417,13 @@ export const reviewHazard = async ({
 };
 
 /**
- * Summarizes a hazard report using AI to generate a concise title, short description, summary, callToAction and confidence level.
+ * Summarizes a hazard report using AI to generate a concise title, short description, summary, callsToAction and confidence level.
  *
  * The AI provides a structured response to standardize the hazard report for clarity and actionability.
  */
 export const summarizeHazard = async ({
   title,
   description,
-  latitude,
-  longitude,
   locationName,
   category,
   source,
@@ -399,8 +433,6 @@ export const summarizeHazard = async ({
 }: {
   title: string;
   description: string;
-  latitude: number;
-  longitude: number;
   locationName?: string | undefined | null;
   category: HazardCategory;
   source: HazardSource;
@@ -412,7 +444,7 @@ export const summarizeHazard = async ({
     return {
       title,
       summary: description,
-      callToAction: "Please stay informed and take necessary precautions.",
+      callsToAction: ["Please stay informed and take necessary precautions."],
       confidence: "high",
     };
   }
@@ -426,9 +458,9 @@ export const summarizeHazard = async ({
 
   const userPromptContent = `Standardize the following hazard report using the rules and templates in the system prompt:
   Inputs:
-  - title: ${title}
+  - title: ${title || "[No title provided]"}
   - description: ${description}
-  - location: ${locationName || ""} (${latitude}, ${longitude})
+  - ${locationName && `location: ${locationName}`}
   - category: ${category.name}
   - agency: ${source.name}`;
 
@@ -450,7 +482,7 @@ export const summarizeHazard = async ({
     console.error("Failed to parse AI summary response:", parseError);
     throw new HttpError(
       500,
-      "AI summarization failed: Invalid response format"
+      "AI summarization failed: Invalid response format",
     );
   }
 };
@@ -487,7 +519,7 @@ export const getAIPromptForHazard = async ({
           ];
         console.log(
           `Found source-specific prompt for ${source.id}:`,
-          requiredPromptId
+          requiredPromptId,
         );
         return getPromptById(requiredPromptId);
       }
@@ -509,7 +541,7 @@ export const getAIPromptForHazard = async ({
           ];
         console.log(
           `Found category-specific prompt for ${category.id}:`,
-          requiredPromptId
+          requiredPromptId,
         );
         return getPromptById(requiredPromptId);
       }
@@ -520,7 +552,7 @@ export const getAIPromptForHazard = async ({
 
   // Key doesn't exist, use default prompts
   console.error(
-    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`
+    `No specific prompt found for source ${source.id} or category ${category.id}, using default prompts.`,
   );
   const requiredPromptId = isAwsCompliant
     ? config.officialAwsAlertSummarizationPromptId[
@@ -538,7 +570,7 @@ export const getAIPromptForHazard = async ({
  * @returns The number of hazards deleted.
  */
 export const deleteAllHazardsForSourceIds = async (
-  sourceIds: string[]
+  sourceIds: string[],
 ): Promise<number> => {
   const deleteResult = await prisma.hazard.deleteMany({
     where: {
@@ -550,8 +582,8 @@ export const deleteAllHazardsForSourceIds = async (
 
   console.log(
     `Deleted ${deleteResult.count} hazards for source IDs: ${sourceIds.join(
-      ", "
-    )}`
+      ", ",
+    )}`,
   );
 
   return deleteResult.count;
@@ -604,9 +636,9 @@ export const getSuggestedCategory = async ({
     "suggestedCategory": "${availableCategories
       .map((cat) => cat.id)
       .join("|")}", (MUST be only one.${
-    currentCategoryId &&
-    ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
-  })
+      currentCategoryId &&
+      ` If you think that "${currentCategoryId}" category is somewhat appropriate, you MUST NOT suggest a different category unless there is a clearly better fit.`
+    })
   }`;
 
   const userPromptContent = `Hazard Report:
@@ -624,7 +656,7 @@ export const getSuggestedCategory = async ({
   if (!content) {
     throw new HttpError(
       500,
-      "AI category suggestion failed: Empty response from AI"
+      "AI category suggestion failed: Empty response from AI",
     );
   }
 
@@ -634,12 +666,12 @@ export const getSuggestedCategory = async ({
     };
 
     const category = availableCategories.find(
-      (cat) => cat.id === aiResponse.suggestedCategory
+      (cat) => cat.id === aiResponse.suggestedCategory,
     );
     if (!category) {
       throw new HttpError(
         500,
-        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`
+        `AI category suggestion failed: Suggested category "${aiResponse.suggestedCategory}" not found in available categories`,
       );
     }
 
@@ -647,7 +679,321 @@ export const getSuggestedCategory = async ({
   } catch (parseError) {
     throw new HttpError(
       500,
-      `AI category suggestion failed: Invalid response format: ${parseError}`
+      `AI category suggestion failed: Invalid response format: ${parseError}`,
     );
+  }
+};
+
+/**
+ * Enum representing different hazard source licenses.
+ * Each license type corresponds to a specific set of usage rights and restrictions.
+ */
+export enum HazardSourceLicenseBadgeText {
+  ccBy4 = "CC BY 4.0",
+  ccBy3 = "CC BY 3.0",
+  oglv3 = "OGL v3.0",
+  openGov = "OPEN GOV",
+  openData = "OPEN DATA",
+  licensed = "LICENSED",
+  permission = "PERMISSION",
+  pending = "PENDING",
+}
+
+/**
+ * Initialize hazard sources in the database
+ * This function creates or updates hazard sources based on predefined external sources
+ */
+export const initializeHazardSources = async (): Promise<void> => {
+  try {
+    const count = await prisma.hazardSource.count();
+    if (count > 0) {
+      return;
+    }
+
+    // Create or update hazard source licenses first
+    const hazardSourceLicenses: Prisma.HazardSourceLicenseCreateInput[] = [
+      {
+        badgeText: HazardSourceLicenseBadgeText.ccBy4,
+        licenseText: "Creative Commons Attribution 4.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://creativecommons.org/licenses/by/4.0/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.ccBy3,
+        licenseText: "Creative Commons Attribution 3.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://creativecommons.org/licenses/by/3.0/au/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.oglv3,
+        licenseText: "Open Government Licence v3.0",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+        link: "https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.openGov,
+        licenseText: "Open Government License",
+        backgroundColor: "#e8f5e9",
+        foregroundColor: "#2e7d32",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.openData,
+        licenseText: "Open Data License",
+        backgroundColor: "#e3f2fd",
+        foregroundColor: "#0d6efd",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.licensed,
+        licenseText: "Commercial License",
+        backgroundColor: "#e9ecef",
+        foregroundColor: "#6c757d",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.permission,
+        licenseText: "Source Permission",
+        backgroundColor: "#f8d7da",
+        foregroundColor: "#dc3545",
+      },
+      {
+        badgeText: HazardSourceLicenseBadgeText.pending,
+        licenseText: "Awaiting License Permission",
+        backgroundColor: "#fff3cd",
+        foregroundColor: "#856404",
+      },
+    ];
+
+    await Promise.all(
+      hazardSourceLicenses.map((license) => {
+        return prisma.hazardSourceLicense.upsert({
+          where: { badgeText: license.badgeText },
+          create: license,
+          update: license,
+        });
+      }),
+    );
+
+    // Now create or update hazard sources
+    const hazardSources: Prisma.HazardSourceCreateInput[] = [
+      {
+        id: ExternalSourceId.rfs,
+        name: "New South Wales Rural Fire Service",
+        url: "https://www.rfs.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW (NSW RFS).",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.bom,
+        name: "Bureau of Meteorology",
+        url: "https://www.bom.gov.au",
+        copyrightText:
+          "Reproduced by permission of the Bureau of Meteorology, © Commonwealth of Australia.",
+        copyrightLink:
+          "http://www.bom.gov.au/data-access/3rd-party-attribution.shtml",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.nswTransport,
+        name: "Live Traffic NSW",
+        url: "https://www.transport.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.actEs,
+        name: "ACT Emergency Services Agency",
+        url: "https://www.act.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Australian Capital Territory.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.cfs,
+        name: "South Australian Country Fire Service",
+        url: "https://www.cfs.sa.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Government of South Australia.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.pending,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.viceFire,
+        name: "VicEmergency",
+        url: "https://www.vicefire.com",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Victoria.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy3,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.qldFire,
+        name: "Queensland Fire Department",
+        url: "https://www.qld.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.ntFireAndRescue,
+        name: "Northern Territory Fire and Rescue Service",
+        url: "https://www.nt.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Northern Territory Government.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.permission,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.waqi,
+        name: "World Air Quality Index",
+        url: "https://www.waqi.info",
+        advisoryText:
+          "For official air quality health advice, consult your state EPA, Bureau of Meteorology, or Department of Health.",
+      },
+      {
+        id: ExternalSourceId.openMeteo,
+        name: "Open-Meteo",
+        url: "https://open-meteo.com",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.smartraveller,
+        name: "Smartraveller",
+        url: "https://www.smartraveller.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © Commonwealth of Australia (DFAT).",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.permission,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.waDfes,
+        name: "Department of Fire and Emergency Services WA",
+        url: "https://emergency.wa.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Western Australia.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.nswSes,
+        name: "New South Wales State Emergency Service",
+        url: "https://www.ses.nsw.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of NSW (NSW SES).",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.licensed,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.earthquakeUsgs,
+        name: "USGS Earthquake Hazards Program",
+        url: "https://earthquake.usgs.gov",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.qldTraffic,
+        name: "QLDTraffic",
+        url: "https://qldtraffic.qld.gov.au",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.qldPark,
+        name: "Queensland Parks and Wildlife Service",
+        url: "https://parks.qld.gov.au/park-alerts",
+        copyrightText:
+          "Data sourced from official government feeds, © State of Queensland.",
+        license: {
+          connect: {
+            badgeText: HazardSourceLicenseBadgeText.ccBy4,
+          },
+        },
+      },
+      {
+        id: ExternalSourceId.canadaGovTra,
+        name: "Government of Canada Travel Advice and Advisories",
+        url: "https://travel.gc.ca/travelling/advisories",
+      },
+      {
+        id: ExternalSourceId.gdacsGlobal,
+        name: "Global Disaster Alert and Coordination System",
+        url: "https://www.gdacs.org",
+      },
+    ];
+
+    await Promise.all(
+      hazardSources.map((source) => {
+        // Always require id for upsert since url is no longer unique
+        if (!source.id) {
+          throw new Error(
+            `HazardSource must have an id for upsert operation: ${source.name}`,
+          );
+        }
+        return prisma.hazardSource.upsert({
+          where: { id: source.id },
+          create: source,
+          update: source,
+        });
+      }),
+    );
+
+    console.log(
+      "---------------------------------------> Hazard sources initialized successfully",
+    );
+  } catch (error) {
+    console.error("Error initializing hazard sources:", error);
   }
 };

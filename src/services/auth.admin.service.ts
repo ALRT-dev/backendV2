@@ -43,6 +43,7 @@ export const authenticateAdmin = async (data: AdminLoginBody) => {
         failedLoginAttempts: true,
         lockedUntil: true,
         lastLoginAt: true,
+        mustChangePassword: true,
       },
     });
 
@@ -72,7 +73,6 @@ export const authenticateAdmin = async (data: AdminLoginBody) => {
       admin.passwordHash
     );
 
-    console.log("Password verification result:", isPasswordValid);
     if (!isPasswordValid) {
       // Increment failed attempts
       await prisma.admin.update({
@@ -123,6 +123,7 @@ export const authenticateAdmin = async (data: AdminLoginBody) => {
       accessToken,
       refreshToken,
       expiresIn: 3600, // 1 hour in seconds
+      mustChangePassword: admin.mustChangePassword,
     };
   } catch (error) {
     if (error instanceof HttpError) {
@@ -146,6 +147,7 @@ export const updateAdminPassword = async (
         passwordChangedAt: new Date(),
         failedLoginAttempts: 0,
         lockedUntil: null,
+        mustChangePassword: false,
       },
     });
 

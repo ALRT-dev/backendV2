@@ -24,19 +24,25 @@ import {
   type HazardForConfidenceCalculation,
 } from "../../services/confidence_score.service.js";
 import type { AISummaryResponse } from "../../models/ai_summary_response_interface.js";
-import { buildHazardInclude } from "../../utils/hazard.util.js";
+import {
+  buildHazardInclude,
+  getHazardExpiryDateFromSeverity,
+} from "../../utils/hazard.util.js";
 import { syncHazardsFromDifferentSources } from "../../services/ingestion.service.js";
 import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
+import { getHazardAttributesFromDescription } from "../../utils/ingestion.util.js";
+import { getAllSubHazardCategories } from "../../services/hazard_category.service.js";
 
 export const getHazardsForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const {
       searchString,
       categoryIds,
+      sourceIds,
       awsEmergency,
       awsWatchAndAct,
       awsAdvice,
@@ -44,6 +50,8 @@ export const getHazardsForAdmin = async (
       userReported,
       reviewStatus,
       reportedById,
+      severities,
+      severityBands,
       northeastLat,
       northeastLng,
       southwestLat,
@@ -58,6 +66,7 @@ export const getHazardsForAdmin = async (
     const hazards = await getHazardsApplyingFiltersRaw({
       searchString,
       categoryIds,
+      sourceIds,
       awsEmergency: parseBoolean(awsEmergency),
       awsWatchAndAct: parseBoolean(awsWatchAndAct),
       awsAdvice: parseBoolean(awsAdvice),
@@ -65,6 +74,8 @@ export const getHazardsForAdmin = async (
       userReported: parseBoolean(userReported),
       reviewStatus,
       reportedById,
+      severities,
+      severityBands,
       northeastLat: Number(northeastLat),
       northeastLng: Number(northeastLng),
       southwestLat: Number(southwestLat),
@@ -84,64 +95,93 @@ export const getHazardsForAdmin = async (
 export const createHazardForAdmin = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
       throw new HttpError(403, "Unauthorized");
     }
 
+    const availableCategories = await getAllSubHazardCategories();
+    const attributes = getHazardAttributesFromDescription(
+      req.body.description,
+      availableCategories,
+    );
+
     const {
       title,
       description,
       aiSummary,
-      callToAction,
+      severity = attributes.severity,
+      severityBand = attributes.severityBand,
+      callsToAction,
+      fireStatus = attributes.fireStatus || undefined,
       latitude,
       longitude,
       locationName,
+      northeastLat,
+      northeastLng,
+      southwestLat,
+      southwestLng,
       categoryId,
-      fireStatus,
-      isAwsCompliant,
-      severity,
       sourceId,
+      isAwsCompliant = attributes.isAwsCompliant,
+      link,
       occurredAt,
+      expiresAt,
     }: CreateHazardForAdminBody = req.body;
 
-    const category = await prisma.hazardCategory.findUnique({
-      where: { id: categoryId },
+    // Validate sourceId
+    const source = await prisma.hazardSource.findUnique({
+      where: { id: sourceId },
     });
-    if (!category) {
-      throw new HttpError(400, "Invalid categoryId provided");
+    if (!source) {
+      throw new HttpError(400, "Invalid sourceId provided");
     }
 
-    let source: HazardSource;
-    if (sourceId) {
-      const foundSource = await prisma.hazardSource.findUnique({
-        where: { id: sourceId },
+    // Validate location (either latitude & longitude OR bounds MUST be provided)
+    if (
+      (latitude === undefined || longitude === undefined) &&
+      (northeastLat === undefined ||
+        northeastLng === undefined ||
+        southwestLat === undefined ||
+        southwestLng === undefined)
+    ) {
+      throw new HttpError(
+        400,
+        "Either latitude & longitude or northeast & southwest bounds must be provided",
+      );
+    }
+
+    // Validate categoryId if provided, else use the one from attributes
+    let category: HazardCategory | undefined;
+    if (categoryId) {
+      const foundCategory = await prisma.hazardCategory.findUnique({
+        where: { id: categoryId },
       });
-      if (!foundSource) {
-        throw new HttpError(400, "Invalid sourceId provided");
+      if (!foundCategory) {
+        throw new HttpError(400, "Invalid categoryId provided");
       }
-      source = foundSource;
+      category = foundCategory;
     }
+    category = category || attributes.category;
 
+    // Summarize hazard using AI
     const summarized = await summarizeHazard({
       title: title || "",
       description,
-      latitude,
-      longitude,
       locationName,
       category,
-      source: source!,
-      isAwsCompliant: isAwsCompliant ?? false,
-      severityBand: HazardSeverityBand.info,
+      source,
+      isAwsCompliant,
+      severityBand,
     });
 
     // Calculate confidence score for the admin created hazard
     let confidenceScore = 75; // Default high score for admin created hazards
     try {
       const hazardForCalculation: HazardForConfidenceCalculation = {
-        severity: severity || HazardSeverity.unknown,
+        severity,
         aiConfidence: summarized.confidence,
         upvoteCount: 0,
         downvoteCount: 0,
@@ -153,31 +193,37 @@ export const createHazardForAdmin = async (
     } catch (error) {
       console.error(
         "Error calculating confidence score for admin created hazard:",
-        error
+        error,
       );
     }
 
-    const today = new Date();
+    // Create hazard in the database
     const createdHazard = await prisma.hazard.create({
       data: {
         title: title || summarized.title,
         description,
         aiSummary: aiSummary || summarized.summary,
-        callToAction: callToAction || summarized.callToAction,
-        latitude,
-        longitude,
-        ...(locationName && { locationName }),
-        ...(categoryId && { categoryId }),
+        severity,
+        severityBand,
+        callsToAction: callsToAction || summarized.callsToAction,
         ...(fireStatus && { fireStatus }),
-        ...(isAwsCompliant !== undefined && { isAwsCompliant }),
-        ...(severity && { severity }),
-        ...(sourceId && { sourceId }),
+        ...(latitude !== undefined && { latitude }),
+        ...(longitude !== undefined && { longitude }),
+        ...(locationName && { locationName }),
+        ...(northeastLat !== undefined && { northeastLat }),
+        ...(northeastLng !== undefined && { northeastLng }),
+        ...(southwestLat !== undefined && { southwestLat }),
+        ...(southwestLng !== undefined && { southwestLng }),
+        categoryId: category.id,
+        sourceId: source.id,
+        isAwsCompliant,
+        ...(link && { link }),
         ...(occurredAt && { occurredAt }),
+        expiresAt: expiresAt || getHazardExpiryDateFromSeverity(severity),
         aiConfidence: summarized.confidence,
         confidenceScore,
         confidenceScoreCalculatedAt: new Date(),
         reviewStatus: HazardReviewStatus.accepted,
-        expiresAt: new Date(today.setMinutes(today.getMinutes() + 30)), // Default expiry 30 minutes from now
       },
     });
 
@@ -190,7 +236,7 @@ export const createHazardForAdmin = async (
 export const updateHazardForAdmin = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const hazardId = req.params.hazardId;
@@ -206,7 +252,7 @@ export const updateHazardForAdmin = async (
       title,
       description,
       aiSummary,
-      callToAction,
+      callsToAction,
       latitude,
       longitude,
       locationName,
@@ -251,16 +297,14 @@ export const updateHazardForAdmin = async (
     let summarized: AISummaryResponse = {
       title: existingHazard.title,
       summary: existingHazard.aiSummary || "",
-      callToAction: existingHazard.callToAction || "",
+      callsToAction: existingHazard.callsToAction || [],
       confidence: existingHazard.aiConfidence || "low",
     };
 
-    if (!title || !description || !aiSummary || !callToAction) {
+    if (!title || !description || !aiSummary || !callsToAction) {
       summarized = await summarizeHazard({
         title: title || existingHazard.title,
         description: description || existingHazard.description,
-        latitude: latitude ?? existingHazard.latitude!,
-        longitude: longitude ?? existingHazard.longitude!,
         locationName: locationName || existingHazard.locationName,
         category: category || existingHazard.category!,
         source: source || existingHazard.source!,
@@ -276,7 +320,7 @@ export const updateHazardForAdmin = async (
         title: title || summarized.title,
         ...(description && { description }),
         aiSummary: aiSummary || summarized.summary,
-        callToAction: callToAction || summarized.callToAction,
+        callsToAction: callsToAction || summarized.callsToAction,
         ...(latitude !== undefined && { latitude }),
         ...(longitude !== undefined && { longitude }),
         ...(locationName && { locationName }),
@@ -299,7 +343,7 @@ export const updateHazardForAdmin = async (
 export const deleteHazardForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const hazardId = req.params.hazardId;
@@ -327,7 +371,7 @@ export const deleteHazardForAdmin = async (
 export const syncHazardsFromExternalSourceForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { sourceIds, syncOption }: SyncHazardsFromExternalSourceForAdminBody =
@@ -346,11 +390,14 @@ export const syncHazardsFromExternalSourceForAdmin = async (
 export const getHazardSourcesForAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const sources = await prisma.hazardSource.findMany({
       orderBy: { name: "asc" },
+      include: {
+        license: true,
+      },
     });
     res.status(200).json(sources);
   } catch (error) {

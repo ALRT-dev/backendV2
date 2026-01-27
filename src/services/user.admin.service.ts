@@ -16,6 +16,7 @@ export const getAdminProfile = async (adminId: string) => {
         role: true,
         isActive: true,
         lastLoginAt: true,
+        mustChangePassword: true,
         createdAt: true,
         updatedAt: true,
       },

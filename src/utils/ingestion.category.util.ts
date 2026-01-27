@@ -2,6 +2,34 @@ import { FireStatus, type HazardCategory } from "@prisma/client";
 import { MainCategoryId } from "../services/hazard_category.service.js";
 
 /**
+ * Flag to control logging in getCategoryFromDescription function.
+ */
+let categoryLoggingEnabled = false;
+
+/**
+ * Enable logging in getCategoryFromDescription function.
+ */
+export const enableCategoryLogging = () => {
+  categoryLoggingEnabled = true;
+};
+
+/**
+ * Disable logging in getCategoryFromDescription function.
+ */
+export const disableCategoryLogging = () => {
+  categoryLoggingEnabled = false;
+};
+
+/**
+ * Conditional logging helper for category detection.
+ */
+const categoryLog = (...args: any[]) => {
+  if (categoryLoggingEnabled) {
+    console.log(...args);
+  }
+};
+
+/**
  * Keywords associated with each fire status.
  * These keywords are used to infer fire status from hazard descriptions.
  */
@@ -147,7 +175,7 @@ export const getCategoryFromDescription = (
   ): HazardCategory | null => {
     const isDirectMatch = matchType === "direct";
 
-    console.log(
+    categoryLog(
       `---> 🧠 Starting ${matchType} keyword matching across all categories`
     );
 
@@ -156,40 +184,40 @@ export const getCategoryFromDescription = (
     const childMatches: HazardCategory[] = [];
 
     // 1. Check AWS categories for matches
-    console.log(`----> Checking AWS categories`);
+    categoryLog(`----> Checking AWS categories`);
     for (const category of awsCategories) {
       const matches = isDirectMatch
         ? hasDirectMatch(category.keywords, desc, descWords)
         : hasNormalMatch(category.keywords, desc);
 
       if (matches) {
-        console.log(`------> ✅ Match found in AWS category: ${category.id}`);
+        categoryLog(`------> ✅ Match found in AWS category: ${category.id}`);
         awsMatches.push(category);
       }
     }
 
     // 2. Check child categories for matches
-    console.log(`----> Checking child categories`);
+    categoryLog(`----> Checking child categories`);
     for (const category of childCategories) {
       const matches = isDirectMatch
         ? hasDirectMatch(category.keywords, desc, descWords)
         : hasNormalMatch(category.keywords, desc);
 
       if (matches) {
-        console.log(`------> ✅ Match found in child category: ${category.id}`);
+        categoryLog(`------> ✅ Match found in child category: ${category.id}`);
         childMatches.push(category);
       }
     }
 
     // 3. Check parent categories for matches
-    console.log(`----> Checking parent categories`);
+    categoryLog(`----> Checking parent categories`);
     for (const category of parentCategories) {
       const matches = isDirectMatch
         ? hasDirectMatch(category.keywords, desc, descWords)
         : hasNormalMatch(category.keywords, desc);
 
       if (matches) {
-        console.log(
+        categoryLog(
           `------> ✅ Match found in parent category: ${category.id}`
         );
         parentMatches.push(category);
@@ -200,32 +228,32 @@ export const getCategoryFromDescription = (
     const totalMatches =
       awsMatches.length + parentMatches.length + childMatches.length;
 
-    console.log(
+    categoryLog(
       `---> 📊 Total ${matchType} matches: ${totalMatches} (AWS: ${awsMatches.length}, Parent: ${parentMatches.length}, Child: ${childMatches.length})`
     );
 
     // If no matches found, return null
     if (totalMatches === 0) {
-      console.log(`---> ❌ No ${matchType} matches found\n`);
+      categoryLog(`---> ❌ No ${matchType} matches found\n`);
       return null;
     }
 
     // If only one match found, return it
     if (totalMatches === 1) {
       const singleMatch = awsMatches[0] || parentMatches[0] || childMatches[0];
-      console.log(
+      categoryLog(
         `---> ✅ Single ${matchType} match found: ${singleMatch!.id}\n`
       );
       return singleMatch!;
     }
 
     // Multiple matches found, apply priority rules
-    console.log(`---> 🎯 Multiple matches found, applying priority rules`);
+    categoryLog(`---> 🎯 Multiple matches found, applying priority rules`);
 
     // Priority 1: Return AWS category if there is one
     if (awsMatches.length > 0 && awsMatches[0]) {
       const awsMatch = awsMatches[0];
-      console.log(
+      categoryLog(
         `----> ✅ Returning AWS category (highest priority): ${awsMatch.id}\n`
       );
       return awsMatch;
@@ -233,7 +261,7 @@ export const getCategoryFromDescription = (
 
     // Priority 2: Return child category using mainCategoriesLookupOrder
     if (childMatches.length > 0) {
-      console.log(
+      categoryLog(
         `----> 🔍 Multiple child matches found, using mainCategoriesLookupOrder`
       );
       for (const mainCategoryId of mainCategoriesLookupOrder) {
@@ -241,7 +269,7 @@ export const getCategoryFromDescription = (
           (cat) => cat.parentId === mainCategoryId
         );
         if (matchingChild) {
-          console.log(
+          categoryLog(
             `----> ✅ Returning child category (by priority): ${matchingChild.id}\n`
           );
           return matchingChild;
@@ -250,7 +278,7 @@ export const getCategoryFromDescription = (
       // If no match found by priority order, return first child match
       if (childMatches[0]) {
         const firstChild = childMatches[0];
-        console.log(
+        categoryLog(
           `----> ✅ Returning first child category: ${firstChild.id}\n`
         );
         return firstChild;
@@ -259,7 +287,7 @@ export const getCategoryFromDescription = (
 
     // Priority 3: Return parent category using mainCategoriesLookupOrder
     if (parentMatches.length > 0) {
-      console.log(
+      categoryLog(
         `----> 🔍 Multiple parent matches found, using mainCategoriesLookupOrder`
       );
       for (const mainCategoryId of mainCategoriesLookupOrder) {
@@ -267,7 +295,7 @@ export const getCategoryFromDescription = (
           (cat) => cat.id === mainCategoryId
         );
         if (matchingParent) {
-          console.log(
+          categoryLog(
             `----> ✅ Returning parent category (by priority): ${matchingParent.id}\n`
           );
           return matchingParent;
@@ -276,7 +304,7 @@ export const getCategoryFromDescription = (
       // If no match found by priority order, return first parent match
       if (parentMatches[0]) {
         const firstParent = parentMatches[0];
-        console.log(
+        categoryLog(
           `----> ✅ Returning first parent category: ${firstParent.id}\n`
         );
         return firstParent;
@@ -299,7 +327,7 @@ export const getCategoryFromDescription = (
   }
 
   // No matches found at all, use fallback
-  console.log(
+  categoryLog(
     `---> 🔍 No matches found, looking for fallback category: ${fallbackCategoryId}`
   );
 
@@ -308,7 +336,7 @@ export const getCategoryFromDescription = (
     (cat) => cat.id === fallbackCategoryId
   );
   if (fallbackCategory) {
-    console.log(`----> ✅ Fallback category found: ${fallbackCategory.id}\n`);
+    categoryLog(`----> ✅ Fallback category found: ${fallbackCategory.id}\n`);
     return fallbackCategory;
   }
 
@@ -317,14 +345,14 @@ export const getCategoryFromDescription = (
     (cat) => cat.id === fallbackCategoryId
   );
   if (fallbackCategoryParent) {
-    console.log(
+    categoryLog(
       `----> ✅ Fallback category found: ${fallbackCategoryParent.id}\n`
     );
     return fallbackCategoryParent;
   }
 
   // Final fallback to "other" category
-  console.log(
+  categoryLog(
     "---> ✅ No fallback category found, defaulting to 'other' category\n"
   );
   return parentCategories.find((cat) => cat.id === "other")!;

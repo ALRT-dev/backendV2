@@ -14,6 +14,8 @@ import {
   xpPointsRouter,
   adminRouter,
   onboardingRouter,
+  webhookRouter,
+  supportRouter,
 } from "./routes/index.js";
 import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
@@ -28,7 +30,7 @@ const app = express();
 
 // Configure Express to use qs for parsing query strings with nested objects
 app.set("query parser", (str: string) =>
-  qs.parse(str, { allowDots: true, arrayLimit: 100 })
+  qs.parse(str, { allowDots: true, arrayLimit: 100 }),
 );
 
 const server = http.createServer(app);
@@ -41,7 +43,14 @@ const io = new Server(server, {
 io.use(requireSocketAuth);
 initSocket(io);
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true, // Reflects the request origin, works with credentials
+    credentials: true, // Allow cookies and authorization headers
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
@@ -52,13 +61,19 @@ app.use("/api/notifications", notificationRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/xp", xpPointsRouter);
 app.use("/api/admin", adminRouter);
+app.use("/api/webhook", webhookRouter);
+app.use("/api/support", supportRouter);
+
+app.get("/api/test", (req, res) => {
+  res.send("Test route is working!");
+});
 
 app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
 
 server.listen(config.port, async () => {
   console.log(
-    `${config.env.toUpperCase()} server is running at PORT:${config.port}`
+    `${config.env.toUpperCase()} server is running at PORT:${config.port}`,
   );
 
   // Initialize database and required data

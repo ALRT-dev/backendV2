@@ -10,16 +10,25 @@ import type {
 /**
  * Check multiple media files (images/videos) for problems
  * @param files - Array of uploaded media files
- * @returns Object indicating if any media is rejected and the reasons
+ * @returns Object with detailed results per file
  */
 export const checkMediasForProblems = async (
   files: Express.Multer.File[]
-): Promise<{ isRejected: boolean; reasons: string[] }> => {
-  const reasons: string[] = [];
+): Promise<{
+  validFiles: Express.Multer.File[];
+  problematicFiles: Array<{ file: Express.Multer.File; reasons: string[] }>;
+  hasProblematicFiles: boolean;
+}> => {
   const THRESHOLD = 0.5; // Probability threshold for flagging content
+  const validFiles: Express.Multer.File[] = [];
+  const problematicFiles: Array<{
+    file: Express.Multer.File;
+    reasons: string[];
+  }> = [];
 
   try {
     for (const file of files) {
+      const fileReasons: string[] = [];
       const isVideo = file.mimetype.startsWith("video/");
       const isImage = file.mimetype.startsWith("image/");
 
@@ -28,49 +37,49 @@ export const checkMediasForProblems = async (
 
         if (result.summary.action === "reject") {
           const videoReasons = result.summary.reject_reason.map(
-            (r) => `${r.text} detected in one or more videos.`
+            (r) => `${r.text} detected.`
           );
-          reasons.push(...videoReasons);
+          fileReasons.push(...videoReasons);
         }
       } else if (isImage) {
         const result = await moderateImageFromMulterFile(file);
 
         // Check nudity
         if (result.nudity.sexual_activity > THRESHOLD) {
-          reasons.push("Sexual activity detected in one or more images.");
+          fileReasons.push("Sexual activity detected.");
         }
         if (result.nudity.sexual_display > THRESHOLD) {
-          reasons.push("Sexual display detected in one or more images.");
+          fileReasons.push("Sexual display detected.");
         }
         if (result.nudity.erotica > THRESHOLD) {
-          reasons.push("Erotica content detected in one or more images.");
+          fileReasons.push("Erotica content detected.");
         }
 
         // Check offensive content
         if (result.offensive.nazi > THRESHOLD) {
-          reasons.push("Nazi symbols detected in one or more images.");
+          fileReasons.push("Nazi symbols detected.");
         }
         if (result.offensive.confederate > THRESHOLD) {
-          reasons.push("Confederate symbols detected in one or more images.");
+          fileReasons.push("Confederate symbols detected.");
         }
         if (result.offensive.supremacist > THRESHOLD) {
-          reasons.push("Supremacist content detected in one or more images.");
+          fileReasons.push("Supremacist content detected.");
         }
         if (result.offensive.terrorist > THRESHOLD) {
-          reasons.push("Terrorist content detected in one or more images.");
+          fileReasons.push("Terrorist content detected.");
         }
         if (result.offensive.middle_finger > THRESHOLD) {
-          reasons.push("Offensive gestures detected in one or more images.");
+          fileReasons.push("Offensive gestures detected.");
         }
 
         // Check self-harm
         if (result["self-harm"].prob > THRESHOLD) {
-          reasons.push("Self-harm content detected in one or more images.");
+          fileReasons.push("Self-harm content detected.");
         }
 
         // Check for faces
         if (result.faces.length > 0) {
-          reasons.push("Faces detected in one or more images.");
+          fileReasons.push("Faces detected.");
         }
 
         // Check for minors
@@ -78,52 +87,67 @@ export const checkMediasForProblems = async (
           (face) => face.attributes.age.minor > THRESHOLD
         );
         if (hasMinor) {
-          reasons.push("Minor detected in one or more images.");
+          fileReasons.push("Minor detected.");
         }
 
         // Check text content
         if (result.text.profanity.length > 0) {
-          reasons.push("Profanity in text detected in one or more images.");
+          fileReasons.push("Profanity in text detected.");
         }
         if (result.text.personal.length > 0) {
-          reasons.push(
-            "Personal information detected (names, license plates, etc.) in one or more images."
+          fileReasons.push(
+            "Personal information detected (names, license plates, etc.)."
           );
         }
         if (result.text.extremism.length > 0) {
-          reasons.push("Extremism in text detected in one or more images.");
+          fileReasons.push("Extremism in text detected.");
         }
         if (result.text.violence.length > 0) {
-          reasons.push("Violence in text detected in one or more images.");
+          fileReasons.push("Violence in text detected.");
         }
         if (result.text["self-harm"].length > 0) {
-          reasons.push("Self-harm in text detected in one or more images.");
+          fileReasons.push("Self-harm in text detected.");
         }
 
         // Check QR codes for personal information
         if (result.qr.personal.length > 0) {
-          reasons.push(
-            "QR code with personal information detected in one or more images."
-          );
+          fileReasons.push("QR code with personal information detected.");
         }
+      }
+
+      // Categorize the file
+      if (fileReasons.length > 0) {
+        problematicFiles.push({ file, reasons: fileReasons });
+      } else {
+        validFiles.push(file);
       }
     }
 
     const result = {
-      isRejected: reasons.length > 0,
-      reasons: [...new Set(reasons)], // Remove duplicates
+      validFiles,
+      problematicFiles,
+      hasProblematicFiles: problematicFiles.length > 0,
     };
 
     if (files.length > 0) {
-      console.log("Media moderation final result:", result);
+      console.log(
+        `Media moderation result: ${validFiles.length} valid, ${problematicFiles.length} problematic out of ${files.length} total files`
+      );
+      if (problematicFiles.length > 0) {
+        problematicFiles.forEach(({ file, reasons }) => {
+          console.log(`  - ${file.originalname}: ${reasons.join(", ")}`);
+        });
+      }
     }
 
     return result;
   } catch (error: any) {
     console.error("Media moderation error:", error);
+    // On error, accept all files to not block the hazard creation
     return {
-      isRejected: false,
-      reasons: [],
+      validFiles: files,
+      problematicFiles: [],
+      hasProblematicFiles: false,
     };
   }
 };
@@ -200,8 +224,6 @@ const moderateImageFromMulterFile = async (
       headers: formData.getHeaders(),
     });
 
-    console.log("Image moderation response:", response.data);
-
     return response.data as ImageModerationResult;
   } catch (error: any) {
     if (error.response) {
@@ -275,8 +297,6 @@ const moderateVideoFromUrl = async (
       }
     );
 
-    console.log("Video moderation response:", response.data);
-
     return response.data as VideoModerationResult;
   } catch (error: any) {
     if (error.response) {
@@ -321,8 +341,6 @@ const moderateVideoFromMulterFile = async (
       data: formData,
       headers: formData.getHeaders(),
     });
-
-    console.log("Video moderation response:", response.data);
 
     return response.data as VideoModerationResult;
   } catch (error: any) {

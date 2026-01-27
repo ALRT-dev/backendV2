@@ -6,7 +6,7 @@ export const errorHandlerMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error("Error occurred:", error);
+  console.error(`Error occurred at endpoint ${req.originalUrl}:`, error);
   res
     .status(error.statusCode || 500)
     .send({ error: error.message || "Internal Server Error" });

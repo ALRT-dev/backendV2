@@ -2,7 +2,12 @@
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
-import { HazardSeverityBand, type AIPrompt, type Prisma } from "@prisma/client";
+import {
+  HazardSeverityBand,
+  type AIPrompt,
+  type AIPromptGroup,
+  type Prisma,
+} from "@prisma/client";
 import {
   getAirQualityAlertCategoryPrompt,
   getExtractLocationPrompt,
@@ -10,6 +15,7 @@ import {
   getSmartravellerSourcePrompt,
   getUserReportedAlertReviewAndSummarizationPrompt,
 } from "../utils/ai-prompt.util.js";
+import { getAIPromptConfiguration } from "./configuration.service.js";
 
 // Cache for prompts to avoid database calls on every AI request
 const promptCache = new Map<string, AIPrompt>();
@@ -32,6 +38,7 @@ export interface CreatePromptData {
   content: string;
   variables: string[];
   model: string;
+  groupId?: string;
 }
 
 export interface UpdatePromptData {
@@ -39,6 +46,7 @@ export interface UpdatePromptData {
   content?: string;
   variables?: string[];
   model?: string;
+  groupId?: string;
 }
 
 /**
@@ -120,6 +128,7 @@ export const getRawPromptByName = async (name: string): Promise<string> => {
 export const getAllPrompts = async (): Promise<AIPrompt[]> => {
   const prompts = prisma.aIPrompt.findMany({
     include: {
+      group: true,
       createdBy: {
         select: {
           id: true,
@@ -135,7 +144,7 @@ export const getAllPrompts = async (): Promise<AIPrompt[]> => {
         },
       },
     },
-    orderBy: [{ name: "asc" }],
+    orderBy: [{ group: { name: "asc" } }, { name: "asc" }],
   });
 
   return prompts;
@@ -148,6 +157,7 @@ export const getPromptById = async (promptId: string): Promise<AIPrompt> => {
   const prompt = await prisma.aIPrompt.findUnique({
     where: { id: promptId },
     include: {
+      group: true,
       createdBy: {
         select: {
           id: true,
@@ -272,6 +282,32 @@ export const deletePrompt = async (promptId: string): Promise<void> => {
     throw new HttpError(404, `Prompt with ID '${promptId}' not found`);
   }
 
+  const aiPromptConfig = await getAIPromptConfiguration();
+
+  // Recursively extract all prompt IDs from the configuration object
+  const extractPromptIds = (obj: any): string[] => {
+    const ids: string[] = [];
+
+    for (const value of Object.values(obj)) {
+      if (typeof value === "string" && value) {
+        ids.push(value);
+      } else if (typeof value === "object" && value !== null) {
+        ids.push(...extractPromptIds(value));
+      }
+    }
+
+    return ids;
+  };
+
+  const referencedPromptIds = extractPromptIds(aiPromptConfig);
+
+  if (referencedPromptIds.includes(promptId)) {
+    throw new HttpError(
+      400,
+      `Cannot delete prompt '${existingPrompt.name}' because it is currently referenced in the AI configuration. Please update the configuration first to use a different prompt.`
+    );
+  }
+
   await prisma.aIPrompt.delete({
     where: { id: promptId },
   });
@@ -328,6 +364,164 @@ export const validatePromptContent = (
 };
 
 /**
+ * Retrieves all AI prompt groups.
+ */
+export const getAllPromptGroups = async (): Promise<AIPromptGroup[]> => {
+  const groups = await prisma.aIPromptGroup.findMany({
+    include: {
+      prompts: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return groups;
+};
+
+/**
+ * Retrieves all prompts grouped by their groups.
+ */
+export const getGroupedPrompts = async () => {
+  const groups = await prisma.aIPromptGroup.findMany({
+    include: {
+      prompts: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    description: group.description,
+    prompts: group.prompts,
+  }));
+};
+
+/**
+ * Retrieves a single AI prompt group by ID.
+ */
+export const getPromptGroupById = async (
+  groupId: string
+): Promise<AIPromptGroup> => {
+  const group = await prisma.aIPromptGroup.findUnique({
+    where: { id: groupId },
+    include: {
+      prompts: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!group) {
+    throw new HttpError(404, `Prompt group with ID '${groupId}' not found`);
+  }
+
+  return group;
+};
+
+/**
+ * Creates a new AI prompt group.
+ */
+export const createPromptGroup = async (data: {
+  name: string;
+  description?: string;
+}): Promise<AIPromptGroup> => {
+  const existingGroup = await prisma.aIPromptGroup.findUnique({
+    where: { name: data.name },
+  });
+
+  if (existingGroup) {
+    throw new HttpError(
+      409,
+      `Prompt group with name '${data.name}' already exists`
+    );
+  }
+
+  return await prisma.aIPromptGroup.create({
+    data,
+  });
+};
+
+/**
+ * Updates an existing AI prompt group.
+ */
+export const updatePromptGroup = async (
+  groupId: string,
+  data: {
+    name?: string;
+    description?: string;
+  }
+): Promise<AIPromptGroup> => {
+  // Check if the group exists
+  const existingGroup = await prisma.aIPromptGroup.findUnique({
+    where: { id: groupId },
+  });
+
+  if (!existingGroup) {
+    throw new HttpError(404, `Prompt group with ID '${groupId}' not found`);
+  }
+
+  // If name is being updated, check if another group with that name exists
+  if (data.name && data.name !== existingGroup.name) {
+    const duplicateGroup = await prisma.aIPromptGroup.findUnique({
+      where: { name: data.name },
+    });
+
+    if (duplicateGroup) {
+      throw new HttpError(
+        409,
+        `Prompt group with name '${data.name}' already exists`
+      );
+    }
+  }
+
+  return await prisma.aIPromptGroup.update({
+    where: { id: groupId },
+    include: {
+      prompts: {
+        orderBy: { createdAt: "desc" },
+      },
+    },
+    data,
+  });
+};
+
+/**
+ * Deletes an AI prompt group.
+ * Only allows deletion if the group has no prompts associated with it.
+ */
+export const deletePromptGroup = async (
+  groupId: string
+): Promise<AIPromptGroup> => {
+  // Check if the group exists and fetch its prompts
+  const existingGroup = await prisma.aIPromptGroup.findUnique({
+    where: { id: groupId },
+    include: {
+      prompts: true,
+    },
+  });
+
+  if (!existingGroup) {
+    throw new HttpError(404, `Prompt group with ID '${groupId}' not found`);
+  }
+
+  // Check if the group has any prompts
+  if (existingGroup.prompts.length > 0) {
+    throw new HttpError(
+      400,
+      `Cannot delete group '${existingGroup.name}' because it has ${existingGroup.prompts.length} prompt(s) associated with it. Please reassign or delete the prompts first.`
+    );
+  }
+
+  return await prisma.aIPromptGroup.delete({
+    where: { id: groupId },
+  });
+};
+
+/**
  * Clears the prompt cache
  */
 export const clearCache = (): void => {
@@ -343,27 +537,27 @@ export enum DefaultAIPromptNames {
   userReportedAlertReviewAndSummarizationInfo = "[INFO] User Reported Alert Review and Summarization",
   userReportedAlertReviewAndSummarizationMonitor = "[MONITOR] User Reported Alert Review and Summarization",
   userReportedAlertReviewAndSummarizationAction = "[ACTION] User Reported Alert Review and Summarization",
-  userReportedAlertReviewAndSummarizationCritical = "[CRITICAL ]User Reported Alert Review and Summarization",
+  userReportedAlertReviewAndSummarizationCritical = "[CRITICAL] User Reported Alert Review and Summarization",
 
   officialAlertSummarizationInfo = "[INFO] Official Alert Summarization",
   officialAlertSummarizationMonitor = "[MONITOR] Official Alert Summarization",
   officialAlertSummarizationAction = "[ACTION] Official Alert Summarization",
-  officialAlertSummarizationCritical = "[CRITICAL ] Official Alert Summarization",
+  officialAlertSummarizationCritical = "[CRITICAL] Official Alert Summarization",
 
   officialAwsAlertSummarizationInfo = "[INFO] Official AWS Alert Summarization",
   officialAwsAlertSummarizationMonitor = "[MONITOR] Official AWS Alert Summarization",
   officialAwsAlertSummarizationAction = "[ACTION] Official AWS Alert Summarization",
-  officialAwsAlertSummarizationCritical = "[CRITICAL ] Official AWS Alert Summarization",
+  officialAwsAlertSummarizationCritical = "[CRITICAL] Official AWS Alert Summarization",
 
   airQualityAlertCategoryInfo = "[INFO] Air Quality Alert Category Summarization",
   airQualityAlertCategoryMonitor = "[MONITOR] Air Quality Alert Category Summarization",
   airQualityAlertCategoryAction = "[ACTION] Air Quality Alert Category Summarization",
-  airQualityAlertCategoryCritical = "[CRITICAL ] Air Quality Alert Category Summarization",
+  airQualityAlertCategoryCritical = "[CRITICAL] Air Quality Alert Category Summarization",
 
   smartravellerSourceInfo = "[INFO] Smartraveller Source Alert Summarization",
   smartravellerSourceMonitor = "[MONITOR] Smartraveller Source Alert Summarization",
   smartravellerSourceAction = "[ACTION] Smartraveller Source Alert Summarization",
-  smartravellerSourceCritical = "[CRITICAL ] Smartraveller Source Alert Summarization",
+  smartravellerSourceCritical = "[CRITICAL] Smartraveller Source Alert Summarization",
 
   extractLocationPrompt = "Extract Location from Text",
 }
@@ -388,6 +582,69 @@ export const initializeAIPrompts = async (): Promise<void> => {
       return;
     }
 
+    const groupsData = [
+      {
+        name: "Other",
+        description:
+          "Miscellaneous prompts that don't fit into other categories.",
+      },
+      {
+        name: "Smartraveller Alerts",
+        description:
+          "Prompts for processing and summarizing Smartraveller travel advisories.",
+      },
+      {
+        name: "Air Quality Alerts",
+        description:
+          "Prompts for processing and categorizing air quality alerts.",
+      },
+      {
+        name: "Official AWS Alerts",
+        description:
+          "Prompts for processing and summarizing AWS-compliant alerts from official sources.",
+      },
+      {
+        name: "Official Alerts",
+        description:
+          "Prompts for processing and summarizing alerts from official sources.",
+      },
+      {
+        name: "User Reported Alerts",
+        description:
+          "Prompts for processing and summarizing user-reported alerts.",
+      },
+    ];
+
+    // Create prompt groups
+    const groups: AIPromptGroup[] = [];
+    for (const groupData of groupsData) {
+      const group = await prisma.aIPromptGroup.upsert({
+        where: { name: groupData.name },
+        create: groupData,
+        update: groupData,
+      });
+      groups.push(group);
+    }
+
+    const userReportedGroup = groups.find(
+      (g) => g.name === "User Reported Alerts"
+    )!;
+    const officialAlertGroup = groups.find(
+      (g) => g.name === "Official Alerts"
+    )!;
+    const officialAwsAlertGroup = groups.find(
+      (g) => g.name === "Official AWS Alerts"
+    )!;
+    const airQualityGroup = groups.find(
+      (g) => g.name === "Air Quality Alerts"
+    )!;
+    const smartravellerGroup = groups.find(
+      (g) => g.name === "Smartraveller Alerts"
+    )!;
+    const otherGroup = groups.find((g) => g.name === "Other")!;
+
+    // Prepare prompt contents
+
     const userReportedAlertReviewAndSummarizationPrompt =
       getUserReportedAlertReviewAndSummarizationPrompt();
 
@@ -396,9 +653,9 @@ export const initializeAIPrompts = async (): Promise<void> => {
 
     const extractLocationPrompt = getExtractLocationPrompt();
 
-    // Define the three prompts to create
+    // Define all prompts with their groups
     const defaultPrompts: Prisma.AIPromptCreateInput[] = [
-      // User Reported Alert Review and Summarization Prompts
+      // User Reported Alerts Summarization Prompts
       {
         name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationInfo,
         description:
@@ -407,6 +664,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: userReportedGroup.id } },
       },
       {
         name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationMonitor,
@@ -416,6 +674,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: userReportedGroup.id } },
       },
       {
         name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationAction,
@@ -425,6 +684,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: userReportedGroup.id } },
       },
       {
         name: DefaultAIPromptNames.userReportedAlertReviewAndSummarizationCritical,
@@ -434,6 +694,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: userReportedGroup.id } },
       },
 
       // Official Alert Summarization Prompts
@@ -445,6 +706,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAlertSummarizationMonitor,
@@ -454,6 +716,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAlertSummarizationAction,
@@ -463,6 +726,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAlertSummarizationCritical,
@@ -472,6 +736,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAlertGroup.id } },
       },
 
       // Official AWS Alert Summarization Prompts
@@ -483,6 +748,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAwsAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAwsAlertSummarizationMonitor,
@@ -492,6 +758,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAwsAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAwsAlertSummarizationAction,
@@ -501,6 +768,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAwsAlertGroup.id } },
       },
       {
         name: DefaultAIPromptNames.officialAwsAlertSummarizationCritical,
@@ -510,6 +778,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: officialAwsAlertGroup.id } },
       },
 
       // Air Quality Alert Category Prompts
@@ -521,6 +790,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: airQualityGroup.id } },
       },
       {
         name: DefaultAIPromptNames.airQualityAlertCategoryMonitor,
@@ -530,6 +800,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: airQualityGroup.id } },
       },
       {
         name: DefaultAIPromptNames.airQualityAlertCategoryAction,
@@ -539,6 +810,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: airQualityGroup.id } },
       },
       {
         name: DefaultAIPromptNames.airQualityAlertCategoryCritical,
@@ -548,6 +820,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: airQualityGroup.id } },
       },
 
       // Smartraveller Source Summarization Prompts
@@ -559,6 +832,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: smartravellerGroup.id } },
       },
       {
         name: DefaultAIPromptNames.smartravellerSourceMonitor,
@@ -568,6 +842,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: smartravellerGroup.id } },
       },
       {
         name: DefaultAIPromptNames.smartravellerSourceAction,
@@ -577,6 +852,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: smartravellerGroup.id } },
       },
       {
         name: DefaultAIPromptNames.smartravellerSourceCritical,
@@ -586,6 +862,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: smartravellerGroup.id } },
       },
 
       // Extract Location Prompt
@@ -597,6 +874,7 @@ export const initializeAIPrompts = async (): Promise<void> => {
         variables: [],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: otherGroup.id } },
       },
     ];
 
