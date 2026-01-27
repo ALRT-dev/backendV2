@@ -1,10 +1,38 @@
 import { PushNotificationPreference } from "../enums/notification_preference_types.js";
-import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import { updateUserPushNotificationSettings } from "./user.service.js";
 import type { PushNotificationSettings } from "../models/push_notification_settings_interface.js";
 import { updateUserOwnLocationSubscriptionRadius } from "./location_subscription.service.js";
 import { getAllMainHazardCategoryIds } from "./hazard_category.service.js";
+
+/**
+ * Marks the disclaimer as accepted for a given user
+ * @param userId - The ID of the user
+ */
+export const acceptDisclaimer = async (userId: string): Promise<void> => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      isDisclaimerAccepted: true,
+    },
+  });
+};
+
+/**
+ * Marks the terms of service as accepted for a given user
+ * @param userId - The ID of the user
+ */
+export const acceptTermsOfService = async (userId: string): Promise<void> => {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      isTOSAccepted: true,
+
+      // Also accept the privacy policy as it is part of the terms of service.
+      isPrivacyPolicyAccepted: true,
+    },
+  });
+};
 
 /**
  * Sets the user's location information during onboarding
@@ -80,20 +108,25 @@ export const setPushNotificationPreference = async ({
     subscribedCategoryIds: mainCategoryIds,
   };
 
-  await updateUserPushNotificationSettings(userId, settings);
+  // Update the user's push notification settings and complete the onboarding process.
+  await Promise.all([
+    updateUserPushNotificationSettings(userId, settings),
+    completeOnboarding(userId),
+  ]);
 };
 
 /**
- * Marks the terms of service as accepted for a given user
+ * Completes the onboarding process for a given user
  * @param userId - The ID of the user
  */
-export const acceptTermsOfService = async (userId: string): Promise<void> => {
+export const completeOnboarding = async (userId: string): Promise<void> => {
   await prisma.user.update({
     where: { id: userId },
     data: {
-      isTOSAccepted: true,
       isOnboardingCompleted: true,
-      xpPoints: { increment: 50 },
+
+      // Give 20 XP points for completing onboarding.
+      xpPoints: { increment: 20 },
     },
   });
 };

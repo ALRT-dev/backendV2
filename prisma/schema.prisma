@@ -19,7 +19,9 @@ model User {
 
   isOnboardingCompleted Boolean @default(false)
 
-  isTOSAccepted Boolean @default(false)
+  isTOSAccepted           Boolean @default(false)
+  isPrivacyPolicyAccepted Boolean @default(false)
+  isDisclaimerAccepted    Boolean @default(false)
 
   xpPoints         Int   @default(0)
   reliabilityScore Float @default(0.0)
