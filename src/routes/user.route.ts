@@ -10,6 +10,9 @@ import {
   updateUserProfilePicture,
   updateUserOwnLocationSubscriptionRadiusController,
   updateUserOwnLocationSubscriptionController,
+  requestAccountDeletionController,
+  cancelAccountDeletionController,
+  getAccountDeletionStatusController,
 } from "../controllers/user.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
@@ -73,5 +76,10 @@ userRouter.put(
   validate(updateNotificationSettingsSchema),
   updateUserNotificationSettingsController
 );
+
+// Account deletion routes
+userRouter.get("/account/deletion-status", requireAuth, getAccountDeletionStatusController);
+userRouter.delete("/account", requireAuth, requestAccountDeletionController);
+userRouter.post("/account/cancel-deletion", requireAuth, cancelAccountDeletionController);
 
 export default userRouter;

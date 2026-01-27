@@ -395,6 +395,22 @@ export const buildHazardsWhereClause = (
     }
   }
 
+  // Exclude hazards from users who have initiated account deletion
+  // (users with scheduledDeletionAt set are in the deletion grace period)
+  andConditions.push({
+    OR: [
+      // Include hazards from official sources (has sourceId)
+      { sourceId: { not: null } },
+      // Include hazards from users who have NOT initiated deletion
+      {
+        reportedById: { not: null },
+        reportedBy: {
+          scheduledDeletionAt: null,
+        },
+      },
+    ],
+  });
+
   return andConditions.length > 0 ? { AND: andConditions } : {};
 };
 
@@ -735,6 +751,21 @@ export const buildHazardsWhereClauseRaw = (
       paramIndex += 3;
     }
   }
+
+  // Exclude hazards from users who have initiated account deletion
+  // (users with scheduledDeletionAt set are in the deletion grace period)
+  // Show hazards that are either:
+  // 1. From official sources (sourceId IS NOT NULL)
+  // 2. From users who have NOT initiated deletion (reportedById IS NOT NULL AND user.scheduledDeletionAt IS NULL)
+  whereConditions.push(
+    `(h."sourceId" IS NOT NULL OR (
+      h."reportedById" IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM "User" u_del 
+        WHERE u_del.id = h."reportedById" 
+        AND u_del."scheduledDeletionAt" IS NOT NULL
+      )
+    ))`,
+  );
 
   const whereClause =
     whereConditions.length > 0 ? whereConditions.join(" AND ") : "TRUE";
