@@ -30,6 +30,11 @@ export const acceptTermsOfService = async (userId: string): Promise<void> => {
 
       // Also accept the privacy policy as it is part of the terms of service.
       isPrivacyPolicyAccepted: true,
+
+      // Complete the onboarding process.
+      isOnboardingCompleted: true,
+      // Give 20 XP points for completing the onboarding process.
+      xpPoints: { increment: 20 },
     },
   });
 };
@@ -108,11 +113,7 @@ export const setPushNotificationPreference = async ({
     subscribedCategoryIds: mainCategoryIds,
   };
 
-  // Update the user's push notification settings and complete the onboarding process.
-  await Promise.all([
-    updateUserPushNotificationSettings(userId, settings),
-    completeOnboarding(userId),
-  ]);
+  await updateUserPushNotificationSettings(userId, settings);
 };
 
 /**
