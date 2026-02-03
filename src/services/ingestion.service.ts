@@ -481,6 +481,11 @@ export const syncHazardsFromDifferentSources = async ({
  * Summarizes and posts hazards to the database.
  * Sends notifications for newly created hazards.
  *
+ * Race condition (concurrent webhooks with same hazard): When multiple requests
+ * try to create the same hazard, we use create-then-update-on-conflict (P2002).
+ * Only the request that actually inserts the row sends notifications; the
+ * other(s) update the row and skip notifications to avoid duplicates.
+ *
  * @param hazardDatas Array of hazard data to be summarized and posted.
  * @param syncOption The sync option to use for existing hazards.
  * @param severityBandFilters Map of source IDs to their severity band filter configurations.
@@ -759,7 +764,11 @@ export const summarizeAndPostHazards = async ({
             return null;
           }
 
+          const createInput =
+            convertHazardDataWithRelationsToCreateInput(finalHazardData);
           let createdHazard: Hazard;
+          /** True only when we inserted a new row. False when we updated (e.g. lost race to another request). */
+          let actuallyCreated: boolean;
 
           if (
             syncOption === SyncHazardsFromExternalSourceOption.deleteExisting &&
@@ -767,37 +776,89 @@ export const summarizeAndPostHazards = async ({
           ) {
             // For deleteExisting option, when isUpdate is false, it means we deleted the existing record
             // so we should create a new one
-            createdHazard = await prisma.hazard.create({
-              data: convertHazardDataWithRelationsToCreateInput(
-                finalHazardData,
-              ),
-              include: buildHazardInclude(),
-            });
+            try {
+              createdHazard = await prisma.hazard.create({
+                data: createInput,
+                include: buildHazardInclude(),
+              });
+              actuallyCreated = true;
+            } catch (createError: unknown) {
+              if (
+                createError &&
+                typeof createError === "object" &&
+                "code" in createError &&
+                (createError as { code: string }).code === "P2002"
+              ) {
+                // Another request created this hazard first (race condition) – update and do not notify
+                createdHazard = await prisma.hazard.update({
+                  where: { id: finalHazardData.id },
+                  data: createInput,
+                  include: buildHazardInclude(),
+                });
+                actuallyCreated = false;
+                console.log(
+                  "[Race condition] Hazard already created by another request, updated without re-notifying:",
+                  finalHazardData.title,
+                );
+              } else {
+                throw createError;
+              }
+            }
+          } else if (!isUpdate) {
+            // New hazard: try create first so only one request sends notifications
+            try {
+              createdHazard = await prisma.hazard.create({
+                data: createInput,
+                include: buildHazardInclude(),
+              });
+              actuallyCreated = true;
+            } catch (createError: unknown) {
+              if (
+                createError &&
+                typeof createError === "object" &&
+                "code" in createError &&
+                (createError as { code: string }).code === "P2002"
+              ) {
+                // Another request created this hazard first (race condition) – update and do not notify
+                createdHazard = await prisma.hazard.update({
+                  where: { id: finalHazardData.id },
+                  data: createInput,
+                  include: buildHazardInclude(),
+                });
+                actuallyCreated = false;
+                console.log(
+                  "[Race condition] Hazard already created by another request, updated without re-notifying:",
+                  finalHazardData.title,
+                );
+              } else {
+                throw createError;
+              }
+            }
           } else {
-            // For replaceExisting or when creating truly new hazards
+            // Updating an existing hazard (replaceExisting or content change)
             createdHazard = await prisma.hazard.upsert({
               where: { id: finalHazardData.id },
-              create:
-                convertHazardDataWithRelationsToCreateInput(finalHazardData),
-              update:
-                convertHazardDataWithRelationsToCreateInput(finalHazardData),
+              create: createInput,
+              update: createInput,
               include: buildHazardInclude(),
             });
+            actuallyCreated = false;
           }
 
           console.log(
-            `${isUpdate ? "Updated" : "Created"} hazard:`,
+            `${actuallyCreated ? "Created" : "Updated"} hazard:`,
             finalHazardData.title,
           );
 
-          // Send push notifications to users who subscribed to this area when a new hazard is created
-          sendPushNotificationAboutNewHazard(createdHazard);
-
-          // Send socket events to users who subscribed to this area when a new hazard is created
-          sendSocketEventAboutHazardToSubscribers({
-            hazard: createdHazard,
-            socketEvent: SocketEvent.newHazard,
-          });
+          // Send "new hazard" notifications when we created the row or did a genuine update.
+          // When we lost a race (P2002), we only updated – skip to avoid duplicate notifications.
+          if (actuallyCreated || isUpdate) {
+            sendPushNotificationAboutNewHazard(createdHazard);
+            sendSocketEventAboutHazardToSubscribers({
+              hazard: createdHazard,
+              socketEvent: SocketEvent.newHazard,
+            });
+          }
 
           return createdHazard;
         } catch (error) {
