@@ -539,13 +539,10 @@ export const createHazard = async (
 
     // Now also send a notification to the user who reported the hazard
     if (reviewStatus === HazardReviewStatus.accepted) {
-      const xpMessage = xpResult
-        ? ` You earned ${xpResult.pointsAwarded} XP points!`
-        : "";
       sendPushNotificationToUser({
         userId: userId!,
-        title: "Alrt Reported Successfully",
-        body: `Your alrt "${hazard.title}" has been reported successfully.${xpMessage}`,
+        title: "ALRT Approved! 🎉",
+        body: "Your alert is now live - community notified",
         data: hazard,
         type: PushNotificationType.viewHazard,
       });
@@ -556,8 +553,8 @@ export const createHazard = async (
           : "";
       sendPushNotificationToUser({
         userId: userId!,
-        title: "Invalid Alrt Report",
-        body: `Our review found your alrt report to be invalid. ${reviewFeedback}${xpMessage}`,
+        title: "Invalid ALRT Report",
+        body: `Our review found your ALRT report to be invalid. ${reviewFeedback}${xpMessage}`,
         data: hazard,
         type: PushNotificationType.viewHazard,
       });
