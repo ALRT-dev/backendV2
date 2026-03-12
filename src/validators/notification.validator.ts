@@ -5,6 +5,8 @@ export const getNotificationsFeedSchema = z.object({
 
   categoryIds: z.string().optional(), // Comma-separated list of UUIDs
 
+  locationIds: z.string().optional(), // Comma-separated list of location subscription UUIDs
+
   awsEmergency: z
     .string()
     .regex(/^(true|false)$/, "awsEmergency must be 'true' or 'false'")

@@ -13,13 +13,14 @@ import { getUserLocationSubscriptions } from "../services/location_subscription.
 export const getNotificationsFeed = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { userId } = res;
     const {
       searchString,
       categoryIds,
+      locationIds,
       awsEmergency,
       awsWatchAndAct,
       awsAdvice,
@@ -32,9 +33,15 @@ export const getNotificationsFeed = async (
       pageSize = "20",
     }: GetNotificationsFeedQuery = req.query;
 
-    const subscriptions = await getUserLocationSubscriptions({
+    const allSubscriptions = await getUserLocationSubscriptions({
       userId: userId!,
     });
+
+    const subscriptions = locationIds
+      ? allSubscriptions.filter((sub) =>
+          locationIds.split(",").includes(sub.id),
+        )
+      : allSubscriptions;
 
     if (subscriptions.length === 0) {
       return res.status(200).json([]);
@@ -67,9 +74,8 @@ export const getNotificationsFeed = async (
     });
 
     // Enrich hazards with presigned URLs for media access
-    const hazardsWithPresignedUrls = await enrichHazardsWithPresignedUrls(
-      hazards
-    );
+    const hazardsWithPresignedUrls =
+      await enrichHazardsWithPresignedUrls(hazards);
 
     res.status(200).json(hazardsWithPresignedUrls);
   } catch (error) {
@@ -80,7 +86,7 @@ export const getNotificationsFeed = async (
 export const sendPushNotificationToken = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { token, platform }: PushNotificationTokenInput = req.body;
