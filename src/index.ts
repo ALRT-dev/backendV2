@@ -8,6 +8,7 @@ import { config } from "./utils/config.js";
 import {
   authRouter,
   hazardRouter,
+  alertRouter,
   notificationRouter,
   userRouter,
   hazardCategoryRouter,
@@ -56,6 +57,7 @@ app.use(express.json());
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 app.use("/api/hazards", hazardRouter);
+app.use("/api/alerts", alertRouter);
 app.use("/api/hazard-categories", hazardCategoryRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/onboarding", onboardingRouter);

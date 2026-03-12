@@ -997,3 +997,93 @@ export const initializeHazardSources = async (): Promise<void> => {
     console.error("Error initializing hazard sources:", error);
   }
 };
+
+/**
+ * Fetches hazards for GeoJSON output using a lightweight query.
+ * Skips media, user votes, and reporter enrichment for performance.
+ * Only returns hazards with valid lat/lon coordinates.
+ */
+export const getHazardsForGeoJson = async (
+  params: HazardSearchParams,
+): Promise<{ hazards: any[]; totalCount: number }> => {
+  // Build WHERE clause
+  const { whereClause, queryParams, paramIndex } =
+    buildHazardsWhereClauseRaw(params);
+
+  // Require valid coordinates for GeoJSON output
+  const geoWhereClause = `${whereClause} AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL`;
+
+  // Build ORDER BY clause (no user location needed for geo endpoint)
+  const { orderByClause, paramIndex: updatedParamIndex } =
+    buildHazardsOrderByClauseRaw(
+      undefined,
+      undefined,
+      paramIndex,
+      queryParams,
+    );
+
+  // Apply limit
+  const limit = params.pageSize ?? 500;
+  queryParams.push(limit);
+  const limitParamIndex = updatedParamIndex;
+
+  // Count query for metadata
+  const countQuery = `
+    SELECT COUNT(*)::int as count
+    FROM "Hazard" h
+    WHERE ${geoWhereClause}
+  `;
+
+  // Main query — lightweight: only joins category and source, no media/votes/reporter
+  const query = `
+    SELECT
+      h.id,
+      h.title,
+      h.description,
+      h."aiSummary",
+      h.latitude,
+      h.longitude,
+      h."locationName",
+      h."northeastLat",
+      h."northeastLng",
+      h."southwestLat",
+      h."southwestLng",
+      h.severity,
+      h."severityBand",
+      h."reviewStatus",
+      h."confidenceScore",
+      h."fireStatus",
+      h."callsToAction",
+      h."isAwsCompliant",
+      h."externalId",
+      h."categoryId",
+      h."sourceId",
+      h."expiresAt",
+      h."createdAt",
+      h."updatedAt",
+      hc.name as "categoryName",
+      hc.color as "categoryColor",
+      hs.name as "sourceName"
+    FROM "Hazard" h
+    LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
+    LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id
+    WHERE ${geoWhereClause}
+    ORDER BY ${orderByClause}
+    LIMIT $${limitParamIndex}
+  `;
+
+  // Run count and data queries in parallel
+  // Count query uses same params minus the limit param
+  const countParams = queryParams.slice(0, -1);
+  const [countResult, hazards] = await Promise.all([
+    prisma.$queryRawUnsafe(countQuery, ...countParams) as Promise<
+      { count: number }[]
+    >,
+    prisma.$queryRawUnsafe(query, ...queryParams) as Promise<any[]>,
+  ]);
+
+  return {
+    hazards,
+    totalCount: countResult[0]?.count ?? 0,
+  };
+};
