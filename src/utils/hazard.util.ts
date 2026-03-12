@@ -460,6 +460,8 @@ export const buildHazardsWhereClauseRaw = (
     ignoreHazardLatLngBounds,
     subscriptions,
     showExpired,
+    dateFrom,
+    dateTo,
     isAwsCompliant,
   } = params;
 
@@ -708,6 +710,18 @@ export const buildHazardsWhereClauseRaw = (
     whereConditions.push(
       `(h."expiresAt" > NOW() AT TIME ZONE 'UTC' OR h."expiresAt" IS NULL)`,
     );
+  }
+
+  // Apply date range filter if provided
+  if (dateFrom) {
+    whereConditions.push(`h."createdAt" >= $${paramIndex}::timestamptz`);
+    queryParams.push(dateFrom);
+    paramIndex++;
+  }
+  if (dateTo) {
+    whereConditions.push(`h."createdAt" <= $${paramIndex}::timestamptz`);
+    queryParams.push(dateTo);
+    paramIndex++;
   }
 
   // Apply isAwsCompliant filter if provided

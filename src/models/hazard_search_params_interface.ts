@@ -44,6 +44,9 @@ export interface HazardSearchParams {
 
   showExpired?: boolean | undefined;
 
+  dateFrom?: Date | undefined;
+  dateTo?: Date | undefined;
+
   isAwsCompliant?: boolean | undefined;
 
   sortSettings?: SortSetting[] | undefined;
