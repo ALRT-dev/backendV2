@@ -10,28 +10,84 @@ const COORD_PRECISION = 2;
 // Helpers
 // ---------------------------------------------------------------------------
 
-const roundCoord = (value: number | undefined | null): string => {
+const COORD_KEYS = new Set([
+  "northeastLat",
+  "northeastLng",
+  "southwestLat",
+  "southwestLng",
+  "userLat",
+  "userLng",
+]);
+
+const roundCoord = (
+  value: number | undefined | null,
+  precision: number = COORD_PRECISION,
+): string => {
   if (value === undefined || value === null || isNaN(value as number))
     return "_";
-  return (value as number).toFixed(COORD_PRECISION);
+  return (value as number).toFixed(precision);
 };
 
-const stableHash = (params: Record<string, unknown>): string => {
-  const sorted = Object.keys(params)
-    .sort()
-    .reduce(
-      (acc, key) => {
-        const val = params[key];
-        if (val !== undefined && val !== null && val !== "") {
-          acc[key] = val;
-        }
-        return acc;
-      },
-      {} as Record<string, unknown>,
-    );
+/**
+ * Normalize a value for deterministic hashing:
+ * - Skip undefined, null, "" and empty arrays
+ * - Round coordinate-like numbers to fixed precision
+ * - Sort object keys and array elements so key/order doesn't change the hash
+ */
+const normalizeForHash = (value: unknown, coordPrecision: number): unknown => {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return undefined;
+    const normalized = value
+      .map((v) => normalizeForHash(v, coordPrecision))
+      .filter((v) => v !== undefined);
+    if (normalized.length === 0) return undefined;
+    const sorted = normalized.every(
+      (v) =>
+        typeof v === "string" ||
+        typeof v === "number" ||
+        typeof v === "boolean",
+    )
+      ? [...normalized].sort((a, b) => String(a).localeCompare(String(b)))
+      : [...normalized].sort((a, b) =>
+          JSON.stringify(a).localeCompare(JSON.stringify(b)),
+        );
+    return sorted;
+  }
+  if (typeof value === "object" && value !== null && !(value instanceof Date)) {
+    const obj = value as Record<string, unknown>;
+    const entries: [string, unknown][] = [];
+    for (const k of Object.keys(obj).sort()) {
+      const v = normalizeForHash(obj[k], coordPrecision);
+      if (v !== undefined) entries.push([k, v]);
+    }
+    if (entries.length === 0) return undefined;
+    return Object.fromEntries(entries);
+  }
+  if (typeof value === "number" && !Number.isInteger(value)) {
+    if (isNaN(value)) return undefined;
+    return Number(value.toFixed(coordPrecision));
+  }
+  return value;
+};
 
+const stableHash = (
+  params: Record<string, unknown>,
+  coordPrecision: number = COORD_PRECISION,
+): string => {
+  const rounded: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(params)) {
+    if (val === undefined || val === null || val === "") continue;
+    if (Array.isArray(val) && val.length === 0) continue;
+    if (COORD_KEYS.has(key) && typeof val === "number") {
+      rounded[key] = roundCoord(val, coordPrecision);
+      continue;
+    }
+    const normalized = normalizeForHash(val, coordPrecision);
+    if (normalized !== undefined) rounded[key] = normalized;
+  }
   return createHash("sha256")
-    .update(JSON.stringify(sorted))
+    .update(JSON.stringify(rounded))
     .digest("hex")
     .slice(0, 16);
 };
@@ -53,18 +109,10 @@ const getVersion = async (): Promise<number> => {
 
 export const buildHazardListCacheKey = async (
   params: Record<string, unknown>,
+  roundPrecision: number = COORD_PRECISION,
 ): Promise<string> => {
   const version = await getVersion();
-
-  const normalized: Record<string, unknown> = {
-    ...params,
-    northeastLat: roundCoord(params.northeastLat as number | undefined),
-    northeastLng: roundCoord(params.northeastLng as number | undefined),
-    southwestLat: roundCoord(params.southwestLat as number | undefined),
-    southwestLng: roundCoord(params.southwestLng as number | undefined),
-  };
-
-  return `hazards:list:v${version}:${stableHash(normalized)}`;
+  return `hazards:list:v${version}:${stableHash(params, roundPrecision)}`;
 };
 
 export const getCachedHazardList = async <T = unknown>(
@@ -119,7 +167,11 @@ export const cacheHazard = async (
   const redis = getCacheClient();
   if (!redis) return;
   try {
-    await redis.setEx(hazardKey(hazardId), HAZARD_SINGLE_TTL, JSON.stringify(data));
+    await redis.setEx(
+      hazardKey(hazardId),
+      HAZARD_SINGLE_TTL,
+      JSON.stringify(data),
+    );
   } catch {
     /* best-effort */
   }
