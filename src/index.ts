@@ -23,6 +23,7 @@ import { initSocket } from "./utils/socket_client.util.js";
 import { requireSocketAuth } from "./middlewares/auth.middleware.js";
 import { initializeScheduledTasks } from "./services/scheduler.service.js";
 import { initializeDatabase } from "./services/database_initialization.service.js";
+import { initCacheClient } from "./utils/cache_client.util.js";
 
 env.config();
 
@@ -81,6 +82,13 @@ server.listen(config.port, async () => {
     await initializeDatabase();
   } catch (error) {
     console.error("Failed to initialize database:", error);
+  }
+
+  // Initialize cache client (non-blocking — app works without cache)
+  try {
+    await initCacheClient();
+  } catch (error) {
+    console.error("Failed to initialize cache client:", error);
   }
 
   // Whether to run scheduled tasks in development environment

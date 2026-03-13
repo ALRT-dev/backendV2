@@ -51,6 +51,7 @@ import { executePrompt, processBatchWithRateLimit } from "./open-ai.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
+import { invalidateHazardListCaches } from "./hazard_cache.service.js";
 
 export enum ExternalSourceId {
   rfs = "rfs",
@@ -876,6 +877,11 @@ export const summarizeAndPostHazards = async ({
     );
 
     console.log(`Successfully processed ${validCreatedHazards.length} hazards`);
+
+    if (validCreatedHazards.length > 0) {
+      await invalidateHazardListCaches();
+    }
+
     return validCreatedHazards;
   } catch (error) {
     console.error("Error during hazard summarization and posting:", error);

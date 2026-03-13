@@ -109,6 +109,12 @@ export const config = {
   // Webhook API Key
   WEBHOOK_API_KEY: getOptionalEnv("WEBHOOK_API_KEY", ""),
 
+  // Cache (ElastiCache / Valkey)
+  cache: {
+    url: getOptionalEnv("CACHE_URL", ""),
+    tls: getOptionalEnv("CACHE_TLS", "false") === "true",
+  },
+
   // Email configuration
   email: {
     smtpHost: getRequiredEnv("SMTP_HOST"),
