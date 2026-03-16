@@ -133,8 +133,6 @@ export const getHazards = async (
     const cacheKey = await buildHazardListCacheKey(filterParams);
     const cached = await getCachedHazardList<Hazard>(cacheKey);
 
-    console.log("I'm loading from cache: ", cached?.length);
-
     let hazards: Hazard[];
     if (cached) {
       hazards = cached;

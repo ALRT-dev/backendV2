@@ -147,7 +147,17 @@ export const getHazardsQuerySchema = z.object({
 
   page: z.string().regex(/^\d+$/, "Page must be a number").optional(),
 
-  pageSize: z.string().regex(/^\d+$/, "Page size must be a number").optional(),
+  pageSize: z
+    .string()
+    .regex(/^\d+$/, "Page size must be a number")
+    .refine(
+      (val) => {
+        const n = parseInt(val, 10);
+        return !Number.isNaN(n) && n >= 1 && n <= 5000;
+      },
+      { message: "Page size must be between 1 and 5000" }
+    )
+    .optional(),
 
   northeastLat: z
     .string()
