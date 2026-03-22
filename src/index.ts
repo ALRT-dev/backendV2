@@ -26,10 +26,18 @@ import { requireSocketAuth } from "./middlewares/auth.middleware.js";
 import { initializeScheduledTasks } from "./services/scheduler.service.js";
 import { initializeDatabase } from "./services/database_initialization.service.js";
 import { initCacheClient } from "./utils/cache_client.util.js";
+import {
+  apiGeneralRateLimiter,
+  authApiRateLimiter,
+} from "./middlewares/api_rate_limit.middleware.js";
 
 env.config();
 
 const app = express();
+
+if (config.rateLimit.trustProxy) {
+  app.set("trust proxy", 1);
+}
 
 // Configure Express to use qs for parsing query strings with nested objects
 app.set("query parser", (str: string) =>
@@ -83,7 +91,11 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-app.use("/api/auth", authRouter);
+// Rate limits: webhook first (own per-key limits), then auth (stricter), then general API.
+app.use("/api/webhook", webhookRouter);
+app.use("/api/auth", authApiRateLimiter, authRouter);
+app.use("/api", apiGeneralRateLimiter);
+
 app.use("/api/user", userRouter);
 app.use("/api/hazards", hazardRouter);
 app.use("/api/hazard-categories", hazardCategoryRouter);
@@ -91,7 +103,6 @@ app.use("/api/notifications", notificationRouter);
 app.use("/api/onboarding", onboardingRouter);
 app.use("/api/xp", xpPointsRouter);
 app.use("/api/admin", adminRouter);
-app.use("/api/webhook", webhookRouter);
 app.use("/api/support", supportRouter);
 
 app.get("/api/test", (req, res) => {

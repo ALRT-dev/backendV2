@@ -20,23 +20,38 @@ import {
   voteHazardSchema,
   getHazardsQuerySchema,
   updateHazardSchema,
-  getHazardFiltersQuerySchema,
 } from "../validators/hazard.validator.js";
 import {
   uploadMultiple,
   handleMulterError,
 } from "../middlewares/upload.middleware.js";
+import {
+  hazardGetIpLimiter,
+  hazardReadUserLimiter,
+} from "../middlewares/api_rate_limit.middleware.js";
 
 const hazardRouter = Router();
 
-hazardRouter.get("/", requireAuth, validate(getHazardsQuerySchema), getHazards);
+hazardRouter.use((req, res, next) => {
+  if (req.method !== "GET") return next();
+  hazardGetIpLimiter(req, res, next);
+});
+
+hazardRouter.get(
+  "/",
+  requireAuth,
+  hazardReadUserLimiter,
+  validate(getHazardsQuerySchema),
+  getHazards,
+);
 hazardRouter.get(
   "/hazards-with-subscription-id",
   requireAuth,
+  hazardReadUserLimiter,
   validate(getHazardsQuerySchema),
   getHazardsWithSubscriptionId,
 );
-hazardRouter.get("/:id", requireAuth, getHazardById);
+hazardRouter.get("/:id", requireAuth, hazardReadUserLimiter, getHazardById);
 
 hazardRouter.post(
   "/",
