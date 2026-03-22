@@ -24,6 +24,17 @@ export const config = {
   env: getOptionalEnv("NODE_ENV", "dev"),
   port: parseInt(getOptionalEnv("PORT", "3000"), 10),
 
+  // CORS / Socket.IO — comma-separated origins; localhost/127.0.0.1 still allowed in non-prod when list does not match
+  cors: {
+    allowedOrigins: getOptionalEnv(
+      "CORS_ALLOWED_ORIGINS",
+      "https://admin.safetyalrt.com",
+    )
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+  },
+
   // Database
   database: {
     url: getRequiredEnv("DATABASE_URL"),
@@ -42,12 +53,12 @@ export const config = {
     accessSecret: getRequiredEnv("ADMIN_JWT_ACCESS_SECRET"),
     accessExpirationMinutes: parseInt(
       getRequiredEnv("ADMIN_JWT_ACCESS_EXP_M"),
-      10
+      10,
     ),
     refreshSecret: getRequiredEnv("ADMIN_JWT_REFRESH_SECRET"),
     refreshExpirationDays: parseInt(
       getRequiredEnv("ADMIN_JWT_REFRESH_EXP_D"),
-      10
+      10,
     ),
   },
 

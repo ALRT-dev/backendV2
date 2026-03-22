@@ -1,10 +1,12 @@
 import http from "http";
 import env from "dotenv";
 import express from "express";
+import helmet from "helmet";
 import cors from "cors";
 import { Server } from "socket.io";
 import qs from "qs";
 import { config } from "./utils/config.js";
+import { isAllowedOrigin } from "./utils/cors.util.js";
 import {
   authRouter,
   hazardRouter,
@@ -34,11 +36,27 @@ app.set("query parser", (str: string) =>
   qs.parse(str, { allowDots: true, arrayLimit: 100 }),
 );
 
+// Security headers. cross-origin CORP aligns with explicit browser CORS allowlist below.
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+
+const corsOriginCallback: cors.CorsOptions["origin"] = (origin, callback) => {
+  if (isAllowedOrigin(origin)) {
+    callback(null, true);
+  } else {
+    callback(new Error("Not allowed by CORS"));
+  }
+};
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: corsOriginCallback,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 io.use(requireSocketAuth);
@@ -46,12 +64,23 @@ initSocket(io);
 
 app.use(
   cors({
-    origin: true, // Reflects the request origin, works with credentials
-    credentials: true, // Allow cookies and authorization headers
+    origin: corsOriginCallback,
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+// Ensure CORS headers are on every response (including 4xx/5xx from error handler)
+app.use((req, res, next) => {
+  const origin = req.get("Origin");
+  if (origin && isAllowedOrigin(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  next();
+});
+
 app.use(express.json());
 
 app.use("/api/auth", authRouter);
