@@ -38,7 +38,7 @@ export interface XpCalculationResult {
  * Returns detailed breakdown for transparency
  */
 export const calculateXpPoints = (
-  factors: XpCalculationFactors
+  factors: XpCalculationFactors,
 ): XpCalculationResult => {
   // Step 1: Base points based on AI confidence and review status
   let basePoints = 0;
@@ -101,10 +101,10 @@ export const calculateXpPoints = (
     breakdown: {
       basePoints: `${basePoints} (${factors.confidence} confidence, ${factors.reviewStatus})`,
       severityBonus: `${basePoints} × ${severityMultiplier} = ${Math.round(
-        pointsAfterSeverity
+        pointsAfterSeverity,
       )} (${factors.severity})`,
       reliabilityBonus: `× ${reliabilityModifier} = ${Math.round(
-        pointsAfterReliability
+        pointsAfterReliability,
       )} (reliability: ${factors.userReliabilityScore?.toFixed(2) || "N/A"})`,
       finalTotal: `${totalXpPoints} total XP points`,
     },
@@ -117,7 +117,7 @@ export const calculateXpPoints = (
 export const awardXpPointsForHazard = async (
   userId: string,
   hazardId: string,
-  factors: XpCalculationFactors
+  factors: XpCalculationFactors,
 ): Promise<{
   pointsAwarded: number;
   newXpTotal: number;
@@ -149,7 +149,8 @@ export const awardXpPointsForHazard = async (
   };
 
   const calculation = calculateXpPoints(updatedFactors);
-  const pointsToAward = calculation.totalXpPoints;
+  // const pointsToAward = calculation.totalXpPoints;
+  const pointsToAward = 10; // HARDCODED TO 10 FOR NOW
 
   // Update user's xpPoints
   const newXpTotal = user.xpPoints + pointsToAward;
@@ -175,7 +176,7 @@ export const awardXpPointsForHazard = async (
 
   const newReliabilityScore = Math.max(
     0,
-    Math.min(1, user.reliabilityScore + finalReliabilityAdjustment)
+    Math.min(1, user.reliabilityScore + finalReliabilityAdjustment),
   );
 
   // Update user in database
@@ -199,7 +200,7 @@ export const awardXpPointsForHazard = async (
   });
 
   console.log(
-    `Awarded ${pointsToAward} XP to user ${userId} for hazard ${hazardId}`
+    `Awarded ${pointsToAward} XP to user ${userId} for hazard ${hazardId}`,
   );
   console.log(`Calculation breakdown:`, calculation.breakdown);
 

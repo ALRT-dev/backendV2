@@ -1,9 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import slowDown from "express-slow-down";
+import slowDown, { type SlowDownRequestHandler } from "express-slow-down";
 import bcrypt from "bcrypt";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
+import {
+  getClientIp,
+  normalizeClientIpForRateLimitKey,
+} from "../utils/client_ip.util.js";
 import prisma from "../utils/prisma_client.util.js";
 import type { WebhookApiKey } from "@prisma/client";
 
@@ -170,7 +174,9 @@ export const webhookRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return apiKey?.id || getClientIp(req);
+    return (
+      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
+    );
   },
   handler: async (req: Request, res: Response) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
@@ -202,7 +208,7 @@ export const webhookRateLimiter = rateLimit({
  * Speed limiter: Gradually slow down requests as limit approaches
  * Provides warning before hitting hard rate limit
  */
-export const webhookSpeedLimiter = slowDown({
+export const webhookSpeedLimiter: SlowDownRequestHandler = slowDown({
   windowMs: 60 * 60 * 1000, // 1 hour
   delayAfter: async (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
@@ -212,7 +218,9 @@ export const webhookSpeedLimiter = slowDown({
   maxDelayMs: 5000,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return apiKey?.id || getClientIp(req);
+    return (
+      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
+    );
   },
 });
 
@@ -235,7 +243,9 @@ export const webhookDailyQuota = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return apiKey?.id || getClientIp(req);
+    return (
+      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
+    );
   },
   skipSuccessfulRequests: false,
   handler: async (req: Request, res: Response) => {
@@ -283,7 +293,9 @@ export const webhookBurstProtection = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return apiKey?.id || getClientIp(req);
+    return (
+      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
+    );
   },
   handler: async (req: Request, res: Response) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
@@ -325,19 +337,6 @@ function timingSafeEqual(a: string, b: string): boolean {
   }
 
   return result === 0;
-}
-
-/**
- * Extract client IP address from request
- * Handles proxies and load balancers
- */
-function getClientIp(req: Request): string {
-  const forwarded = req.headers["x-forwarded-for"];
-  if (typeof forwarded === "string") {
-    const firstIp = forwarded.split(",")[0];
-    return firstIp ? firstIp.trim() : "unknown";
-  }
-  return req.ip || req.socket.remoteAddress || "unknown";
 }
 
 /**

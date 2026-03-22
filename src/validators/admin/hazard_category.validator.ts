@@ -1,4 +1,26 @@
 import z from "zod";
+import { CategoryImageType } from "@prisma/client";
+
+const categoryImageTypeEnum = z.enum([
+  CategoryImageType.info,
+  CategoryImageType.monitor,
+  CategoryImageType.action,
+  CategoryImageType.critical,
+  CategoryImageType.advice,
+  CategoryImageType.watchAndAct,
+  CategoryImageType.emergency,
+]);
+
+const imageDimensionSchema = z.object({
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+});
+
+export const imageDimensionsSchema = z
+  .record(categoryImageTypeEnum, imageDimensionSchema)
+  .optional();
+
+export type ImageDimensions = z.infer<typeof imageDimensionsSchema>;
 
 export const getCategoriesForAdminQuerySchema = z.object({});
 
@@ -40,6 +62,8 @@ export const createHazardCategoryForAdminBodySchema = z.object({
   isFireRelated: z.boolean().optional(),
 
   parentId: z.string().optional(),
+
+  imageDimensions: imageDimensionsSchema,
 });
 
 export type CreateHazardCategoryForAdminBody = z.infer<
@@ -73,6 +97,8 @@ export const updateHazardCategoryForAdminBodySchema = z.object({
   isFireRelated: z.boolean().optional(),
 
   parentId: z.string().nullable().optional(),
+
+  imageDimensions: imageDimensionsSchema,
 });
 
 export type UpdateHazardCategoryForAdminBody = z.infer<

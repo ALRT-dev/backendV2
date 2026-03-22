@@ -152,7 +152,7 @@ export const createUserLocationSubscription = async ({
  * @param subscriptionId - The ID of the location subscription to delete
  */
 export const deleteUserLocationSubscription = async (
-  subscriptionId: string
+  subscriptionId: string,
 ): Promise<void> => {
   await prisma.locationSubscription.delete({
     where: { id: subscriptionId },
@@ -205,41 +205,42 @@ export const upsertUserOwnLocationSubscription = async ({
   const southwestLat = latitude - latDelta;
   const southwestLng = longitude - lngDelta;
 
-  // Check if user already has an own location subscription
-  const existingSubscription = await prisma.locationSubscription.findFirst({
-    where: {
-      userId,
-      isOwnLocation: true,
-    },
-  });
+  const data = {
+    northeastLat,
+    northeastLng,
+    southwestLat,
+    southwestLng,
+    name: locationName || "My Location",
+    address: locationName || null,
+  };
 
-  if (existingSubscription) {
-    // Update existing own location subscription
-    return await prisma.locationSubscription.update({
-      where: { id: existingSubscription.id },
-      data: {
-        northeastLat,
-        northeastLng,
-        southwestLat,
-        southwestLng,
-        name: locationName || "My Location",
-        address: locationName || null,
-      },
-    });
-  } else {
-    // Create new own location subscription
+  try {
+    // Try to create first - the partial unique index will prevent duplicates
     return await prisma.locationSubscription.create({
       data: {
         userId,
-        northeastLat,
-        northeastLng,
-        southwestLat,
-        southwestLng,
-        name: locationName || "My Location",
-        address: locationName || null,
+        ...data,
         isOwnLocation: true,
       },
     });
+  } catch (error: unknown) {
+    // If unique constraint violation (race condition), find and update instead
+    if (
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: string }).code === "P2002"
+    ) {
+      const existing = await prisma.locationSubscription.findFirst({
+        where: { userId, isOwnLocation: true },
+      });
+      if (existing) {
+        return await prisma.locationSubscription.update({
+          where: { id: existing.id },
+          data,
+        });
+      }
+    }
+    throw error;
   }
 };
 
@@ -251,7 +252,7 @@ export const upsertUserOwnLocationSubscription = async ({
  */
 export const updateUserOwnLocationSubscriptionRadius = async (
   userId: string,
-  radiusKm: number
+  radiusKm: number,
 ): Promise<LocationSubscription | null> => {
   const user = await prisma.user.update({
     where: { id: userId },

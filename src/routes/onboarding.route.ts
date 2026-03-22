@@ -4,6 +4,7 @@ import {
   setOnboardingRadius,
   setOnboardingNotificationPreference,
   acceptOnboardingTermsOfService,
+  acceptOnboardingDisclaimer,
 } from "../controllers/onboarding.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
@@ -16,27 +17,32 @@ import {
 const onboardingRouter = Router();
 
 onboardingRouter.post(
+  "/accept-disclaimer",
+  requireAuth,
+  acceptOnboardingDisclaimer,
+);
+onboardingRouter.post(
+  "/accept-tos",
+  requireAuth,
+  acceptOnboardingTermsOfService,
+);
+onboardingRouter.post(
   "/location",
   requireAuth,
   validate(setUserLocationSchema),
-  setOnboardingLocation
+  setOnboardingLocation,
 );
 onboardingRouter.post(
   "/radius",
   requireAuth,
   validate(setUserRadiusSchema),
-  setOnboardingRadius
+  setOnboardingRadius,
 );
 onboardingRouter.post(
   "/notifications",
   requireAuth,
   validate(setPushNotificationPreferenceSchema),
-  setOnboardingNotificationPreference
-);
-onboardingRouter.post(
-  "/accept-tos",
-  requireAuth,
-  acceptOnboardingTermsOfService
+  setOnboardingNotificationPreference,
 );
 
 export default onboardingRouter;

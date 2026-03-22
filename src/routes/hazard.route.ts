@@ -8,7 +8,6 @@ import {
   voteHazard,
   viewHazard,
   updateHazard,
-  deleteAllHazards,
 } from "../controllers/hazard.controller.js";
 import {
   deleteHazardMedia,
@@ -21,23 +20,38 @@ import {
   voteHazardSchema,
   getHazardsQuerySchema,
   updateHazardSchema,
-  getHazardFiltersQuerySchema,
 } from "../validators/hazard.validator.js";
 import {
   uploadMultiple,
   handleMulterError,
 } from "../middlewares/upload.middleware.js";
+import {
+  hazardGetIpLimiter,
+  hazardReadUserLimiter,
+} from "../middlewares/api_rate_limit.middleware.js";
 
 const hazardRouter = Router();
 
-hazardRouter.get("/", requireAuth, validate(getHazardsQuerySchema), getHazards);
+hazardRouter.use((req, res, next) => {
+  if (req.method !== "GET") return next();
+  hazardGetIpLimiter(req, res, next);
+});
+
+hazardRouter.get(
+  "/",
+  requireAuth,
+  hazardReadUserLimiter,
+  validate(getHazardsQuerySchema),
+  getHazards,
+);
 hazardRouter.get(
   "/hazards-with-subscription-id",
   requireAuth,
+  hazardReadUserLimiter,
   validate(getHazardsQuerySchema),
-  getHazardsWithSubscriptionId
+  getHazardsWithSubscriptionId,
 );
-hazardRouter.get("/:id", requireAuth, getHazardById);
+hazardRouter.get("/:id", requireAuth, hazardReadUserLimiter, getHazardById);
 
 hazardRouter.post(
   "/",
@@ -45,7 +59,7 @@ hazardRouter.post(
   uploadMultiple,
   handleMulterError,
   validate(createHazardSchema),
-  createHazard
+  createHazard,
 );
 hazardRouter.put(
   "/:id",
@@ -53,13 +67,13 @@ hazardRouter.put(
   uploadMultiple,
   handleMulterError,
   validate(updateHazardSchema),
-  updateHazard
+  updateHazard,
 );
 hazardRouter.post(
   "/:id/vote",
   requireAuth,
   validate(voteHazardSchema),
-  voteHazard
+  voteHazard,
 );
 hazardRouter.post("/:id/view", requireAuth, viewHazard);
 hazardRouter.delete("/:id", requireAuth, deleteHazard);
@@ -67,11 +81,8 @@ hazardRouter.delete("/:id", requireAuth, deleteHazard);
 hazardRouter.delete(
   "/:hazardId/media/:mediaId",
   requireAuth,
-  deleteHazardMedia
+  deleteHazardMedia,
 );
 hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
-
-// admin
-hazardRouter.post("/delete-all", deleteAllHazards);
 
 export default hazardRouter;

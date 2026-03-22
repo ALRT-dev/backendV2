@@ -102,7 +102,7 @@ async function findAdmin(idOrEmail: string) {
 async function createAdmin(
   email: string,
   name: string,
-  options: CreateOptions = {}
+  options: CreateOptions = {},
 ) {
   try {
     console.log("👤 Creating new admin account...");
@@ -125,7 +125,7 @@ async function createAdmin(
       password = options.password;
     } else {
       console.error(
-        "❌ Password is required. Use --password or --generate-password"
+        "❌ Password is required. Use --password or --generate-password",
       );
       process.exit(1);
     }
@@ -138,7 +138,7 @@ async function createAdmin(
       console.error("   - At least one lowercase letter");
       console.error("   - At least one number");
       console.error(
-        '   - At least one special character (!@#$%^&*(),.?":{}|<>)'
+        '   - At least one special character (!@#$%^&*(),.?":{}|<>)',
       );
       process.exit(1);
     }
@@ -165,23 +165,23 @@ async function createAdmin(
     console.log(`   Role: ${admin.role}`);
     console.log(`   Status: ${admin.isActive ? "🟢 Active" : "🔴 Disabled"}`);
     console.log(
-      `   Must Change Password: ${admin.mustChangePassword ? "Yes" : "No"}`
+      `   Must Change Password: ${admin.mustChangePassword ? "Yes" : "No"}`,
     );
     console.log(`   Created: ${admin.createdAt.toISOString()}`);
 
     if (options.generatePassword) {
       console.log(
-        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):"
+        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):",
       );
       console.log(`   ${password}`);
       console.log(
-        "\n⚠️  WARNING: Store this password securely and share it with the admin!"
+        "\n⚠️  WARNING: Store this password securely and share it with the admin!",
       );
     }
 
     if (admin.mustChangePassword) {
       console.log(
-        "\n📝 Note: Admin will be required to change password on first login"
+        "\n📝 Note: Admin will be required to change password on first login",
       );
     }
   } catch (error) {
@@ -207,17 +207,20 @@ async function listAdmins() {
     const roleOrder = { superAdmin: 1, admin: 2, moderator: 3 };
 
     // Group by role
-    const groupedAdmins = admins.reduce((acc, admin) => {
-      if (!acc[admin.role]) acc[admin.role] = [];
-      acc[admin.role]!.push(admin);
-      return acc;
-    }, {} as Record<string, typeof admins>);
+    const groupedAdmins = admins.reduce(
+      (acc, admin) => {
+        if (!acc[admin.role]) acc[admin.role] = [];
+        acc[admin.role]!.push(admin);
+        return acc;
+      },
+      {} as Record<string, typeof admins>,
+    );
 
     // Display by role groups
     Object.entries(groupedAdmins)
       .sort(
         ([roleA], [roleB]) =>
-          roleOrder[roleA as AdminRole] - roleOrder[roleB as AdminRole]
+          roleOrder[roleA as AdminRole] - roleOrder[roleB as AdminRole],
       )
       .forEach(([role, roleAdmins]) => {
         console.log(`\n🛡️  ${role.toUpperCase()}S (${roleAdmins.length})`);
@@ -225,16 +228,16 @@ async function listAdmins() {
 
         roleAdmins.forEach((admin, index) => {
           console.log(
-            `${index + 1}. ${admin.name || "(No name)"} <${admin.email}>`
+            `${index + 1}. ${admin.name || "(No name)"} <${admin.email}>`,
           );
           console.log(`   ID: ${admin.id}`);
           console.log(
-            `   Status: ${admin.isActive ? "🟢 Active" : "🔴 Disabled"}`
+            `   Status: ${admin.isActive ? "🟢 Active" : "🔴 Disabled"}`,
           );
           console.log(
             `   Must Change Password: ${
               admin.mustChangePassword ? "⚠️  Yes" : "No"
-            }`
+            }`,
           );
           if (admin.lastLoginAt) {
             console.log(`   Last Login: ${admin.lastLoginAt.toISOString()}`);
@@ -244,7 +247,7 @@ async function listAdmins() {
           console.log(`   Failed Attempts: ${admin.failedLoginAttempts}`);
           if (admin.lockedUntil && admin.lockedUntil > new Date()) {
             console.log(
-              `   🔒 Locked Until: ${admin.lockedUntil.toISOString()}`
+              `   🔒 Locked Until: ${admin.lockedUntil.toISOString()}`,
             );
           }
           console.log(`   Created: ${admin.createdAt.toISOString()}`);
@@ -257,7 +260,7 @@ async function listAdmins() {
     console.log(
       `\nTotal: ${admins.length} admin${
         admins.length !== 1 ? "s" : ""
-      } (${activeCount} active, ${inactiveCount} inactive)`
+      } (${activeCount} active, ${inactiveCount} inactive)`,
     );
   } catch (error) {
     console.error("❌ Failed to list admin accounts:");
@@ -299,19 +302,19 @@ async function showAdmin(idOrEmail: string) {
 
     console.log("\n🔐 Security:");
     console.log(
-      `   Must Change Password: ${admin.mustChangePassword ? "⚠️  Yes" : "No"}`
+      `   Must Change Password: ${admin.mustChangePassword ? "⚠️  Yes" : "No"}`,
     );
     console.log(`   Failed Login Attempts: ${admin.failedLoginAttempts}`);
     if (admin.lockedUntil && admin.lockedUntil > new Date()) {
       const lockMinutes = Math.ceil(
-        (admin.lockedUntil.getTime() - Date.now()) / 60000
+        (admin.lockedUntil.getTime() - Date.now()) / 60000,
       );
       console.log(`   🔒 Account Locked: ${lockMinutes} minutes remaining`);
     } else if (admin.lockedUntil) {
       console.log("   Lock Status: Unlocked");
     }
     console.log(
-      `   Password Changed: ${admin.passwordChangedAt.toISOString()}`
+      `   Password Changed: ${admin.passwordChangedAt.toISOString()}`,
     );
 
     console.log("\n📊 Activity:");
@@ -415,7 +418,7 @@ async function deactivateAdmin(idOrEmail: string) {
 
 async function resetPassword(
   idOrEmail: string,
-  options: ResetPasswordOptions = {}
+  options: ResetPasswordOptions = {},
 ) {
   try {
     console.log("🔑 Resetting admin password...");
@@ -435,7 +438,7 @@ async function resetPassword(
       password = options.password;
     } else {
       console.error(
-        "❌ Password is required. Use --password or --generate-password"
+        "❌ Password is required. Use --password or --generate-password",
       );
       process.exit(1);
     }
@@ -448,7 +451,7 @@ async function resetPassword(
       console.error("   - At least one lowercase letter");
       console.error("   - At least one number");
       console.error(
-        '   - At least one special character (!@#$%^&*(),.?":{}|<>)'
+        '   - At least one special character (!@#$%^&*(),.?":{}|<>)',
       );
       process.exit(1);
     }
@@ -472,16 +475,16 @@ async function resetPassword(
     console.log(`   Email: ${admin.email}`);
     console.log(`   Name: ${admin.name}`);
     console.log(
-      `   Must Change Password: ${options.mustChangePassword ? "Yes" : "No"}`
+      `   Must Change Password: ${options.mustChangePassword ? "Yes" : "No"}`,
     );
 
     if (options.generatePassword) {
       console.log(
-        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):"
+        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):",
       );
       console.log(`   ${password}`);
       console.log(
-        "\n⚠️  WARNING: Store this password securely and share it with the admin!"
+        "\n⚠️  WARNING: Store this password securely and share it with the admin!",
       );
     }
   } catch (error) {
@@ -568,7 +571,7 @@ async function deleteAdmin(idOrEmail: string) {
     console.log(`   Role: ${admin.role}`);
     console.log("\n   This action CANNOT be undone!");
     console.log(
-      "   All related data (prompts, configs) will have createdBy/updatedBy orphaned."
+      "   All related data (prompts, configs) will have createdBy/updatedBy orphaned.",
     );
 
     await prisma.admin.delete({
@@ -624,14 +627,14 @@ async function main() {
   if (!command) {
     console.log("Usage:");
     console.log(
-      "  yarn admin create <email> <name> --role <role> --password <pass> OR --generate-password [--must-change-password]"
+      "  yarn admin create <email> <name> --role <role> --password <pass> OR --generate-password [--must-change-password]",
     );
     console.log("  yarn admin list");
     console.log("  yarn admin show <admin-id-or-email>");
     console.log("  yarn admin activate <admin-id-or-email>");
     console.log("  yarn admin deactivate <admin-id-or-email>");
     console.log(
-      "  yarn admin reset-password <admin-id-or-email> --password <pass> OR --generate-password [--must-change-password]"
+      "  yarn admin reset-password <admin-id-or-email> --password <pass> OR --generate-password [--must-change-password]",
     );
     console.log("  yarn admin promote <admin-id-or-email> --role <role>");
     console.log("  yarn admin delete <admin-id-or-email>");
@@ -640,13 +643,13 @@ async function main() {
     console.log("  superAdmin, admin, moderator");
     console.log("\nExamples:");
     console.log(
-      '  yarn admin create "admin@example.com" "John Doe" --role admin --generate-password --must-change-password'
+      '  yarn admin create "admin@example.com" "John Doe" --role admin --generate-password --must-change-password',
     );
     console.log(
-      '  yarn admin create "mod@example.com" "Jane" --role moderator --password "SecurePass123!"'
+      '  yarn admin create "mod@example.com" "Jane" --role moderator --password "SecurePass123!"',
     );
     console.log(
-      '  yarn admin reset-password "admin@example.com" --generate-password --must-change-password'
+      '  yarn admin reset-password "admin@example.com" --generate-password --must-change-password',
     );
     console.log('  yarn admin promote "admin@example.com" --role superAdmin');
     console.log("  yarn admin list");
@@ -661,7 +664,7 @@ async function main() {
       if (!email || !name) {
         console.error("❌ Email and name are required for create command");
         console.log(
-          "Usage: yarn admin create <email> <name> --role <role> --password <pass> OR --generate-password"
+          "Usage: yarn admin create <email> <name> --role <role> --password <pass> OR --generate-password",
         );
         process.exit(1);
       }
@@ -722,7 +725,7 @@ async function main() {
       const idOrEmail = args[1];
       if (!idOrEmail) {
         console.error(
-          "❌ Admin ID or email is required for deactivate command"
+          "❌ Admin ID or email is required for deactivate command",
         );
         console.log("Usage: yarn admin deactivate <admin-id-or-email>");
         process.exit(1);
@@ -735,10 +738,10 @@ async function main() {
       const idOrEmail = args[1];
       if (!idOrEmail) {
         console.error(
-          "❌ Admin ID or email is required for reset-password command"
+          "❌ Admin ID or email is required for reset-password command",
         );
         console.log(
-          "Usage: yarn admin reset-password <admin-id-or-email> --password <pass> OR --generate-password"
+          "Usage: yarn admin reset-password <admin-id-or-email> --password <pass> OR --generate-password",
         );
         process.exit(1);
       }
@@ -766,7 +769,7 @@ async function main() {
       if (!idOrEmail) {
         console.error("❌ Admin ID or email is required for promote command");
         console.log(
-          "Usage: yarn admin promote <admin-id-or-email> --role <role>"
+          "Usage: yarn admin promote <admin-id-or-email> --role <role>",
         );
         process.exit(1);
       }
@@ -788,7 +791,7 @@ async function main() {
       if (!role) {
         console.error("❌ Role is required for promote command");
         console.log(
-          "Usage: yarn admin promote <admin-id-or-email> --role <role>"
+          "Usage: yarn admin promote <admin-id-or-email> --role <role>",
         );
         process.exit(1);
       }
@@ -822,7 +825,7 @@ async function main() {
     default:
       console.error(`❌ Unknown command: ${command}`);
       console.log(
-        "Available commands: create, list, show, activate, deactivate, reset-password, promote, delete, unlock"
+        "Available commands: create, list, show, activate, deactivate, reset-password, promote, delete, unlock",
       );
       process.exit(1);
   }

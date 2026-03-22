@@ -19,7 +19,9 @@ model User {
 
   isOnboardingCompleted Boolean @default(false)
 
-  isTOSAccepted Boolean @default(false)
+  isTOSAccepted           Boolean @default(false)
+  isPrivacyPolicyAccepted Boolean @default(false)
+  isDisclaimerAccepted    Boolean @default(false)
 
   xpPoints         Int   @default(0)
   reliabilityScore Float @default(0.0)
@@ -32,6 +34,10 @@ model User {
   ownLocationSubscriptionRadiusKm Int @default(5) // The radius in km for the user's own location subscription
 
   profilePictureUrl String? // S3 URL for user's profile picture
+
+  // Account deletion fields
+  deletionRequestedAt DateTime? // When the user requested account deletion
+  scheduledDeletionAt DateTime? // When the account will be permanently deleted (Usually 30 days after request)
 
   locationSubscriptions    LocationSubscription[]
   devices                  UserDevice[]
@@ -47,6 +53,17 @@ model User {
   // Performance indexes
   @@index([xpPoints]) // For reputation/scoring queries
   @@index([reliabilityScore]) // For reliability-based filtering
+  @@index([scheduledDeletionAt]) // For filtering users with pending account deletion
+}
+
+enum CategoryImageType {
+  info
+  monitor
+  action
+  critical
+  advice
+  watchAndAct
+  emergency
 }
 
 model HazardCategory {
@@ -61,6 +78,7 @@ model HazardCategory {
   parentId String? // For subcategories, this points to the parent category
 
   hazards       Hazard[]
+  images        HazardCategoryImage[]
   parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   subCategories HazardCategory[] @relation("CategoryHierarchy")
 
@@ -69,6 +87,23 @@ model HazardCategory {
 
   // Performance indexes
   @@index([parentId]) // Hierarchical category queries
+}
+
+model HazardCategoryImage {
+  id            String           @id @default(uuid())
+  categoryId    String
+  category      HazardCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  imageType     CategoryImageType
+  s3Key         String
+  width         Int?
+  height        Int?
+  fileSizeBytes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, imageType])
+  @@index([categoryId])
 }
 
 enum HazardSeverity {

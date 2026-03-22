@@ -24,6 +24,17 @@ export const config = {
   env: getOptionalEnv("NODE_ENV", "dev"),
   port: parseInt(getOptionalEnv("PORT", "3000"), 10),
 
+  // CORS / Socket.IO — comma-separated origins; localhost/127.0.0.1 still allowed in non-prod when list does not match
+  cors: {
+    allowedOrigins: getOptionalEnv(
+      "CORS_ALLOWED_ORIGINS",
+      "https://admin.safetyalrt.com",
+    )
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean),
+  },
+
   // Database
   database: {
     url: getRequiredEnv("DATABASE_URL"),
@@ -42,12 +53,12 @@ export const config = {
     accessSecret: getRequiredEnv("ADMIN_JWT_ACCESS_SECRET"),
     accessExpirationMinutes: parseInt(
       getRequiredEnv("ADMIN_JWT_ACCESS_EXP_M"),
-      10
+      10,
     ),
     refreshSecret: getRequiredEnv("ADMIN_JWT_REFRESH_SECRET"),
     refreshExpirationDays: parseInt(
       getRequiredEnv("ADMIN_JWT_REFRESH_EXP_D"),
-      10
+      10,
     ),
   },
 
@@ -108,6 +119,47 @@ export const config = {
 
   // Webhook API Key
   WEBHOOK_API_KEY: getOptionalEnv("WEBHOOK_API_KEY", ""),
+
+  // Cache (ElastiCache / Valkey)
+  cache: {
+    url: getOptionalEnv("CACHE_URL", ""),
+    tls: getOptionalEnv("CACHE_TLS", "false") === "true",
+  },
+
+  // HTTP API rate limiting (express-rate-limit). Webhook routes use separate per-key limits.
+  rateLimit: {
+    // Set true when behind a reverse proxy so req.ip / rate-limit keys use X-Forwarded-For safely
+    // Recommended in prod environment for rate-limiting client IPs accurately.
+    trustProxy: getOptionalEnv("TRUST_PROXY", "false") === "true",
+    generalWindowMs: parseInt(
+      getOptionalEnv("API_RATE_LIMIT_WINDOW_MS", String(15 * 60 * 1000)),
+      10,
+    ),
+    generalMax: parseInt(getOptionalEnv("API_RATE_LIMIT_MAX", "600"), 10),
+    authWindowMs: parseInt(
+      getOptionalEnv("AUTH_RATE_LIMIT_WINDOW_MS", String(15 * 60 * 1000)),
+      10,
+    ),
+    authMax: parseInt(getOptionalEnv("AUTH_RATE_LIMIT_MAX", "40"), 10),
+    /** Per-IP for all GET /api/hazards* (before auth) — map polling + abuse guard */
+    hazardGetIpWindowMs: parseInt(
+      getOptionalEnv("HAZARD_GET_IP_RATE_LIMIT_WINDOW_MS", "60000"),
+      10,
+    ),
+    hazardGetIpMax: parseInt(
+      getOptionalEnv("HAZARD_GET_IP_RATE_LIMIT_MAX", "600"),
+      10,
+    ),
+    /** Per authenticated user for hazard reads (list/detail/subscription GETs) */
+    hazardReadWindowMs: parseInt(
+      getOptionalEnv("HAZARD_READ_RATE_LIMIT_WINDOW_MS", String(15 * 60 * 1000)),
+      10,
+    ),
+    hazardReadMax: parseInt(
+      getOptionalEnv("HAZARD_READ_RATE_LIMIT_MAX", "15000"),
+      10,
+    ),
+  },
 
   // Email configuration
   email: {
