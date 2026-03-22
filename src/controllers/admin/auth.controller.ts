@@ -18,7 +18,7 @@ import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
 export const loginAsAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { email, password }: AdminLoginBody = req.body;
@@ -26,11 +26,7 @@ export const loginAsAdmin = async (
     // Authenticate admin and get tokens
     const result = await authenticateAdmin({ email, password });
 
-    console.log(
-      `Admin login successful: ${
-        result.admin.email
-      } at ${new Date().toISOString()}`
-    );
+    console.log(`Admin login successful at ${new Date().toISOString()}`);
 
     res.status(200).json({
       accessToken: result.accessToken,
@@ -38,11 +34,10 @@ export const loginAsAdmin = async (
       mustChangePassword: result.mustChangePassword || false,
     });
   } catch (error) {
-    const { email } = req.body;
     console.warn(
-      `Admin login failed for ${email}: ${
+      `Admin login failed: ${
         error instanceof HttpError ? error.message : "Unknown error"
-      } at ${new Date().toISOString()}`
+      } at ${new Date().toISOString()}`,
     );
 
     next(error);
@@ -52,7 +47,7 @@ export const loginAsAdmin = async (
 export const refreshAdminToken = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { refreshToken }: AdminRefreshTokenInput = req.body;
@@ -79,7 +74,7 @@ export const refreshAdminToken = async (
 export const logoutAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     res.status(200).json({
@@ -94,7 +89,7 @@ export const logoutAdmin = async (
 export const changeAdminPassword = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { currentPassword, newPassword }: ChangeAdminPasswordInput = req.body;
@@ -121,7 +116,7 @@ export const changeAdminPassword = async (
     // Verify current password
     const isCurrentPasswordValid = await compareAdminPassword(
       currentPassword,
-      admin.passwordHash
+      admin.passwordHash,
     );
 
     if (!isCurrentPasswordValid) {
@@ -132,7 +127,7 @@ export const changeAdminPassword = async (
     await updateAdminPassword(adminId, newPassword);
 
     console.log(
-      `Admin password changed successfully: ${adminId} at ${new Date().toISOString()}`
+      `Admin password changed successfully: ${adminId} at ${new Date().toISOString()}`,
     );
 
     res.status(200).json({
@@ -143,7 +138,7 @@ export const changeAdminPassword = async (
     console.warn(
       `Admin password change failed: ${
         error instanceof HttpError ? error.message : "Unknown error"
-      } at ${new Date().toISOString()}`
+      } at ${new Date().toISOString()}`,
     );
     next(error);
   }
