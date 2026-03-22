@@ -1679,6 +1679,7 @@ export const getCategoriesApplyingFilters = async ({
       ],
     },
     include: {
+      images: true,
       _count: {
         select: {
           hazards: {
@@ -1688,6 +1689,7 @@ export const getCategoriesApplyingFilters = async ({
       },
       subCategories: {
         include: {
+          images: true,
           _count: {
             select: {
               hazards: {

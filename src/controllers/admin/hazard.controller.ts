@@ -32,6 +32,10 @@ import { syncHazardsFromDifferentSources } from "../../services/ingestion.servic
 import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
 import { getHazardAttributesFromDescription } from "../../utils/ingestion.util.js";
 import { getAllSubHazardCategories } from "../../services/hazard_category.service.js";
+import {
+  invalidateHazardCaches,
+  invalidateHazardListCaches,
+} from "../../services/hazard_cache.service.js";
 
 export const getHazardsForAdmin = async (
   req: Request,
@@ -227,6 +231,8 @@ export const createHazardForAdmin = async (
       },
     });
 
+    await invalidateHazardCaches();
+
     res.status(201).json(createdHazard);
   } catch (error) {
     next(error);
@@ -334,6 +340,8 @@ export const updateHazardForAdmin = async (
       },
     });
 
+    await invalidateHazardCaches(hazardId);
+
     res.status(200).json(updatedHazard);
   } catch (error) {
     next(error);
@@ -362,6 +370,8 @@ export const deleteHazardForAdmin = async (
       where: { id: hazardId },
     });
 
+    await invalidateHazardCaches(hazardId);
+
     res.status(200).json({ message: "Hazard deleted successfully" });
   } catch (error) {
     next(error);
@@ -381,6 +391,11 @@ export const syncHazardsFromExternalSourceForAdmin = async (
       sourceIds,
       syncOption,
     });
+
+    if (createdHazards.length > 0) {
+      await invalidateHazardListCaches();
+    }
+
     res.status(200).json(createdHazards);
   } catch (error) {
     next(error);

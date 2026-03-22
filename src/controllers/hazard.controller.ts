@@ -55,6 +55,14 @@ import { getSingleUserLocationSubscriptionByBounds } from "../services/location_
 import { checkMediasForProblems } from "../services/image_video_detection.service.js";
 import { getAllParentHazardCategories } from "./hazard_category.controller.js";
 import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/hazard_category.service.js";
+import {
+  buildHazardListCacheKey,
+  getCachedHazardList,
+  cacheHazardList,
+  getCachedHazard,
+  cacheHazard,
+  invalidateHazardCaches,
+} from "../services/hazard_cache.service.js";
 
 /// Controller to handle fetching hazards with optional filters and pagination.
 export const getHazards = async (
@@ -95,7 +103,7 @@ export const getHazards = async (
     const userLat = user?.latitude || undefined;
     const userLng = user?.longitude || undefined;
 
-    const hazards = await getHazardsApplyingFiltersRaw({
+    const filterParams = {
       searchString,
       categoryIds,
       sourceIds,
@@ -120,9 +128,19 @@ export const getHazards = async (
       sortSettings,
       page: Number(page),
       pageSize: Number(pageSize),
-    });
+    };
 
-    // Enrich hazards with presigned URLs for media access
+    const cacheKey = await buildHazardListCacheKey(filterParams);
+    const cached = await getCachedHazardList<Hazard>(cacheKey);
+
+    let hazards: Hazard[];
+    if (cached) {
+      hazards = cached;
+    } else {
+      hazards = await getHazardsApplyingFiltersRaw(filterParams);
+      await cacheHazardList(cacheKey, hazards);
+    }
+
     const hazardsWithPresignedUrls =
       await enrichHazardsWithPresignedUrls(hazards);
 
@@ -170,15 +188,7 @@ export const getHazardsWithSubscriptionId = async (
     const userLat = user?.latitude || undefined;
     const userLng = user?.longitude || undefined;
 
-    const subscriptionPromise = getSingleUserLocationSubscriptionByBounds({
-      userId: userId!,
-      northeastLat: Number(northeastLat),
-      northeastLng: Number(northeastLng),
-      southwestLat: Number(southwestLat),
-      southwestLng: Number(southwestLng),
-    });
-
-    const hazardsPromise = getHazardsApplyingFiltersRaw({
+    const filterParams = {
       searchString,
       categoryIds,
       awsEmergency: parseBoolean(awsEmergency),
@@ -202,7 +212,26 @@ export const getHazardsWithSubscriptionId = async (
       sortSettings,
       page: Number(page),
       pageSize: Number(pageSize),
+    };
+
+    const cacheKey = await buildHazardListCacheKey(filterParams);
+
+    const subscriptionPromise = getSingleUserLocationSubscriptionByBounds({
+      userId: userId!,
+      northeastLat: Number(northeastLat),
+      northeastLng: Number(northeastLng),
+      southwestLat: Number(southwestLat),
+      southwestLng: Number(southwestLng),
     });
+
+    const hazardsPromise = (async (): Promise<Hazard[]> => {
+      const cached = await getCachedHazardList<Hazard>(cacheKey);
+      if (cached) return cached;
+
+      const fresh = await getHazardsApplyingFiltersRaw(filterParams);
+      await cacheHazardList(cacheKey, fresh);
+      return fresh;
+    })();
 
     const [subscription, hazards] = await Promise.all([
       subscriptionPromise,
@@ -244,16 +273,21 @@ export const getHazardById = async (
       throw new HttpError(400, "Hazard ID is required");
     }
 
-    const hazard = await prisma.hazard.findUnique({
-      where: { id },
-      include: buildHazardInclude(),
-    });
+    let hazard = await getCachedHazard<Hazard>(id);
 
     if (!hazard) {
-      return res.status(404).json({ message: "Hazard not found" });
+      hazard = (await prisma.hazard.findUnique({
+        where: { id },
+        include: buildHazardInclude(),
+      })) as Hazard | null;
+
+      if (!hazard) {
+        return res.status(404).json({ message: "Hazard not found" });
+      }
+
+      await cacheHazard(id, hazard);
     }
 
-    // Enrich hazard with presigned URLs for media access
     const hazardWithPresignedUrls = await enrichHazardsWithPresignedUrls([
       hazard,
     ]);
@@ -508,6 +542,8 @@ export const createHazard = async (
     }
 
     const hazard = await enrichHazardWithPresignedUrls(result);
+
+    await invalidateHazardCaches();
 
     // Award XP points to the user based on AI review <----------------------------------------------------------------------------
     let xpResult = null;
@@ -853,6 +889,8 @@ export const updateHazard = async (
 
     const updatedHazard = await enrichHazardWithPresignedUrls(result);
 
+    await invalidateHazardCaches(id);
+
     // Send socket event about updated hazard to subscribers
     sendSocketEventAboutHazardToSubscribers({
       hazard: updatedHazard,
@@ -933,6 +971,8 @@ export const deleteHazard = async (
         // The hazard is already deleted from the database
       }
     }
+
+    await invalidateHazardCaches(id);
 
     // Notify subscribers about the deleted hazard
     sendSocketEventAboutHazardToSubscribers({
@@ -1111,12 +1151,8 @@ export const voteHazard = async (
       return { updatedHazard, voteAction, previousVoteType };
     });
 
-    // New upvote: +2 XP to reporter
-    // New downvote: -1 XP to reporter
-    // Remove upvote: -2 XP to reporter
-    // Remove downvote: +1 XP to reporter
-    // Change upvote→downvote: -3 XP to reporter (lost +2, gained -1)
-    // Change downvote→upvote: +3 XP to reporter (lost -1, gained +2)
+    await invalidateHazardCaches(hazardId);
+
     if (result.updatedHazard) {
       // Award XP points for engagement changes (simple approach)
       try {
