@@ -6,6 +6,7 @@ import {
   hashAdminPassword,
   validatePasswordStrength,
 } from "../services/admin_security.service.js";
+import { emitCliSecret, maskEmail } from "../utils/log_sanitize.util.js";
 
 /**
  * Script to manage admin accounts
@@ -37,6 +38,8 @@ import {
  *
  *   # Delete an admin (use with caution)
  *   yarn admin delete <admin-id-or-email>
+ *
+ * Generated passwords: set ADMIN_PASSWORD_OUTPUT_FILE in CI/non-TTY so secrets are not captured in logs.
  */
 
 interface CreateOptions {
@@ -113,7 +116,7 @@ async function createAdmin(
     });
 
     if (existingAdmin) {
-      console.error(`❌ Admin with email ${email} already exists`);
+      console.error(`❌ Admin with email ${maskEmail(email)} already exists`);
       process.exit(1);
     }
 
@@ -160,7 +163,7 @@ async function createAdmin(
     console.log("✅ Admin account created successfully!");
     console.log("\n📋 Details:");
     console.log(`   ID: ${admin.id}`);
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log(`   Role: ${admin.role}`);
     console.log(`   Status: ${admin.isActive ? "🟢 Active" : "🔴 Disabled"}`);
@@ -171,11 +174,13 @@ async function createAdmin(
 
     if (options.generatePassword) {
       console.log(
-        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):",
+        "\n🔐 Generated password (file or TTY only — not full log line):",
       );
-      console.log(`   ${password}`);
+      if (emitCliSecret(password, "ADMIN_PASSWORD_OUTPUT_FILE") === "exit") {
+        process.exit(1);
+      }
       console.log(
-        "\n⚠️  WARNING: Store this password securely and share it with the admin!",
+        "\n⚠️  Store this password in a vault and share it with the admin securely.",
       );
     }
 
@@ -228,7 +233,7 @@ async function listAdmins() {
 
         roleAdmins.forEach((admin, index) => {
           console.log(
-            `${index + 1}. ${admin.name || "(No name)"} <${admin.email}>`,
+            `${index + 1}. ${admin.name || "(No name)"} <${maskEmail(admin.email)}>`,
           );
           console.log(`   ID: ${admin.id}`);
           console.log(
@@ -295,7 +300,7 @@ async function showAdmin(idOrEmail: string) {
 
     console.log("📋 Admin Account Details:");
     console.log(`   ID: ${admin.id}`);
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name || "(No name)"}`);
     console.log(`   Role: ${admin.role}`);
     console.log(`   Status: ${admin.isActive ? "🟢 Active" : "🔴 Disabled"}`);
@@ -359,7 +364,7 @@ async function activateAdmin(idOrEmail: string) {
     });
 
     console.log("✅ Admin account activated successfully!");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log("   Status: 🟢 Active");
   } catch (error) {
@@ -406,7 +411,7 @@ async function deactivateAdmin(idOrEmail: string) {
     });
 
     console.log("✅ Admin account deactivated successfully!");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log("   Status: 🔴 Disabled");
   } catch (error) {
@@ -472,19 +477,19 @@ async function resetPassword(
     });
 
     console.log("✅ Password reset successfully!");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log(
       `   Must Change Password: ${options.mustChangePassword ? "Yes" : "No"}`,
     );
 
     if (options.generatePassword) {
+      console.log("\n🔐 Generated password (file or TTY only):");
+      if (emitCliSecret(password, "ADMIN_PASSWORD_OUTPUT_FILE") === "exit") {
+        process.exit(1);
+      }
       console.log(
-        "\n🔐 Generated Password (SAVE THIS - IT WON'T BE SHOWN AGAIN!):",
-      );
-      console.log(`   ${password}`);
-      console.log(
-        "\n⚠️  WARNING: Store this password securely and share it with the admin!",
+        "\n⚠️  Store this password in a vault and share it with the admin securely.",
       );
     }
   } catch (error) {
@@ -531,7 +536,7 @@ async function promoteAdmin(idOrEmail: string, options: PromoteOptions) {
     });
 
     console.log("✅ Admin role updated successfully!");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log(`   Old Role: ${admin.role}`);
     console.log(`   New Role: ${options.role}`);
@@ -566,7 +571,7 @@ async function deleteAdmin(idOrEmail: string) {
     }
 
     console.log("\n⚠️  You are about to DELETE:");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
     console.log(`   Role: ${admin.role}`);
     console.log("\n   This action CANNOT be undone!");
@@ -611,7 +616,7 @@ async function unlockAdmin(idOrEmail: string) {
     });
 
     console.log("✅ Admin account unlocked successfully!");
-    console.log(`   Email: ${admin.email}`);
+    console.log(`   Email: ${maskEmail(admin.email)}`);
     console.log(`   Name: ${admin.name}`);
   } catch (error) {
     console.error("❌ Failed to unlock admin account:");

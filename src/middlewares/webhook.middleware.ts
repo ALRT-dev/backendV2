@@ -39,7 +39,7 @@ const webhookUsageStore = new Map<
 export const requireWebhookAuth = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   const startTime = Date.now();
 
@@ -79,7 +79,6 @@ export const requireWebhookAuth = async (
         reason: "Invalid API key",
         clientIp,
         endpoint: req.path,
-        apiKeyUsed: apiKey.substring(0, 8) + "...",
       });
 
       // Track suspicious attempts
@@ -127,7 +126,7 @@ export const requireWebhookAuth = async (
       });
       throw new HttpError(
         429,
-        "Too many failed attempts. Please try again later."
+        "Too many failed attempts. Please try again later.",
       );
     }
 
@@ -174,9 +173,7 @@ export const webhookRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return (
-      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
-    );
+    return apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req));
   },
   handler: async (req: Request, res: Response) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
@@ -218,9 +215,7 @@ export const webhookSpeedLimiter: SlowDownRequestHandler = slowDown({
   maxDelayMs: 5000,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return (
-      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
-    );
+    return apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req));
   },
 });
 
@@ -243,9 +238,7 @@ export const webhookDailyQuota = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return (
-      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
-    );
+    return apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req));
   },
   skipSuccessfulRequests: false,
   handler: async (req: Request, res: Response) => {
@@ -293,9 +286,7 @@ export const webhookBurstProtection = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
-    return (
-      apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req))
-    );
+    return apiKey?.id || normalizeClientIpForRateLimitKey(getClientIp(req));
   },
   handler: async (req: Request, res: Response) => {
     const apiKey = (req as any).webhookApiKey as WebhookApiKey | undefined;
@@ -375,7 +366,6 @@ async function logWebhookAttempt(data: {
   reason?: string;
   clientIp: string;
   endpoint: string;
-  apiKeyUsed?: string;
   apiKeyId?: string;
   responseTime?: number;
   hazardId?: string;
@@ -390,7 +380,6 @@ async function logWebhookAttempt(data: {
         (data.success ? "Authentication successful" : "Unknown error"),
       clientIp: data.clientIp,
       endpoint: data.endpoint,
-      apiKeyUsed: data.apiKeyUsed,
       apiKeyId: data.apiKeyId,
       responseTime: data.responseTime,
       hazardId: data.hazardId,
@@ -437,13 +426,19 @@ function trackSuspiciousAttempt(apiKey: string): void {
   webhookUsageStore.set(apiKey, usage);
 
   // Reset suspicious attempts after 1 hour
-  setTimeout(() => {
-    const current = webhookUsageStore.get(apiKey);
-    if (current) {
-      current.suspiciousAttempts = Math.max(0, current.suspiciousAttempts - 1);
-      webhookUsageStore.set(apiKey, current);
-    }
-  }, 60 * 60 * 1000);
+  setTimeout(
+    () => {
+      const current = webhookUsageStore.get(apiKey);
+      if (current) {
+        current.suspiciousAttempts = Math.max(
+          0,
+          current.suspiciousAttempts - 1,
+        );
+        webhookUsageStore.set(apiKey, current);
+      }
+    },
+    60 * 60 * 1000,
+  );
 }
 
 /**
@@ -451,7 +446,7 @@ function trackSuspiciousAttempt(apiKey: string): void {
  */
 async function updateUsageStats(
   apiKeyId: string,
-  clientIp: string
+  clientIp: string,
 ): Promise<void> {
   try {
     await prisma.webhookApiKey.update({
