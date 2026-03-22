@@ -6,6 +6,16 @@ import type {
 } from "../../validators/admin/hazard_category.validator.js";
 import prisma from "../../utils/prisma_client.util.js";
 import { HttpError } from "../../models/http_error.js";
+import {
+  uploadFileToS3,
+  deleteFileFromS3,
+  enrichCategoryImagesWithPresignedUrls,
+} from "../../services/s3.service.js";
+import {
+  CATEGORY_IMAGE_FIELD_TO_TYPE,
+  CATEGORY_IMAGE_FIELD_NAMES,
+} from "../../constants/category_image.constants.js";
+import type { CategoryImageType } from "@prisma/client";
 
 export const getCategoriesForAdmin = async (
   req: Request,
@@ -20,9 +30,11 @@ export const getCategoriesForAdmin = async (
         parentId: null,
       },
       include: {
+        images: true,
         parent: true,
         subCategories: {
           include: {
+            images: true,
             _count: {
               select: {
                 hazards: {
@@ -75,7 +87,10 @@ export const getCategoriesForAdmin = async (
       };
     });
 
-    res.status(200).json(transformedCategories);
+    const enriched = await enrichCategoryImagesWithPresignedUrls(
+      transformedCategories
+    );
+    res.status(200).json(enriched);
   } catch (error) {
     next(error);
   }
@@ -95,6 +110,7 @@ export const createHazardCategoryForAdmin = async (
       keywords,
       isFireRelated,
       parentId,
+      imageDimensions,
     }: CreateHazardCategoryForAdminBody = req.body;
 
     // If ID is provided, check if it already exists
@@ -138,8 +154,39 @@ export const createHazardCategoryForAdmin = async (
       include: {
         parent: true,
         subCategories: true,
+        images: true,
       },
     });
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    if (files) {
+      const folder = `category-images/${createdCategory.id}`;
+      for (const fieldName of CATEGORY_IMAGE_FIELD_NAMES) {
+        const file = files[fieldName]?.[0];
+        if (!file) continue;
+        const imageType = CATEGORY_IMAGE_FIELD_TO_TYPE[fieldName] as CategoryImageType;
+        const dims = imageDimensions?.[imageType];
+        const result = await uploadFileToS3(file, folder);
+        await prisma.hazardCategoryImage.create({
+          data: {
+            categoryId: createdCategory.id,
+            imageType,
+            s3Key: result.key,
+            width: dims?.width ?? null,
+            height: dims?.height ?? null,
+            fileSizeBytes: result.size ?? null,
+          },
+        });
+      }
+      const withImages = await prisma.hazardCategory.findUnique({
+        where: { id: createdCategory.id },
+        include: { parent: true, subCategories: true, images: true },
+      });
+      const enriched = await enrichCategoryImagesWithPresignedUrls(
+        withImages ? [withImages] : [createdCategory]
+      );
+      return res.status(201).json(enriched[0] ?? createdCategory);
+    }
 
     res.status(201).json(createdCategory);
   } catch (error) {
@@ -165,6 +212,7 @@ export const updateHazardCategoryForAdmin = async (
       keywords,
       isFireRelated,
       parentId,
+      imageDimensions,
     }: UpdateHazardCategoryForAdminBody = req.body;
 
     // Check if category exists
@@ -245,10 +293,75 @@ export const updateHazardCategoryForAdmin = async (
       include: {
         parent: true,
         subCategories: true,
+        images: true,
       },
     });
 
-    res.status(200).json(updatedCategory);
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const folder = `category-images/${categoryId}`;
+
+    if (files) {
+      for (const fieldName of CATEGORY_IMAGE_FIELD_NAMES) {
+        const file = files[fieldName]?.[0];
+        if (!file) continue;
+        const imageType = CATEGORY_IMAGE_FIELD_TO_TYPE[fieldName] as CategoryImageType;
+        const dims = imageDimensions?.[imageType];
+        const existing = await prisma.hazardCategoryImage.findUnique({
+          where: {
+            categoryId_imageType: { categoryId: categoryId!, imageType },
+          },
+        });
+        if (existing) {
+          try {
+            await deleteFileFromS3(existing.s3Key);
+          } catch (e) {
+            console.error("Error deleting old category image from S3:", e);
+          }
+        }
+        const result = await uploadFileToS3(file, folder);
+        await prisma.hazardCategoryImage.upsert({
+          where: {
+            categoryId_imageType: { categoryId: categoryId!, imageType },
+          },
+          create: {
+            categoryId: categoryId!,
+            imageType,
+            s3Key: result.key,
+            width: dims?.width ?? null,
+            height: dims?.height ?? null,
+            fileSizeBytes: result.size ?? null,
+          },
+          update: {
+            s3Key: result.key,
+            width: dims?.width ?? null,
+            height: dims?.height ?? null,
+            fileSizeBytes: result.size ?? null,
+          },
+        });
+      }
+    }
+
+    if (imageDimensions && Object.keys(imageDimensions).length > 0) {
+      for (const [imageType, dims] of Object.entries(imageDimensions)) {
+        if (!dims || typeof dims.width !== "number" || typeof dims.height !== "number")
+          continue;
+        await prisma.hazardCategoryImage.updateMany({
+          where: {
+            categoryId: categoryId!,
+            imageType: imageType as CategoryImageType,
+          },
+          data: { width: dims.width, height: dims.height },
+        });
+      }
+    }
+
+    const withImages = await prisma.hazardCategory.findUnique({
+      where: { id: categoryId },
+      include: { parent: true, subCategories: true, images: true },
+    });
+    const toReturn = withImages ?? updatedCategory;
+    const enriched = await enrichCategoryImagesWithPresignedUrls([toReturn]);
+    res.status(200).json(enriched[0] ?? toReturn);
   } catch (error) {
     next(error);
   }
@@ -280,6 +393,18 @@ export const deleteHazardCategoryForAdmin = async (
 
     if (!existingCategory) {
       throw new HttpError(404, `Category with id ${categoryId} not found`);
+    }
+
+    const categoryImages = await prisma.hazardCategoryImage.findMany({
+      where: { categoryId },
+      select: { s3Key: true },
+    });
+    for (const img of categoryImages) {
+      try {
+        await deleteFileFromS3(img.s3Key);
+      } catch (e) {
+        console.error("Error deleting category image from S3:", e);
+      }
     }
 
     // Check if category has any hazards associated with it

@@ -56,6 +56,16 @@ model User {
   @@index([scheduledDeletionAt]) // For filtering users with pending account deletion
 }
 
+enum CategoryImageType {
+  info
+  monitor
+  action
+  critical
+  advice
+  watchAndAct
+  emergency
+}
+
 model HazardCategory {
   id          String   @id @default(uuid())
   name        String   @unique
@@ -68,6 +78,7 @@ model HazardCategory {
   parentId String? // For subcategories, this points to the parent category
 
   hazards       Hazard[]
+  images        HazardCategoryImage[]
   parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   subCategories HazardCategory[] @relation("CategoryHierarchy")
 
@@ -76,6 +87,23 @@ model HazardCategory {
 
   // Performance indexes
   @@index([parentId]) // Hierarchical category queries
+}
+
+model HazardCategoryImage {
+  id            String           @id @default(uuid())
+  categoryId    String
+  category      HazardCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  imageType     CategoryImageType
+  s3Key         String
+  width         Int?
+  height        Int?
+  fileSizeBytes Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([categoryId, imageType])
+  @@index([categoryId])
 }
 
 enum HazardSeverity {

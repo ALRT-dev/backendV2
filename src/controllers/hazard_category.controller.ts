@@ -3,6 +3,7 @@ import { HttpError } from "../models/http_error.js";
 import prisma from "../utils/prisma_client.util.js";
 import type { CreateHazardCategoryInput } from "../validators/hazard_category.validator.js";
 import { populateInitialCategories } from "../services/hazard_category.service.js";
+import { enrichCategoryImagesWithPresignedUrls } from "../services/s3.service.js";
 
 /**
  * Get all categories including parent and sub categories.
@@ -16,10 +17,12 @@ export const getAllHazardCategories = async (
     const categories = await prisma.hazardCategory.findMany({
       include: {
         parent: true,
-        subCategories: true,
+        subCategories: { include: { images: true } },
+        images: true,
       },
     });
-    res.status(200).json(categories);
+    const enriched = await enrichCategoryImagesWithPresignedUrls(categories);
+    res.status(200).json(enriched);
   } catch (error) {
     next(error);
   }
@@ -39,11 +42,12 @@ export const getAllParentHazardCategories = async (
         parentId: null,
       },
       include: {
-        subCategories: true,
+        subCategories: { include: { images: true } },
+        images: true,
       },
     });
-
-    res.status(200).json(categories);
+    const enriched = await enrichCategoryImagesWithPresignedUrls(categories);
+    res.status(200).json(enriched);
   } catch (error) {
     next(error);
   }
@@ -64,10 +68,11 @@ export const getAllSubHazardCategories = async (
       },
       include: {
         parent: true,
+        images: true,
       },
     });
-
-    res.status(200).json(subCategories);
+    const enriched = await enrichCategoryImagesWithPresignedUrls(subCategories);
+    res.status(200).json(enriched);
   } catch (error) {
     next(error);
   }

@@ -19,7 +19,7 @@ const CLOUDFRONT_DOMAIN = config.aws.cloudfrontDomain;
  */
 export const uploadFileToS3 = async (
   file: Express.Multer.File,
-  folder: string
+  folder: string,
 ): Promise<MediaUploadResult> => {
   try {
     // Generate unique filename
@@ -53,9 +53,16 @@ export const uploadFileToS3 = async (
       mimeType: file.mimetype,
       size: file.size,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error uploading file to S3:", error);
-    throw new Error("Failed to upload file to S3");
+    const code = (error as { Code?: string })?.Code;
+    const message =
+      code === "NoSuchBucket"
+        ? "S3 bucket does not exist. Create the bucket in AWS or check AWS_S3_BUCKET_NAME in your environment."
+        : "Failed to upload file to S3";
+    const err = new Error(message) as Error & { statusCode?: number };
+    err.statusCode = 503;
+    throw err;
   }
 };
 
@@ -64,7 +71,7 @@ export const uploadFileToS3 = async (
  */
 export const uploadMultipleFilesToS3 = async (
   files: Express.Multer.File[],
-  folder: string
+  folder: string,
 ): Promise<MediaUploadResult[]> => {
   try {
     const uploadPromises = files.map((file) => uploadFileToS3(file, folder));
@@ -96,7 +103,7 @@ export const deleteFileFromS3 = async (key: string): Promise<void> => {
  * Delete multiple files from S3
  */
 export const deleteMultipleFilesFromS3 = async (
-  keys: string[]
+  keys: string[],
 ): Promise<void> => {
   try {
     const deletePromises = keys.map((key) => deleteFileFromS3(key));
@@ -143,7 +150,7 @@ export const extractS3KeyFromUrl = (url: string): string | null => {
     if (url.includes(BUCKET_NAME)) {
       const urlParts = url.split("/");
       const bucketIndex = urlParts.findIndex((part) =>
-        part.includes(BUCKET_NAME)
+        part.includes(BUCKET_NAME),
       );
       if (bucketIndex >= 0) {
         return urlParts.slice(bucketIndex + 1).join("/");
@@ -165,7 +172,7 @@ export const extractS3KeyFromUrl = (url: string): string | null => {
  */
 export const generatePresignedUrl = async (
   key: string,
-  expiresIn: number = 3600 // 1 hour default
+  expiresIn: number = 3600, // 1 hour default
 ): Promise<string> => {
   try {
     const command = new GetObjectCommand({
@@ -189,7 +196,7 @@ export const generatePresignedUrl = async (
  */
 export const generateMultiplePresignedUrls = async (
   keys: string[],
-  expiresIn: number = 3600
+  expiresIn: number = 3600,
 ): Promise<Record<string, string>> => {
   try {
     const urlPromises = keys.map(async (key) => {
@@ -200,10 +207,13 @@ export const generateMultiplePresignedUrls = async (
     const results = await Promise.all(urlPromises);
 
     // Convert array to object for easy lookup
-    return results.reduce((acc, { key, url }) => {
-      acc[key] = url;
-      return acc;
-    }, {} as Record<string, string>);
+    return results.reduce(
+      (acc, { key, url }) => {
+        acc[key] = url;
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
   } catch (error) {
     console.error("Error generating multiple presigned URLs:", error);
     throw new Error("Failed to generate presigned URLs");
@@ -217,10 +227,10 @@ export const generateMultiplePresignedUrls = async (
  * @returns Hazards with presigned URLs added to media
  */
 export const enrichHazardsWithPresignedUrls = async <
-  T extends Hazard & { medias?: HazardMedia[] }
+  T extends Hazard & { medias?: HazardMedia[] },
 >(
   hazards: T[],
-  expiresIn: number = 3600 // 1 hour default
+  expiresIn: number = 3600, // 1 hour default
 ): Promise<T[]> => {
   try {
     // Collect all S3 keys from all hazards
@@ -243,7 +253,7 @@ export const enrichHazardsWithPresignedUrls = async <
     // Generate presigned URLs for all keys
     const presignedUrls = await generateMultiplePresignedUrls(
       s3Keys,
-      expiresIn
+      expiresIn,
     );
 
     // Enrich hazards with presigned URLs
@@ -279,14 +289,65 @@ export const enrichHazardsWithPresignedUrls = async <
  * @returns Hazard with presigned URLs added to media
  */
 export const enrichHazardWithPresignedUrls = async <
-  T extends Hazard & { medias?: HazardMedia[] }
+  T extends Hazard & { medias?: HazardMedia[] },
 >(
   hazard: T,
-  expiresIn: number = 3600 // 1 hour default
+  expiresIn: number = 3600, // 1 hour default
 ): Promise<T> => {
   const enrichedHazards = await enrichHazardsWithPresignedUrls(
     [hazard],
-    expiresIn
+    expiresIn,
   );
   return enrichedHazards[0]!; // We know it exists since we passed exactly one hazard
+};
+
+type CategoryWithImagesLike = {
+  images?: { s3Key: string; [k: string]: unknown }[];
+  subCategories?: CategoryWithImagesLike[];
+};
+
+/**
+ * Enriches category images with presigned URLs (generated from s3Key).
+ * Use when returning categories in API responses so clients get a temporary URL.
+ * @param categories - Categories (and nested subCategories) that have images
+ * @param expiresIn - Presigned URL expiry in seconds (default: 1 hour)
+ */
+export const enrichCategoryImagesWithPresignedUrls = async <T>(
+  categories: T[],
+  expiresIn: number = 3600,
+): Promise<T[]> => {
+  try {
+    const keys: string[] = [];
+    function collectKeys(cats: CategoryWithImagesLike[]) {
+      for (const c of cats) {
+        if (c.images) for (const img of c.images) keys.push(img.s3Key);
+        if (c.subCategories) collectKeys(c.subCategories);
+      }
+    }
+    collectKeys(categories as CategoryWithImagesLike[]);
+    if (keys.length === 0) return categories;
+    const urlMap = await generateMultiplePresignedUrls(keys, expiresIn);
+    function enrich(cats: CategoryWithImagesLike[]): CategoryWithImagesLike[] {
+      return cats.map((c) => {
+        const out: CategoryWithImagesLike = { ...c };
+        if (c.images?.length) {
+          out.images = c.images.map((img) => ({
+            ...img,
+            presignedUrl: urlMap[img.s3Key],
+          }));
+        }
+        if (c.subCategories?.length) {
+          out.subCategories = enrich(c.subCategories);
+        }
+        return out;
+      });
+    }
+    return enrich(categories as CategoryWithImagesLike[]) as T[];
+  } catch (error) {
+    console.error(
+      "Error enriching category images with presigned URLs:",
+      error,
+    );
+    return categories;
+  }
 };
