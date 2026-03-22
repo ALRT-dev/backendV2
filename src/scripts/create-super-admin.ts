@@ -4,6 +4,7 @@ import { AdminRole } from "@prisma/client";
 import { validatePasswordStrength } from "../services/admin_security.service.js";
 import { createAdminAccount } from "../services/user.admin.service.js";
 import { config } from "../utils/config.js";
+import { maskEmail } from "../utils/log_sanitize.util.js";
 
 const createSuperAdmin = async () => {
   try {
@@ -18,7 +19,7 @@ const createSuperAdmin = async () => {
       console.error("   - At least one lowercase letter");
       console.error("   - At least one number");
       console.error(
-        '   - At least one special character (!@#$%^&*(),.?":{}|<>)'
+        '   - At least one special character (!@#$%^&*(),.?":{}|<>)',
       );
       process.exit(1);
     }
@@ -34,14 +35,14 @@ const createSuperAdmin = async () => {
     const admin = await createAdminAccount(adminData);
 
     console.log("✅ Super admin account created successfully!");
-    console.log("📧 Email:", admin.email);
+    console.log("📧 Email (masked):", maskEmail(admin.email));
     console.log("👤 Name:", admin.name);
     console.log("🛡️  Role:", admin.role);
+    console.log("🆔 Admin ID:", admin.id);
     console.log("📅 Created:", admin.createdAt.toISOString());
-
-    console.log("\n🔐 You can now login with these credentials:");
-    console.log(`Email: ${admin.email}`);
-    console.log("Password: [REDACTED]");
+    console.log(
+      "\n🔐 Use the email/password from your environment (not printed here).",
+    );
   } catch (error) {
     console.error("❌ Failed to create super admin account:");
     console.error(error instanceof Error ? error.message : error);

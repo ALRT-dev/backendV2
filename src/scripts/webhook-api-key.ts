@@ -3,6 +3,7 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import prisma from "../utils/prisma_client.util.js";
+import { emitCliSecret, maskEmail } from "../utils/log_sanitize.util.js";
 
 /**
  * Script to manage webhook API keys
@@ -28,6 +29,9 @@ import prisma from "../utils/prisma_client.util.js";
  *
  *   # Update rate limits
  *   yarn webhook-key update <key-id> --max-per-minute 20 --max-per-hour 200 --max-per-day 2000
+ *
+ * Secrets: set WEBHOOK_KEY_OUTPUT_FILE=/secure/path when creating a key in CI/non-TTY
+ * so the raw key is not written to captured stdout (log aggregators).
  */
 
 interface CreateOptions {
@@ -82,7 +86,7 @@ async function createApiKey(name: string, options: CreateOptions = {}) {
       console.log(`   Description: ${createdKey.description}`);
     }
     console.log(
-      `   Status: ${createdKey.isActive ? "🟢 Active" : "🔴 Disabled"}`
+      `   Status: ${createdKey.isActive ? "🟢 Active" : "🔴 Disabled"}`,
     );
     console.log(`   Created: ${createdKey.createdAt.toISOString()}`);
     if (createdKey.expiresAt) {
@@ -92,10 +96,14 @@ async function createApiKey(name: string, options: CreateOptions = {}) {
     console.log(`   Per Minute: ${createdKey.maxRequestsPerMinute}`);
     console.log(`   Per Hour: ${createdKey.maxRequestsPerHour}`);
     console.log(`   Per Day: ${createdKey.maxRequestsPerDay}`);
-    console.log("\n🔐 API Key (SAVE THIS - IT WON'T BE SHOWN AGAIN!):");
-    console.log(`   ${apiKey}`);
     console.log(
-      "\n⚠️  WARNING: Store this key securely. It cannot be retrieved later!"
+      "\n🔐 API key (one-time): use file or interactive terminal — not logged in full.",
+    );
+    if (emitCliSecret(apiKey, "WEBHOOK_KEY_OUTPUT_FILE") === "exit") {
+      process.exit(1);
+    }
+    console.log(
+      "\n⚠️  Store this key in a vault. It cannot be retrieved from the API later.",
     );
   } catch (error) {
     console.error("❌ Failed to create API key:");
@@ -208,12 +216,12 @@ async function listApiKeys() {
         console.log("   Last Used: Never");
       }
       console.log(
-        `   Rate Limits: ${key.maxRequestsPerMinute}/min, ${key.maxRequestsPerHour}/hr, ${key.maxRequestsPerDay}/day`
+        `   Rate Limits: ${key.maxRequestsPerMinute}/min, ${key.maxRequestsPerHour}/hr, ${key.maxRequestsPerDay}/day`,
       );
       console.log(`   Created: ${key.createdAt.toISOString()}`);
       if (key.createdBy) {
         console.log(
-          `   Created By: ${key.createdBy.name} (${key.createdBy.email})`
+          `   Created By: ${key.createdBy.name} (${maskEmail(key.createdBy.email)})`,
         );
       }
       if (key.expiresAt) {
@@ -221,7 +229,7 @@ async function listApiKeys() {
         console.log(
           `   Expires: ${key.expiresAt.toISOString()} ${
             isExpired ? "⚠️ EXPIRED" : ""
-          }`
+          }`,
         );
       }
       console.log("");
@@ -362,7 +370,7 @@ async function showApiKey(keyId: string) {
     const successRate =
       recentRequests > 0
         ? (((recentRequests - recentFailures) / recentRequests) * 100).toFixed(
-            2
+            2,
           )
         : "N/A";
 
@@ -376,7 +384,7 @@ async function showApiKey(keyId: string) {
     console.log(`   Created: ${key.createdAt.toISOString()}`);
     if (key.createdBy) {
       console.log(
-        `   Created By: ${key.createdBy.name} (${key.createdBy.email})`
+        `   Created By: ${key.createdBy.name} (${maskEmail(key.createdBy.email)})`,
       );
     }
     if (key.expiresAt) {
@@ -384,7 +392,7 @@ async function showApiKey(keyId: string) {
       console.log(
         `   Expires: ${key.expiresAt.toISOString()} ${
           isExpired ? "⚠️ EXPIRED" : ""
-        }`
+        }`,
       );
     }
 
@@ -396,7 +404,7 @@ async function showApiKey(keyId: string) {
     console.log("\n📊 Usage Statistics:");
     console.log(`   Total Requests: ${key.totalRequests.toLocaleString()}`);
     console.log(
-      `   Last 24 Hours: ${recentRequests.toLocaleString()} requests`
+      `   Last 24 Hours: ${recentRequests.toLocaleString()} requests`,
     );
     console.log(`   Last 24h Failures: ${recentFailures.toLocaleString()}`);
     console.log(`   Last 24h Success Rate: ${successRate}%`);
@@ -424,7 +432,7 @@ async function showApiKey(keyId: string) {
         console.log(
           `   ${index + 1}. ${statusIcon} ${
             log.statusCode
-          } - ${log.createdAt.toISOString()}`
+          } - ${log.createdAt.toISOString()}`,
         );
         console.log(`      IP: ${log.clientIp}`);
         if (log.reason) {
@@ -449,7 +457,7 @@ async function main() {
   if (!command) {
     console.log("Usage:");
     console.log(
-      '  yarn tsx src/scripts/webhook-api-key.ts create "Client Name" [options]'
+      '  yarn tsx src/scripts/webhook-api-key.ts create "Client Name" [options]',
     );
     console.log("  yarn tsx src/scripts/webhook-api-key.ts disable <key-id>");
     console.log("  yarn tsx src/scripts/webhook-api-key.ts enable <key-id>");
@@ -457,18 +465,18 @@ async function main() {
     console.log("  yarn tsx src/scripts/webhook-api-key.ts delete <key-id>");
     console.log("  yarn tsx src/scripts/webhook-api-key.ts show <key-id>");
     console.log(
-      "  yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]"
+      "  yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]",
     );
     console.log("\nOptions for create:");
     console.log("  --description <text>           Description of the API key");
     console.log(
-      "  --max-per-minute <number>      Max requests per minute (default: 10)"
+      "  --max-per-minute <number>      Max requests per minute (default: 10)",
     );
     console.log(
-      "  --max-per-hour <number>        Max requests per hour (default: 100)"
+      "  --max-per-hour <number>        Max requests per hour (default: 100)",
     );
     console.log(
-      "  --max-per-day <number>         Max requests per day (default: 1000)"
+      "  --max-per-day <number>         Max requests per day (default: 1000)",
     );
     console.log("  --expire-days <number>         Expire after N days");
     console.log("\nOptions for update:");
@@ -477,17 +485,17 @@ async function main() {
     console.log("  --max-per-day <number>         New max requests per day");
     console.log("\nExamples:");
     console.log(
-      '  yarn tsx src/scripts/webhook-api-key.ts create "Client A" --description "N8N automation" --expire-days 365'
+      '  yarn tsx src/scripts/webhook-api-key.ts create "Client A" --description "N8N automation" --expire-days 365',
     );
     console.log(
-      '  yarn tsx src/scripts/webhook-api-key.ts create "Premium Client" --max-per-day 5000'
+      '  yarn tsx src/scripts/webhook-api-key.ts create "Premium Client" --max-per-day 5000',
     );
     console.log(
-      "  yarn tsx src/scripts/webhook-api-key.ts disable abc-123-def"
+      "  yarn tsx src/scripts/webhook-api-key.ts disable abc-123-def",
     );
     console.log("  yarn tsx src/scripts/webhook-api-key.ts list");
     console.log(
-      "  yarn tsx src/scripts/webhook-api-key.ts update abc-123-def --max-per-day 5000"
+      "  yarn tsx src/scripts/webhook-api-key.ts update abc-123-def --max-per-day 5000",
     );
     process.exit(0);
   }
@@ -498,7 +506,7 @@ async function main() {
       if (!name) {
         console.error("❌ Name is required for create command");
         console.log(
-          'Usage: yarn tsx src/scripts/webhook-api-key.ts create "Client Name" [options]'
+          'Usage: yarn tsx src/scripts/webhook-api-key.ts create "Client Name" [options]',
         );
         process.exit(1);
       }
@@ -544,7 +552,7 @@ async function main() {
       if (!keyId) {
         console.error("❌ Key ID is required for disable command");
         console.log(
-          "Usage: yarn tsx src/scripts/webhook-api-key.ts disable <key-id>"
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts disable <key-id>",
         );
         process.exit(1);
       }
@@ -557,7 +565,7 @@ async function main() {
       if (!keyId) {
         console.error("❌ Key ID is required for enable command");
         console.log(
-          "Usage: yarn tsx src/scripts/webhook-api-key.ts enable <key-id>"
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts enable <key-id>",
         );
         process.exit(1);
       }
@@ -575,7 +583,7 @@ async function main() {
       if (!keyId) {
         console.error("❌ Key ID is required for delete command");
         console.log(
-          "Usage: yarn tsx src/scripts/webhook-api-key.ts delete <key-id>"
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts delete <key-id>",
         );
         process.exit(1);
       }
@@ -588,7 +596,7 @@ async function main() {
       if (!keyId) {
         console.error("❌ Key ID is required for show command");
         console.log(
-          "Usage: yarn tsx src/scripts/webhook-api-key.ts show <key-id>"
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts show <key-id>",
         );
         process.exit(1);
       }
@@ -601,7 +609,7 @@ async function main() {
       if (!keyId) {
         console.error("❌ Key ID is required for update command");
         console.log(
-          "Usage: yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]"
+          "Usage: yarn tsx src/scripts/webhook-api-key.ts update <key-id> [options]",
         );
         process.exit(1);
       }
@@ -635,7 +643,7 @@ async function main() {
     default:
       console.error(`❌ Unknown command: ${command}`);
       console.log(
-        "Available commands: create, disable, enable, list, delete, show, update"
+        "Available commands: create, disable, enable, list, delete, show, update",
       );
       process.exit(1);
   }

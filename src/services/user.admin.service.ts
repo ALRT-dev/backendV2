@@ -110,10 +110,13 @@ export const activateSuperAdmin = async () => {
     });
 
     console.log(
-      "---------------------------------------> Super admin account activated successfully!"
+      "---------------------------------------> Super admin account activated successfully!",
     );
   } catch (error) {
-    console.error("Error activating super admin:", error);
+    console.error(
+      "Error activating super admin:",
+      error instanceof Error ? error.message : "unknown",
+    );
     throw new HttpError(500, "Failed to activate super admin");
   }
 };
