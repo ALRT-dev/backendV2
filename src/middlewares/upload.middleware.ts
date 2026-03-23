@@ -102,7 +102,7 @@ const categoryImageUpload = multer({
   fileFilter: categoryImageFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB per file
-    files: 7,
+    files: 8,
   },
 });
 
@@ -160,7 +160,7 @@ export const handleMulterError = (
   next(error);
 };
 
-/** Use after optionalCategoryImagesUpload for category create/update routes (5MB limit, 7 files). */
+/** Use after optionalCategoryImagesUpload for category create/update routes (5MB limit, 8 files). */
 export const handleCategoryImagesMulterError = (
   error: any,
   req: Request,
@@ -175,7 +175,7 @@ export const handleCategoryImagesMulterError = (
         );
       case "LIMIT_FILE_COUNT":
         return next(
-          new HttpError(400, "Too many category images. Maximum 7 files allowed.")
+          new HttpError(400, "Too many category images. Maximum 8 files allowed.")
         );
       case "LIMIT_UNEXPECTED_FILE":
         return next(new HttpError(400, "Unexpected file field."));

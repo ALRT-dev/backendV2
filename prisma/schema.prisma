@@ -64,6 +64,7 @@ enum CategoryImageType {
   advice
   watchAndAct
   emergency
+  user
 }
 
 model HazardCategory {

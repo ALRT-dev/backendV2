@@ -9,6 +9,7 @@ const categoryImageTypeEnum = z.enum([
   CategoryImageType.advice,
   CategoryImageType.watchAndAct,
   CategoryImageType.emergency,
+  CategoryImageType.user,
 ]);
 
 const imageDimensionSchema = z.object({

@@ -12,6 +12,7 @@ export const CATEGORY_IMAGE_FIELD_TO_TYPE: Record<string, CategoryImageType> = {
   adviceImage: CategoryImageType.advice,
   watchAndActImage: CategoryImageType.watchAndAct,
   emergencyImage: CategoryImageType.emergency,
+  userImage: CategoryImageType.user,
 };
 
 export const CATEGORY_IMAGE_FIELD_NAMES = Object.keys(

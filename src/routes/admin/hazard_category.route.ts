@@ -35,8 +35,8 @@ adminHazardCategoryRouter.get("/", requireAnyAdmin, getCategoriesForAdmin);
 // Request: Either JSON or multipart/form-data.
 //   - JSON: Body = { name (required), id?, description?, color? (hex), keywords?, isFireRelated?, parentId?, imageDimensions? }.
 //   - Multipart: Form field "data" = JSON string of the same body; optional "imageDimensions" = JSON string like
-//     { "info": { "width": 100, "height": 100 }, "monitor": { "width": 200, "height": 100 }, ... } (keys: info, monitor, action, critical, advice, watchAndAct, emergency).
-//     Optional image files (one per slot, max 5MB each): infoImage, monitorImage, actionImage, criticalImage, adviceImage, watchAndActImage, emergencyImage.
+//     { "info": { "width": 100, "height": 100 }, "monitor": { "width": 200, "height": 100 }, ... } (keys: info, monitor, action, critical, advice, watchAndAct, emergency, user).
+//     Optional image files (one per slot, max 5MB each): infoImage, monitorImage, actionImage, criticalImage, adviceImage, watchAndActImage, emergencyImage, userImage.
 // Response: 201, body = created category with parent, subCategories, images[] (each: id, categoryId, imageType, s3Key, width?, height?, fileSizeBytes?, presignedUrl).
 //
 // --- PUT /:categoryId (update category) ---
