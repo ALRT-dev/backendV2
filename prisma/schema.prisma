@@ -65,6 +65,10 @@ enum CategoryImageType {
   watchAndAct
   emergency
   user
+  fireActive
+  fireBeingControlled
+  fireUnderControl
+  fireClosed
 }
 
 model HazardCategory {
@@ -80,8 +84,8 @@ model HazardCategory {
 
   hazards       Hazard[]
   images        HazardCategoryImage[]
-  parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  subCategories HazardCategory[] @relation("CategoryHierarchy")
+  parent        HazardCategory?       @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subCategories HazardCategory[]      @relation("CategoryHierarchy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -91,9 +95,9 @@ model HazardCategory {
 }
 
 model HazardCategoryImage {
-  id            String           @id @default(uuid())
+  id            String            @id @default(uuid())
   categoryId    String
-  category      HazardCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category      HazardCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   imageType     CategoryImageType
   s3Key         String
   width         Int?

@@ -10,6 +10,10 @@ const categoryImageTypeEnum = z.enum([
   CategoryImageType.watchAndAct,
   CategoryImageType.emergency,
   CategoryImageType.user,
+  CategoryImageType.fireActive,
+  CategoryImageType.fireBeingControlled,
+  CategoryImageType.fireUnderControl,
+  CategoryImageType.fireClosed,
 ]);
 
 const imageDimensionSchema = z.object({

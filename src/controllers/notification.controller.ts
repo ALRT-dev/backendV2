@@ -82,8 +82,6 @@ export const getNotificationsFeed = async (
     const cacheKey = await buildHazardListCacheKey(filterParams);
     const cached = await getCachedHazardList<Hazard>(cacheKey);
 
-    console.log("I'm loading from cache notification: ", cached?.length);
-
     let hazards: Hazard[];
     if (cached) {
       hazards = cached;
