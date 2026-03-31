@@ -22,7 +22,7 @@ const imageDimensionSchema = z.object({
 });
 
 export const imageDimensionsSchema = z
-  .record(categoryImageTypeEnum, imageDimensionSchema)
+  .partialRecord(categoryImageTypeEnum, imageDimensionSchema)
   .optional();
 
 export type ImageDimensions = z.infer<typeof imageDimensionsSchema>;

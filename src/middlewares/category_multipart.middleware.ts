@@ -10,10 +10,22 @@ import { HttpError } from "../models/http_error.js";
 export const normalizeCategoryMultipartBody = (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const body = req.body as Record<string, unknown>;
+    const parseImageDimensions = (input: unknown) => {
+      if (typeof input !== "string" || !input) return undefined;
+      try {
+        return JSON.parse(input);
+      } catch {
+        throw new HttpError(
+          400,
+          "Invalid JSON in form field 'imageDimensions'",
+        );
+      }
+    };
+
     if (typeof body.data === "string") {
       let parsed: Record<string, unknown>;
       try {
@@ -21,17 +33,19 @@ export const normalizeCategoryMultipartBody = (
       } catch {
         throw new HttpError(400, "Invalid JSON in form field 'data'");
       }
-      if (typeof body.imageDimensions === "string" && body.imageDimensions) {
-        try {
-          parsed.imageDimensions = JSON.parse(body.imageDimensions);
-        } catch {
-          throw new HttpError(
-            400,
-            "Invalid JSON in form field 'imageDimensions'"
-          );
-        }
+      const parsedImageDimensions = parseImageDimensions(body.imageDimensions);
+      if (parsedImageDimensions !== undefined) {
+        parsed.imageDimensions = parsedImageDimensions;
       }
       req.body = parsed;
+    } else {
+      const parsedImageDimensions = parseImageDimensions(body.imageDimensions);
+      if (parsedImageDimensions !== undefined) {
+        req.body = {
+          ...body,
+          imageDimensions: parsedImageDimensions,
+        };
+      }
     }
     next();
   } catch (error) {
