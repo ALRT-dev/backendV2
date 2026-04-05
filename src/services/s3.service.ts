@@ -11,8 +11,8 @@ import type { MediaUploadResult } from "../models/media_upload_result_interface.
 import { config } from "../utils/config.js";
 import type { Hazard, HazardMedia } from "@prisma/client";
 
-const BUCKET_NAME = config.aws.s3BucketName;
-const CLOUDFRONT_DOMAIN = config.aws.cloudfrontDomain;
+const BUCKET_NAME = config.aws.s3.bucketName;
+const CLOUDFRONT_DOMAIN = config.aws.s3.cloudfrontDomain;
 
 /**
  * Upload a file to S3 and return the public URL
@@ -44,7 +44,7 @@ export const uploadFileToS3 = async (
     const url =
       CLOUDFRONT_DOMAIN.length > 0
         ? `https://${CLOUDFRONT_DOMAIN}/${key}`
-        : `https://${BUCKET_NAME}.s3.${config.aws.region}.amazonaws.com/${key}`;
+        : `https://${BUCKET_NAME}.s3.${config.aws.s3.region}.amazonaws.com/${key}`;
 
     return {
       key,

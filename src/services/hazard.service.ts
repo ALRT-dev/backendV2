@@ -24,7 +24,8 @@ import {
 } from "../utils/hazard.util.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
-import { executePrompt } from "./open-ai.service.js";
+import { executePrompt } from "./ai.service.js";
+import { config } from "../utils/config.js";
 import { MainCategoryId } from "./hazard_category.service.js";
 import { ExternalSourceId } from "./ingestion.service.js";
 
@@ -431,16 +432,11 @@ export const reviewHazard = async ({
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: promptContent,
     userPromptContent: userContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI review failed: Empty response from AI");
-  }
 
   try {
     const aiReview = JSON.parse(content) as {
@@ -511,16 +507,11 @@ export const summarizeHazard = async ({
   - category: ${category.name}
   - agency: ${source.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: systemPromptContent,
     userPromptContent: userPromptContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI summarization failed: Empty response from AI");
-  }
 
   try {
     const aiSummary = JSON.parse(content) as AISummaryResponse;
@@ -693,19 +684,11 @@ export const getSuggestedCategory = async ({
   Description: ${description}
   ${currentCategoryId ? `Current Category: ${currentCategoryId}` : ""}`;
 
-  const response = await executePrompt({
-    model: "gpt-5-nano",
+  const content = await executePrompt({
+    model: config.aws.bedrock.fallbackModelId,
     systemPromptContent,
     userPromptContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(
-      500,
-      "AI category suggestion failed: Empty response from AI",
-    );
-  }
 
   try {
     const aiResponse = JSON.parse(content) as {
