@@ -113,8 +113,8 @@ export const executePrompt = ({
   systemPromptContent: string;
   userPromptContent: string;
 }): Promise<string> => {
-  // const modelId = model || config.aws.bedrock.fallbackModelId;
-  const modelId = config.aws.bedrock.fallbackModelId;
+  const modelId = model || config.aws.bedrock.fallbackModelId;
+  // const modelId = config.aws.bedrock.fallbackModelId;
 
   return retryWithBackoff(async () => {
     const command = new ConverseCommand({
