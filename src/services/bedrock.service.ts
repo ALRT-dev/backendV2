@@ -10,15 +10,35 @@ const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Claude sometimes wraps JSON responses in markdown code fences (```json ... ```).
- * Strip them so callers always receive plain text/JSON.
+ * Claude sometimes wraps JSON in markdown code fences and/or appends explanation
+ * text after the closing brace. This extracts only the first complete JSON
+ * object or array from the response so JSON.parse always succeeds.
  */
-const stripMarkdownCodeFences = (text: string): string => {
-  return text
+const extractJSON = (text: string): string => {
+  // Strip opening code fence if present
+  const withoutFence = text
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "")
     .trim();
+
+  // Find the first { or [ and the matching closing } or ]
+  const firstBrace = withoutFence.indexOf("{");
+  const firstBracket = withoutFence.indexOf("[");
+
+  const useObject =
+    firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket);
+
+  if (useObject) {
+    const lastBrace = withoutFence.lastIndexOf("}");
+    if (lastBrace !== -1) return withoutFence.slice(firstBrace, lastBrace + 1);
+  } else if (firstBracket !== -1) {
+    const lastBracket = withoutFence.lastIndexOf("]");
+    if (lastBracket !== -1)
+      return withoutFence.slice(firstBracket, lastBracket + 1);
+  }
+
+  // Fallback: return as-is (will surface a clear parse error)
+  return withoutFence;
 };
 
 /**
@@ -139,7 +159,7 @@ export const executePrompt = ({
       throw new Error("Bedrock returned an empty response");
     }
 
-    return stripMarkdownCodeFences(text);
+    return extractJSON(text);
   });
 };
 
