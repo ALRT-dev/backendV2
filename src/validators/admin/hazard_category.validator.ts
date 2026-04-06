@@ -10,6 +10,10 @@ const categoryImageTypeEnum = z.enum([
   CategoryImageType.watchAndAct,
   CategoryImageType.emergency,
   CategoryImageType.user,
+  CategoryImageType.fireActive,
+  CategoryImageType.fireBeingControlled,
+  CategoryImageType.fireUnderControl,
+  CategoryImageType.fireClosed,
 ]);
 
 const imageDimensionSchema = z.object({
@@ -18,7 +22,7 @@ const imageDimensionSchema = z.object({
 });
 
 export const imageDimensionsSchema = z
-  .record(categoryImageTypeEnum, imageDimensionSchema)
+  .partialRecord(categoryImageTypeEnum, imageDimensionSchema)
   .optional();
 
 export type ImageDimensions = z.infer<typeof imageDimensionsSchema>;

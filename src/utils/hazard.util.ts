@@ -427,7 +427,12 @@ export const buildHazardInclude = (
   return {
     category: {
       include: {
-        parent: true, // Include parent category for hierarchical queries
+        images: true,
+        parent: {
+          include: {
+            images: true,
+          },
+        },
       },
     },
     source: {
