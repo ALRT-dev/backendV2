@@ -125,3 +125,20 @@ export const executePrompt = ({
     });
   });
 };
+
+/**
+ * Minimal completion to verify the model ID is accepted by the OpenAI API.
+ * Does not use JSON response mode so more models qualify.
+ */
+export const validateModelId = (modelId: string): Promise<void> => {
+  return retryWithBackoff(async () => {
+    await openai.chat.completions.create({
+      model: modelId,
+      messages: [
+        { role: "system", content: "Reply with the single letter A." },
+        { role: "user", content: "A" },
+      ],
+      max_tokens: 16,
+    });
+  });
+};

@@ -1,6 +1,32 @@
+import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
 import * as bedrock from "./bedrock.service.js";
 import * as openai from "./open-ai.service.js";
+
+const isBedrockInvalidModelError = (err: unknown): boolean => {
+  const e = err as { name?: string };
+  return (
+    e?.name === "ResourceNotFoundException" || e?.name === "ValidationException"
+  );
+};
+
+const isOpenAiInvalidModelError = (err: unknown): boolean => {
+  const e = err as {
+    status?: number;
+    code?: string;
+    param?: string;
+    error?: { code?: string; param?: string };
+  };
+  if (!e) return false;
+  if (e.status === 404) return true;
+  if (e.code === "model_not_found" || e.error?.code === "model_not_found") {
+    return true;
+  }
+  if (e.status === 400 && (e.param === "model" || e.error?.param === "model")) {
+    return true;
+  }
+  return false;
+};
 
 type ExecutePromptParams = {
   model?: string;
@@ -61,4 +87,39 @@ export const processBatchWithRateLimit = <T, R>(
     batchSize,
     delayBetweenBatches,
   );
+};
+
+/**
+ * Verifies the model ID against the configured AI provider (Bedrock or OpenAI).
+ * Throws HttpError 400 when the provider rejects the model; other errors propagate.
+ */
+export const validateModelId = async (modelId: string): Promise<void> => {
+  const id = modelId.trim();
+  if (!id) {
+    throw new HttpError(400, "Model ID is required");
+  }
+
+  const provider = config.ai.provider;
+
+  try {
+    if (provider === "openai") {
+      await openai.validateModelId(id);
+    } else {
+      await bedrock.validateModelId(id);
+    }
+  } catch (err) {
+    if (provider === "openai" && isOpenAiInvalidModelError(err)) {
+      throw new HttpError(
+        400,
+        `"${id}" is an invalid or unavailable OpenAI model ID`,
+      );
+    }
+    if (provider !== "openai" && isBedrockInvalidModelError(err)) {
+      throw new HttpError(
+        400,
+        `"${id}" is an invalid or unavailable Bedrock model ID`,
+      );
+    }
+    throw err;
+  }
 };

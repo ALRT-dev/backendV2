@@ -142,3 +142,28 @@ export const executePrompt = ({
     return stripMarkdownCodeFences(text);
   });
 };
+
+/**
+ * Minimal Converse call to verify the model ID is accepted by Bedrock.
+ * Success means the runtime recognized the model (or profile); empty output is allowed.
+ */
+export const validateModelId = (modelId: string): Promise<void> => {
+  return retryWithBackoff(async () => {
+    const command = new ConverseCommand({
+      modelId,
+      system: [{ text: "Reply with the single letter A." }],
+      messages: [
+        {
+          role: "user",
+          content: [{ text: "A" }],
+        },
+      ],
+      inferenceConfig: {
+        maxTokens: 16,
+        temperature: 0,
+      },
+    });
+
+    await bedrockClient.send(command);
+  });
+};
