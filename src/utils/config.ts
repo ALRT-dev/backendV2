@@ -97,8 +97,8 @@ export const config = {
     },
     bedrock: {
       region: getRequiredEnv("AWS_BEDROCK_REGION"),
-      accessKeyId: getRequiredEnv("AWS_BEDROCK_ACCESS_KEY_ID"),
-      secretAccessKey: getRequiredEnv("AWS_BEDROCK_SECRET_ACCESS_KEY"),
+      accessKeyId: getOptionalEnv("AWS_BEDROCK_ACCESS_KEY_ID", ""),
+      secretAccessKey: getOptionalEnv("AWS_BEDROCK_SECRET_ACCESS_KEY", ""),
       // Must be a cross-region inference profile ID (global./us./eu. prefix).
       // Bare model IDs don't support on-demand throughput for newer Claude models.
       // global. prefix works from any region including ap-southeast-2.
