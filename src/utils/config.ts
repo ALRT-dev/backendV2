@@ -86,13 +86,32 @@ export const config = {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
   },
 
-  // AWS S3
+  // AWS
   aws: {
-    region: getRequiredEnv("AWS_REGION"),
-    accessKeyId: getRequiredEnv("AWS_ACCESS_KEY_ID"),
-    secretAccessKey: getRequiredEnv("AWS_SECRET_ACCESS_KEY"),
-    s3BucketName: getRequiredEnv("AWS_S3_BUCKET_NAME"),
-    cloudfrontDomain: getOptionalEnv("AWS_CLOUDFRONT_DOMAIN", ""),
+    s3: {
+      region: getRequiredEnv("AWS_S3_REGION"),
+      accessKeyId: getRequiredEnv("AWS_S3_ACCESS_KEY_ID"),
+      secretAccessKey: getRequiredEnv("AWS_S3_SECRET_ACCESS_KEY"),
+      bucketName: getRequiredEnv("AWS_S3_BUCKET_NAME"),
+      cloudfrontDomain: getOptionalEnv("AWS_CLOUDFRONT_DOMAIN", ""),
+    },
+    bedrock: {
+      region: getRequiredEnv("AWS_BEDROCK_REGION"),
+      accessKeyId: getOptionalEnv("AWS_BEDROCK_ACCESS_KEY_ID", ""),
+      secretAccessKey: getOptionalEnv("AWS_BEDROCK_SECRET_ACCESS_KEY", ""),
+      // Must be a cross-region inference profile ID (global./us./eu. prefix).
+      // Bare model IDs don't support on-demand throughput for newer Claude models.
+      // global. prefix works from any region including ap-southeast-2.
+      fallbackModelId: getOptionalEnv(
+        "AWS_BEDROCK_FALLBACK_MODEL_ID",
+        "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      ),
+    },
+  },
+
+  // AI provider selection (bedrock or openai)
+  ai: {
+    provider: getOptionalEnv("AI_PROVIDER", "bedrock"),
   },
 
   // NSW Transport API
@@ -152,7 +171,10 @@ export const config = {
     ),
     /** Per authenticated user for hazard reads (list/detail/subscription GETs) */
     hazardReadWindowMs: parseInt(
-      getOptionalEnv("HAZARD_READ_RATE_LIMIT_WINDOW_MS", String(15 * 60 * 1000)),
+      getOptionalEnv(
+        "HAZARD_READ_RATE_LIMIT_WINDOW_MS",
+        String(15 * 60 * 1000),
+      ),
       10,
     ),
     hazardReadMax: parseInt(

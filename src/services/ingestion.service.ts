@@ -47,7 +47,7 @@ import {
 } from "./hazard_category.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import type { HazardDataWithRelations } from "../models/hazard_data_with_relations_interface.js";
-import { executePrompt, processBatchWithRateLimit } from "./open-ai.service.js";
+import { executePrompt, processBatchWithRateLimit } from "./ai.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
@@ -1047,16 +1047,11 @@ export const getLocationsFromText = async (text: string): Promise<string[]> => {
 
   const userContent = `Extract locations from this text: "${text}"`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: promptContent,
     userPromptContent: userContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI location extraction failed: Empty response");
-  }
 
   try {
     const aiResponse = JSON.parse(content) as { locations: string[] };
