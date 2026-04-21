@@ -1,9 +1,11 @@
 FROM node:24
 
-# Remove ImageMagick and related libraries to address CVE-2023-34152.
-# ImageMagick is not used by this application; `|| true` keeps the build
-# resilient if the packages are absent in future base-image versions.
 RUN apt-get update \
+  # Upgrade openssl to address CVE-2025-15467
+  && apt-get upgrade -y openssl \
+  # Remove ImageMagick and related libraries to address CVE-2023-34152
+  # ImageMagick is not used by this application; `|| true` keeps the build
+  # resilient if the packages are absent in future base-image versions.
   && apt-get purge -y --auto-remove \
   'imagemagick*' \
   'libmagick*' \
