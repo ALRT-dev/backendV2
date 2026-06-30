@@ -9,6 +9,7 @@ import onboardingRouter from "./onboarding.route.js";
 import adminRouter from "./admin/index.js";
 import webhookRouter from "./webhook.route.js";
 import supportRouter from "./support.route.js";
+import mapsRouter from "./maps.route.js";
 
 export {
   authRouter,
@@ -22,4 +23,5 @@ export {
   adminRouter,
   webhookRouter,
   supportRouter,
+  mapsRouter,
 };
