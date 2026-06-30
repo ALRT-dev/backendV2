@@ -1,9 +1,14 @@
 import dotenv from "dotenv";
 import path from "path";
+import { loadSecretsFromAgent } from "./secrets.js";
 
 // Load environment file dynamically
 const envFile = `.env.${process.env.NODE_ENV || "dev"}`;
 dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+// In deployed environments (Lambda/ECS/EKS/EC2) secrets such as GOOGLE_MAPS_API_KEY are
+// sourced from the AWS Secrets Manager Agent. Locally this is a no-op and .env is used.
+loadSecretsFromAgent();
 
 // Helper function to get required environment variable
 const getRequiredEnv = (key: string): string => {
