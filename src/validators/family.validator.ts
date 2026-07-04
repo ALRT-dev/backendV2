@@ -19,11 +19,17 @@ export const createFamilyCircleSchema = z.object({
 
 export type CreateFamilyCircleInput = z.infer<typeof createFamilyCircleSchema>;
 
+const hexColor = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, "Must be a hex colour like #5B5BD6");
+
 export const updateFamilyCircleSchema = z.object({
   name: z
     .string()
     .min(1, "Circle name is required")
-    .max(50, "Circle name must be at most 50 characters"),
+    .max(50, "Circle name must be at most 50 characters")
+    .optional(),
+  themeColor: hexColor.nullable().optional(),
 });
 
 export type UpdateFamilyCircleInput = z.infer<typeof updateFamilyCircleSchema>;
@@ -46,6 +52,7 @@ export const updateFamilyMemberSchema = z.object({
   sharingLevel: z
     .enum(["precise", "approximate", "alertsOnly", "off"])
     .optional(),
+  colorHex: hexColor.nullable().optional(),
 });
 
 export type UpdateFamilyMemberInput = z.infer<typeof updateFamilyMemberSchema>;

@@ -87,7 +87,8 @@ export const serializeMember = (
     id: member.id,
     userId: member.userId,
     name: member.nickname || member.user.name || "Family member",
-    profilePictureUrl: member.user.profilePictureUrl,
+    profilePictureUrl: member.photoUrl || member.user.profilePictureUrl,
+    colorHex: member.colorHex,
     role: member.role,
     sharingLevel: member.sharingLevel,
     lastCheckInAt: member.lastCheckInAt,
@@ -258,14 +259,20 @@ export const getCircleForUser = async (userId: string) => {
   };
 };
 
-export const updateCircle = async (userId: string, name: string) => {
+export const updateCircle = async (
+  userId: string,
+  input: { name?: string | undefined; themeColor?: string | null | undefined },
+) => {
   const membership = await requireMembership(userId);
   if (membership.role !== "owner") {
-    throw new HttpError(403, "Only the circle owner can rename the circle");
+    throw new HttpError(403, "Only the circle owner can edit the circle");
   }
   const circle = await prisma.familyCircle.update({
     where: { id: membership.circleId },
-    data: { name },
+    data: {
+      ...(input.name !== undefined && { name: input.name }),
+      ...(input.themeColor !== undefined && { themeColor: input.themeColor }),
+    },
   });
   await notifyCircle({
     circleId: circle.id,
@@ -349,12 +356,14 @@ export const updateOwnMember = async (
   input: {
     nickname?: string | undefined;
     sharingLevel?: FamilySharingLevel | undefined;
+    colorHex?: string | null | undefined;
   },
 ) => {
   const membership = await requireMembership(userId);
 
   const data: Record<string, unknown> = {};
   if (input.nickname !== undefined) data.nickname = input.nickname;
+  if (input.colorHex !== undefined) data.colorHex = input.colorHex;
   if (input.sharingLevel !== undefined) {
     data.sharingLevel = input.sharingLevel;
     // Turning sharing off clears the stored live location immediately.
@@ -381,6 +390,28 @@ export const updateOwnMember = async (
   });
 
   return updated;
+};
+
+/** Stores an uploaded circle photo for the calling member. */
+export const updateOwnMemberPhoto = async (
+  userId: string,
+  photoUrl: string,
+) => {
+  const membership = await requireMembership(userId);
+  const previous = membership.photoUrl;
+
+  const updated = await prisma.familyMember.update({
+    where: { id: membership.id },
+    data: { photoUrl },
+  });
+
+  await notifyCircle({
+    circleId: membership.circleId,
+    socketEvent: SocketEvent.familyCircleUpdate,
+    socketData: { circleId: membership.circleId },
+  });
+
+  return { updated, previousPhotoUrl: previous };
 };
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,11 @@ import type {
 } from "../validators/family.validator.js";
 import * as familyService from "../services/family.service.js";
 import {
+  deleteFileFromS3,
+  extractS3KeyFromUrl,
+  uploadFileToS3,
+} from "../services/s3.service.js";
+import {
   createLocationRequest,
   getPendingLocationRequests,
   respondToLocationRequest,
@@ -72,8 +77,8 @@ export const updateCircleController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const { name }: UpdateFamilyCircleInput = req.body;
-    const circle = await familyService.updateCircle(userId, name);
+    const input: UpdateFamilyCircleInput = req.body;
+    const circle = await familyService.updateCircle(userId, input);
     res.status(200).json(circle);
   } catch (error) {
     next(error);
@@ -134,6 +139,41 @@ export const updateOwnMemberController = async (
     const input: UpdateFamilyMemberInput = req.body;
     const member = await familyService.updateOwnMember(userId, input);
     res.status(200).json(member);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** PUT /api/family/members/me/photo — circle-specific member photo. */
+export const updateOwnMemberPhotoController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+
+    const file = req.file;
+    if (!file) throw new HttpError(400, "Photo file is required");
+    if (!file.mimetype.startsWith("image/")) {
+      throw new HttpError(400, "Photo must be an image file");
+    }
+
+    const uploadResult = await uploadFileToS3(file, "family-member-photos");
+    const { updated, previousPhotoUrl } =
+      await familyService.updateOwnMemberPhoto(userId, uploadResult.url);
+
+    // Best-effort cleanup of the replaced photo.
+    if (previousPhotoUrl) {
+      try {
+        const oldKey = extractS3KeyFromUrl(previousPhotoUrl);
+        if (oldKey) await deleteFileFromS3(oldKey);
+      } catch (error) {
+        console.error("Error deleting old family member photo:", error);
+      }
+    }
+
+    res.status(200).json(updated);
   } catch (error) {
     next(error);
   }

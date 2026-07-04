@@ -591,6 +591,8 @@ model FamilyCircle {
   name String
   plan FamilyPlan @default(plus)
 
+  themeColor String? // Hex accent colour chosen by the owner
+
   maxMembers Int @default(10)
 
   createdById String
@@ -613,6 +615,8 @@ model FamilyMember {
   role         FamilyRole         @default(adult)
   sharingLevel FamilySharingLevel @default(precise)
   nickname     String? // Display name within the circle (falls back to user name)
+  photoUrl     String? // Circle-specific photo (falls back to profile picture)
+  colorHex     String? // Member accent colour shown as the avatar ring
 
   // Last SHARED location snapshot. ALRT never live-tracks: a snapshot is
   // written only when the member checks in, answers a location request, or

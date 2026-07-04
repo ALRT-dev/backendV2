@@ -1,4 +1,8 @@
 import { Router } from "express";
+import {
+  handleMulterError,
+  uploadProfilePicture,
+} from "../middlewares/upload.middleware.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
@@ -24,6 +28,7 @@ import {
   leaveCircleController,
   removeMemberController,
   updateOwnMemberController,
+  updateOwnMemberPhotoController,
   createInviteController,
   listInvitesController,
   revokeInviteController,
@@ -61,6 +66,12 @@ familyRouter.post("/circle/leave", leaveCircleController);
 // Members
 familyRouter.delete("/members/:memberId", removeMemberController);
 familyRouter.put("/members/me", validate(updateFamilyMemberSchema), updateOwnMemberController);
+familyRouter.put(
+  "/members/me/photo",
+  uploadProfilePicture,
+  handleMulterError,
+  updateOwnMemberPhotoController,
+);
 
 // Invites
 familyRouter.post("/invites", createInviteController);
