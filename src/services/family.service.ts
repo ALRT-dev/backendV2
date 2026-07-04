@@ -12,6 +12,7 @@ import { SocketEvent } from "../models/socket_event_types.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventToUsers } from "./socket.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
+import { touchActivityStreak } from "./xp_ledger.service.js";
 
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 const DEFAULT_MAX_MEMBERS = 10;
@@ -544,6 +545,12 @@ export const createCheckIn = async (
     });
     return created;
   });
+
+  // Checking in counts as daily activity for the streak (no XP awarded —
+  // safety actions never earn points, streaks only gate the report bonus).
+  touchActivityStreak(userId).catch((error) =>
+    console.error("Streak touch failed on check-in:", error),
+  );
 
   const memberName =
     checkIn.member.nickname || checkIn.member.user.name || "A family member";

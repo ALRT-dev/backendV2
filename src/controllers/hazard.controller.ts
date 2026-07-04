@@ -25,7 +25,7 @@ import {
 } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
-import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
+import { handleReportReviewOutcome } from "../services/xp_ledger.service.js";
 import { calculateUserReportsStatus } from "../services/user.service.js";
 import {
   calculateConfidenceScore,
@@ -557,19 +557,10 @@ export const createHazard = async (
 
     await invalidateHazardCaches();
 
-    // Award XP points to the user based on AI review <----------------------------------------------------------------------------
+    // Scoring v2: ledger-based award for the reviewed report (never throws)
     let xpResult = null;
     if (userId && hazard.reviewStatus !== HazardReviewStatus.pending) {
-      try {
-        xpResult = await awardXpPointsForHazard(userId, hazard.id, {
-          confidence: hazard.aiConfidence || ("medium" as any),
-          severity: hazard.severity,
-          reviewStatus: hazard.reviewStatus,
-        });
-      } catch (error) {
-        console.error("Error awarding XP points:", error);
-        // Don't fail the entire request if XP calculation fails
-      }
+      xpResult = await handleReportReviewOutcome(hazard);
     }
 
     if (reviewStatus === HazardReviewStatus.accepted) {

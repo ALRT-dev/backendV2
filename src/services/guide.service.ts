@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { sendSocketEventToUsers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import { recordGuideCompletion } from "./xp_ledger.service.js";
 
 /**
  * Lists all safety guide topics (sorted by sortOrder) with their published
@@ -187,6 +188,15 @@ export const completeGuide = async (userId: string, slugOrId: string) => {
       reliabilityScore: updatedUser.reliabilityScore,
     },
   });
+
+  // Journal into the XP ledger + streak + weekly quest (non-blocking).
+  recordGuideCompletion({
+    userId,
+    guideId: guide.id,
+    xpAwarded: guide.xpReward,
+  }).catch((error) =>
+    console.error("Guide completion ledger hook failed:", error),
+  );
 
   return {
     progress,
