@@ -46,6 +46,8 @@ model User {
   hazardViews              HazardView[]
   hazardMedias             HazardMedia[]
   pushNotificationSettings UserPushNotificationSetting[]
+  familyMemberships        FamilyMember[]
+  guideProgress            UserGuideProgress[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -79,8 +81,8 @@ model HazardCategory {
 
   hazards       Hazard[]
   images        HazardCategoryImage[]
-  parent        HazardCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  subCategories HazardCategory[] @relation("CategoryHierarchy")
+  parent        HazardCategory?       @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  subCategories HazardCategory[]      @relation("CategoryHierarchy")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -90,9 +92,9 @@ model HazardCategory {
 }
 
 model HazardCategoryImage {
-  id            String           @id @default(uuid())
+  id            String            @id @default(uuid())
   categoryId    String
-  category      HazardCategory   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category      HazardCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   imageType     CategoryImageType
   s3Key         String
   width         Int?
@@ -512,4 +514,386 @@ model HazardSourceLicense {
   hazardSources HazardSource[]
 
   @@index([badgeText])
+}
+
+// ============================================================================
+// FAMILY MODE
+// ============================================================================
+
+// Plan of a family circle. Billing is not launched yet: every circle defaults
+// to `plus` so all features are unlocked. When ALRT+ subscriptions ship, new
+// circles default to `free` and the plan is set by the entitlement system.
+enum FamilyPlan {
+  free
+  plus
+}
+
+enum FamilyRole {
+  owner
+  adult
+  child
+}
+
+// How much of a member's location the rest of the circle can see.
+// Every member controls their own level and can change it at any time.
+enum FamilySharingLevel {
+  precise // live pin with street-level accuracy
+  approximate // suburb-level label only, no precise pin
+  alertsOnly // no location shown, but hazard-proximity alerts still fire
+  off // nothing shared, no proximity matching
+}
+
+enum FamilyPlaceIcon {
+  home
+  work
+  school
+  heart
+  other
+}
+
+enum FamilyPlaceEventType {
+  arrived
+  left
+}
+
+enum FamilyCheckInStatus {
+  safe
+  needsHelp
+}
+
+enum FamilySosStatus {
+  active
+  resolved
+  cancelled
+}
+
+enum FamilySosResponseType {
+  seen
+  onMyWay
+  called
+}
+
+model FamilyCircle {
+  id   String     @id @default(uuid())
+  name String
+  plan FamilyPlan @default(plus)
+
+  maxMembers Int @default(10)
+
+  createdById String
+
+  members         FamilyMember[]
+  invites         FamilyInvite[]
+  places          FamilySavedPlace[]
+  sosEvents       FamilySosEvent[]
+  checkInRequests FamilyCheckInRequest[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model FamilyMember {
+  id       String @id @default(uuid())
+  circleId String
+  userId   String
+
+  role         FamilyRole         @default(adult)
+  sharingLevel FamilySharingLevel @default(precise)
+  nickname     String? // Display name within the circle (falls back to user name)
+
+  // Latest live location snapshot (denormalized for fast circle reads).
+  // Only populated while sharingLevel is precise/approximate.
+  latitude          Float?
+  longitude         Float?
+  locationLabel     String? // Reverse-geocoded label, e.g. "Newcastle CBD"
+  locationUpdatedAt DateTime?
+  batteryLevel      Int?
+  isMoving          Boolean   @default(false)
+
+  // Presence at a saved place (for arrival/departure detection)
+  currentPlaceId String?
+  currentPlace   FamilySavedPlace? @relation("PlacePresence", fields: [currentPlaceId], references: [id], onDelete: SetNull)
+
+  lastCheckInAt DateTime?
+
+  circle FamilyCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  checkIns        FamilyCheckIn[]
+  locationPings   FamilyLocationPing[]
+  placeEvents     FamilyPlaceEvent[]
+  sosEvents       FamilySosEvent[]
+  sosResponses    FamilySosResponse[]
+  hazardAlerts    FamilyMemberHazardAlert[]
+  checkInRequests FamilyCheckInRequest[]
+  placePrefsAbout FamilyPlaceNotificationPref[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([circleId, userId])
+  @@index([userId])
+  @@index([circleId])
+  @@index([latitude, longitude]) // Hazard-proximity matching over live locations
+}
+
+model FamilyInvite {
+  id       String @id @default(uuid())
+  circleId String
+  code     String @unique // Short human-shareable code, e.g. "ALRT-7F3K2"
+
+  createdById String // FamilyMember id of the inviter
+
+  maxUses   Int       @default(10)
+  useCount  Int       @default(0)
+  isRevoked Boolean   @default(false)
+  expiresAt DateTime?
+
+  circle FamilyCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([circleId])
+}
+
+// Rolling history of live-location pings. The latest snapshot lives on
+// FamilyMember; this table keeps a short trail and is pruned by a daily job.
+model FamilyLocationPing {
+  id       String @id @default(uuid())
+  memberId String
+
+  latitude     Float
+  longitude    Float
+  accuracy     Float? // metres
+  speed        Float? // m/s
+  heading      Float? // degrees
+  batteryLevel Int?
+  isMoving     Boolean @default(false)
+
+  member FamilyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([memberId, createdAt])
+}
+
+model FamilyCheckIn {
+  id       String @id @default(uuid())
+  circleId String
+  memberId String
+
+  status  FamilyCheckInStatus @default(safe)
+  message String?
+
+  latitude  Float?
+  longitude Float?
+
+  // Optional context: the request or hazard this check-in responds to
+  requestId String?
+  hazardId  String?
+
+  member  FamilyMember          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  request FamilyCheckInRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([circleId, createdAt])
+  @@index([memberId, createdAt])
+}
+
+model FamilyCheckInRequest {
+  id            String  @id @default(uuid())
+  circleId      String
+  requestedById String // FamilyMember id
+  hazardId      String? // Set when the request was prompted by a specific hazard
+  message       String?
+
+  circle      FamilyCircle    @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  requestedBy FamilyMember    @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  checkIns    FamilyCheckIn[]
+
+  createdAt DateTime @default(now())
+
+  @@index([circleId, createdAt])
+}
+
+model FamilySavedPlace {
+  id       String @id @default(uuid())
+  circleId String
+
+  name         String
+  icon         FamilyPlaceIcon @default(other)
+  latitude     Float
+  longitude    Float
+  radiusMeters Int             @default(300)
+  address      String?
+
+  createdById String // FamilyMember id
+
+  circle            FamilyCircle                  @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  notificationPrefs FamilyPlaceNotificationPref[]
+  events            FamilyPlaceEvent[]
+  membersPresent    FamilyMember[]                @relation("PlacePresence")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([circleId])
+}
+
+// Circle-wide toggles: "notify the family when <member> arrives/leaves <place>"
+model FamilyPlaceNotificationPref {
+  id              String @id @default(uuid())
+  placeId         String
+  subjectMemberId String // The member whose movement triggers the notification
+
+  notifyArrivals   Boolean @default(true)
+  notifyDepartures Boolean @default(true)
+
+  place         FamilySavedPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  subjectMember FamilyMember     @relation(fields: [subjectMemberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([placeId, subjectMemberId])
+}
+
+model FamilyPlaceEvent {
+  id       String               @id @default(uuid())
+  placeId  String
+  memberId String
+  type     FamilyPlaceEventType
+
+  place  FamilySavedPlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  member FamilyMember     @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([placeId, createdAt])
+  @@index([memberId, createdAt])
+}
+
+model FamilySosEvent {
+  id       String          @id @default(uuid())
+  circleId String
+  memberId String // The member who triggered the SOS
+  status   FamilySosStatus @default(active)
+
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?
+
+  resolvedAt DateTime?
+
+  circle    FamilyCircle        @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  member    FamilyMember        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  responses FamilySosResponse[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([circleId, status])
+  @@index([memberId, createdAt])
+}
+
+model FamilySosResponse {
+  id         String                @id @default(uuid())
+  sosEventId String
+  memberId   String
+  type       FamilySosResponseType
+
+  sosEvent FamilySosEvent @relation(fields: [sosEventId], references: [id], onDelete: Cascade)
+  member   FamilyMember   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([sosEventId, memberId, type])
+  @@index([sosEventId])
+}
+
+// Tracks which hazards a family member has already been flagged near, so the
+// circle is notified once per member+hazard rather than on every re-match.
+model FamilyMemberHazardAlert {
+  id         String @id @default(uuid())
+  memberId   String
+  hazardId   String
+  distanceKm Float
+
+  member FamilyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  notifiedAt DateTime @default(now())
+
+  @@unique([memberId, hazardId])
+  @@index([hazardId])
+}
+
+// ============================================================================
+// LEARN HUB (safety guides)
+// ============================================================================
+
+model SafetyGuideTopic {
+  id          String  @id @default(uuid())
+  slug        String  @unique // e.g. "bushfire-heat"
+  name        String // e.g. "Bushfire & Heat"
+  description String?
+  icon        String? // Icon key used by the app, e.g. "flame"
+  color       String? // Hex accent color
+  sortOrder   Int     @default(0)
+
+  guides SafetyGuide[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SafetyGuide {
+  id      String  @id @default(uuid())
+  topicId String
+  slug    String  @unique // e.g. "bushfire-being-prepared"
+  title   String // e.g. "Bushfire: being prepared"
+  summary String?
+
+  // Guide body: { before: [{title, body}], during: [...], after: [...] }.
+  // Steps use suggestive wording ("The RFS suggests...") — the app shares
+  // safety information and never issues emergency instructions.
+  sections Json
+
+  sourceName String? // e.g. "NSW RFS"
+  sourceUrl  String?
+  sourceNote String? // Attribution paragraph shown in the SOURCE box
+
+  xpReward Int @default(10)
+
+  // Hazard category ids this guide applies to — used for the
+  // "What to do in a bushfire" strip on matching live alerts.
+  categoryIds String[] @default([])
+
+  sortOrder   Int     @default(0)
+  isPublished Boolean @default(true)
+
+  topic    SafetyGuideTopic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  progress UserGuideProgress[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([topicId, sortOrder])
+}
+
+model UserGuideProgress {
+  id      String @id @default(uuid())
+  userId  String
+  guideId String
+
+  xpAwarded Int @default(0)
+
+  user  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guide SafetyGuide @relation(fields: [guideId], references: [id], onDelete: Cascade)
+
+  completedAt DateTime @default(now())
+
+  @@unique([userId, guideId])
+  @@index([userId])
 }
