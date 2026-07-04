@@ -93,11 +93,18 @@ export const serializeMember = (
     createdAt: member.createdAt,
   };
 
+  // Snapshots expire: past their TTL they are hidden from everyone,
+  // including the member themself (the app re-shares on demand).
+  const snapshotIsLive =
+    member.locationExpiresAt != null && member.locationExpiresAt > new Date();
+
   const shareLocation =
-    forSelf ||
-    member.sharingLevel === "precise" ||
-    member.sharingLevel === "approximate";
-  const sharePreciseCoords = forSelf || member.sharingLevel === "precise";
+    snapshotIsLive &&
+    (forSelf ||
+      member.sharingLevel === "precise" ||
+      member.sharingLevel === "approximate");
+  const sharePreciseCoords =
+    snapshotIsLive && (forSelf || member.sharingLevel === "precise");
 
   return {
     ...base,
@@ -105,6 +112,8 @@ export const serializeMember = (
     longitude: sharePreciseCoords ? member.longitude : null,
     locationLabel: shareLocation ? member.locationLabel : null,
     locationUpdatedAt: shareLocation ? member.locationUpdatedAt : null,
+    locationExpiresAt: shareLocation ? member.locationExpiresAt : null,
+    locationSharedVia: shareLocation ? member.locationSharedVia : null,
     batteryLevel: shareLocation ? member.batteryLevel : null,
     isMoving: shareLocation ? member.isMoving : false,
     currentPlaceId: shareLocation ? member.currentPlaceId : null,

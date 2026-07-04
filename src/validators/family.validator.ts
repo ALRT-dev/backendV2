@@ -110,6 +110,16 @@ export type UpdateFamilyPlacePrefInput = z.infer<
   typeof updateFamilyPlacePrefSchema
 >;
 
+export const respondFamilyLocationRequestSchema = z.object({
+  share: z.boolean(),
+  latitude: latitudeSchema.optional(),
+  longitude: longitudeSchema.optional(),
+});
+
+export type RespondFamilyLocationRequestInput = z.infer<
+  typeof respondFamilyLocationRequestSchema
+>;
+
 export const triggerFamilySosSchema = z.object({
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),

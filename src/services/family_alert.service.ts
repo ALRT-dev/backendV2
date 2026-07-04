@@ -1,8 +1,15 @@
-import type { FamilyMember, FamilySavedPlace, Hazard } from "@prisma/client";
+import type {
+  FamilyMember,
+  FamilySavedPlace,
+  FamilySnapshotSource,
+  Hazard,
+} from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
+import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { convertLatLngToAddress } from "./google_map.service.js";
+import { sendPushNotificationToUser } from "./notification.service.js";
 import {
   haversineKm,
   notifyCircle,
@@ -27,13 +34,24 @@ const RELABEL_DISTANCE_KM = 1;
 const EXIT_RADIUS_MULTIPLIER = 1.5;
 const EXIT_RADIUS_PADDING_M = 50;
 
+/**
+ * How long a shared snapshot stays visible and matchable. ALRT never
+ * live-tracks: snapshots are deliberate member actions and they expire.
+ */
+const SNAPSHOT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Location requests go stale if unanswered. */
+const LOCATION_REQUEST_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 // ---------------------------------------------------------------------------
-// Location ping processing
+// Snapshot sharing — the ONLY way a member's location is ever written.
+// Called when the member checks in, answers a location request, triggers
+// SOS, or explicitly re-shares. Never on a timer.
 // ---------------------------------------------------------------------------
 
-export const processLocationPing = async (
+export const shareLocationSnapshot = async (
   userId: string,
-  ping: {
+  snapshot: {
     latitude: number;
     longitude: number;
     accuracy?: number | undefined;
@@ -41,14 +59,17 @@ export const processLocationPing = async (
     heading?: number | undefined;
     batteryLevel?: number | undefined;
     isMoving?: boolean | undefined;
+    via?: FamilySnapshotSource | undefined;
   },
 ) => {
   const membership = await requireMembership(userId);
 
-  // Members who turned sharing off are never tracked server-side.
+  // Members who turned sharing off never share, even via other actions.
   if (membership.sharingLevel === "off") {
     return { accepted: false, reason: "sharing is off" };
   }
+
+  const ping = snapshot;
 
   // Refresh the suburb label only after meaningful movement — reverse
   // geocoding every ping would be slow and expensive.
@@ -74,6 +95,7 @@ export const processLocationPing = async (
     }
   }
 
+  const now = new Date();
   const [updatedMember] = await prisma.$transaction([
     prisma.familyMember.update({
       where: { id: membership.id },
@@ -81,7 +103,9 @@ export const processLocationPing = async (
         latitude: ping.latitude,
         longitude: ping.longitude,
         ...(locationLabel && { locationLabel }),
-        locationUpdatedAt: new Date(),
+        locationUpdatedAt: now,
+        locationExpiresAt: new Date(now.getTime() + SNAPSHOT_TTL_MS),
+        locationSharedVia: snapshot.via ?? "manual",
         ...(ping.batteryLevel !== undefined && {
           batteryLevel: ping.batteryLevel,
         }),
@@ -107,7 +131,7 @@ export const processLocationPing = async (
     }),
   ]);
 
-  // Live pin update for the rest of the circle (respects sharing level).
+  // Snapshot update for the rest of the circle (respects sharing level).
   await notifyCircle({
     circleId: membership.circleId,
     excludeMemberIds: [membership.id],
@@ -115,8 +139,8 @@ export const processLocationPing = async (
     socketData: serializeMember(updatedMember!),
   });
 
-  // Fire-and-forget: geofence transitions and hazard proximity must never
-  // fail the ping itself.
+  // Fire-and-forget: place transitions and hazard proximity are computed on
+  // snapshot write — never on a timer — and must never fail the share.
   detectPlaceTransitions(updatedMember!).catch((error) =>
     console.error("Family place transition detection failed:", error),
   );
@@ -125,6 +149,158 @@ export const processLocationPing = async (
   );
 
   return { accepted: true, member: serializeMember(updatedMember!, { forSelf: true }) };
+};
+
+// ---------------------------------------------------------------------------
+// Location requests — "Sarah asked where you are"
+// ---------------------------------------------------------------------------
+
+export const createLocationRequest = async (
+  userId: string,
+  targetMemberId: string,
+) => {
+  const membership = await requireMembership(userId);
+
+  const target = await prisma.familyMember.findFirst({
+    where: { id: targetMemberId, circleId: membership.circleId },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  if (!target) throw new HttpError(404, "Member not found in your circle");
+  if (target.id === membership.id) {
+    throw new HttpError(400, "You cannot request your own location");
+  }
+  if (target.sharingLevel === "off") {
+    throw new HttpError(
+      400,
+      "This member has location sharing turned off",
+    );
+  }
+
+  // Reuse an existing pending request instead of stacking duplicates.
+  const existing = await prisma.familyLocationRequest.findFirst({
+    where: {
+      targetMemberId: target.id,
+      requesterId: membership.id,
+      status: "pending",
+      expiresAt: { gt: new Date() },
+    },
+  });
+  if (existing) return existing;
+
+  const request = await prisma.familyLocationRequest.create({
+    data: {
+      circleId: membership.circleId,
+      requesterId: membership.id,
+      targetMemberId: target.id,
+      expiresAt: new Date(Date.now() + LOCATION_REQUEST_TTL_MS),
+    },
+    include: {
+      requester: {
+        include: {
+          user: { select: { id: true, name: true, profilePictureUrl: true } },
+        },
+      },
+    },
+  });
+
+  const requesterName =
+    request.requester.nickname ||
+    request.requester.user.name ||
+    "A family member";
+
+  // Only the target is notified. The push carries the request id so the app
+  // can open the Share once / Not now screen.
+  await sendPushNotificationToUser({
+    userId: target.userId,
+    title: `${requesterName} asked where you are`,
+    body: "Share a one-time snapshot of your location? It expires after 1 hour.",
+    data: {
+      circleId: membership.circleId,
+      locationRequestId: request.id,
+      requesterName,
+    },
+    type: PushNotificationType.familyLocationRequest,
+  });
+
+  return request;
+};
+
+/** Pending location requests addressed to the calling user. */
+export const getPendingLocationRequests = async (userId: string) => {
+  const membership = await requireMembership(userId);
+  return prisma.familyLocationRequest.findMany({
+    where: {
+      targetMemberId: membership.id,
+      status: "pending",
+      expiresAt: { gt: new Date() },
+    },
+    orderBy: { createdAt: "desc" },
+    include: {
+      requester: {
+        include: {
+          user: { select: { id: true, name: true, profilePictureUrl: true } },
+        },
+      },
+    },
+  });
+};
+
+export const respondToLocationRequest = async (
+  userId: string,
+  requestId: string,
+  response: {
+    share: boolean;
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+  },
+) => {
+  const membership = await requireMembership(userId);
+
+  const request = await prisma.familyLocationRequest.findFirst({
+    where: { id: requestId, targetMemberId: membership.id },
+    include: {
+      requester: { include: { user: { select: { id: true } } } },
+    },
+  });
+  if (!request) throw new HttpError(404, "Location request not found");
+  if (request.status !== "pending" || request.expiresAt < new Date()) {
+    throw new HttpError(400, "This request is no longer active");
+  }
+
+  // Declining sends nothing — the requester is not notified.
+  if (!response.share) {
+    return prisma.familyLocationRequest.update({
+      where: { id: request.id },
+      data: { status: "declined", respondedAt: new Date() },
+    });
+  }
+
+  if (response.latitude === undefined || response.longitude === undefined) {
+    throw new HttpError(400, "Location is required to share a snapshot");
+  }
+
+  await shareLocationSnapshot(userId, {
+    latitude: response.latitude,
+    longitude: response.longitude,
+    via: "request",
+  });
+
+  const updated = await prisma.familyLocationRequest.update({
+    where: { id: request.id },
+    data: { status: "shared", respondedAt: new Date() },
+  });
+
+  // Tell the requester their ask was answered.
+  const targetName = membership.nickname || "A family member";
+  await sendPushNotificationToUser({
+    userId: request.requester.user.id,
+    title: "Snapshot shared",
+    body: `${targetName} shared a one-time location snapshot with the circle.`,
+    data: { circleId: membership.circleId },
+    type: PushNotificationType.familyLocationShared,
+  });
+
+  return updated;
 };
 
 // ---------------------------------------------------------------------------
@@ -346,6 +522,9 @@ export const notifyFamiliesAboutNewHazard = async (hazard: Hazard) => {
     const nearbyMembers = await prisma.familyMember.findMany({
       where: {
         sharingLevel: { in: ["precise", "approximate", "alertsOnly"] },
+        // Only match unexpired snapshots — an hour-old share is honest to
+        // flag ("snapshot 12 min ago was 1.1 km from..."), a stale one isn't.
+        locationExpiresAt: { gt: new Date() },
         latitude: {
           gte: hazard.latitude - memberPadding,
           lte: hazard.latitude + memberPadding,

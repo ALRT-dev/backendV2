@@ -7,6 +7,7 @@ import type {
   FamilyCheckInRequestInput,
   FamilyLocationPingInput,
   JoinFamilyCircleInput,
+  RespondFamilyLocationRequestInput,
   RespondFamilySosInput,
   TriggerFamilySosInput,
   UpdateFamilyCircleInput,
@@ -15,7 +16,12 @@ import type {
   UpdateFamilyPlacePrefInput,
 } from "../validators/family.validator.js";
 import * as familyService from "../services/family.service.js";
-import { processLocationPing } from "../services/family_alert.service.js";
+import {
+  createLocationRequest,
+  getPendingLocationRequests,
+  respondToLocationRequest,
+  shareLocationSnapshot,
+} from "../services/family_alert.service.js";
 
 const requireUserId = (res: Response): string => {
   const { userId } = res;
@@ -195,9 +201,11 @@ export const joinCircleController = async (
   }
 };
 
-// --- Live location ----------------------------------------------------------
+// --- Location snapshots ------------------------------------------------------
+// ALRT never live-tracks: these endpoints write one-time, expiring snapshots
+// triggered by deliberate member actions only.
 
-export const locationPingController = async (
+export const shareSnapshotController = async (
   req: Request,
   res: Response,
   next: NextFunction,
@@ -205,7 +213,57 @@ export const locationPingController = async (
   try {
     const userId = requireUserId(res);
     const input: FamilyLocationPingInput = req.body;
-    const result = await processLocationPing(userId, input);
+    const result = await shareLocationSnapshot(userId, {
+      ...input,
+      via: "manual",
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createLocationRequestController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { memberId } = req.params;
+    if (!memberId) throw new HttpError(400, "memberId is required");
+    const request = await createLocationRequest(userId, memberId);
+    res.status(201).json(request);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPendingLocationRequestsController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const requests = await getPendingLocationRequests(userId);
+    res.status(200).json(requests);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const respondToLocationRequestController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { requestId } = req.params;
+    if (!requestId) throw new HttpError(400, "requestId is required");
+    const input: RespondFamilyLocationRequestInput = req.body;
+    const result = await respondToLocationRequest(userId, requestId, input);
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -223,6 +281,19 @@ export const checkInController = async (
     const userId = requireUserId(res);
     const input: FamilyCheckInInput = req.body;
     const checkIn = await familyService.createCheckIn(userId, input);
+
+    // Checking in with a location is a deliberate share — stamp it as a
+    // snapshot so the circle sees where the check-in came from (1h TTL).
+    if (input.latitude !== undefined && input.longitude !== undefined) {
+      shareLocationSnapshot(userId, {
+        latitude: input.latitude,
+        longitude: input.longitude,
+        via: "checkIn",
+      }).catch((error) =>
+        console.error("Check-in snapshot stamping failed:", error),
+      );
+    }
+
     res.status(201).json(checkIn);
   } catch (error) {
     next(error);
@@ -354,6 +425,21 @@ export const triggerSosController = async (
   try {
     const userId = requireUserId(res);
     const input: TriggerFamilySosInput = req.body;
+
+    // SOS shares a snapshot at trigger (sender-controlled re-shares after).
+    // Stamp it first so the SOS event picks up the fresh suburb label.
+    if (input.latitude !== undefined && input.longitude !== undefined) {
+      try {
+        await shareLocationSnapshot(userId, {
+          latitude: input.latitude,
+          longitude: input.longitude,
+          via: "sos",
+        });
+      } catch (error) {
+        console.error("SOS snapshot stamping failed:", error);
+      }
+    }
+
     const sos = await familyService.triggerSos(userId, input);
     res.status(201).json(sos);
   } catch (error) {

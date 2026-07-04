@@ -609,14 +609,17 @@ model FamilyMember {
   sharingLevel FamilySharingLevel @default(precise)
   nickname     String? // Display name within the circle (falls back to user name)
 
-  // Latest live location snapshot (denormalized for fast circle reads).
-  // Only populated while sharingLevel is precise/approximate.
+  // Last SHARED location snapshot. ALRT never live-tracks: a snapshot is
+  // written only when the member checks in, answers a location request, or
+  // triggers SOS — and it expires (locationExpiresAt, 1 hour by default).
   latitude          Float?
   longitude         Float?
   locationLabel     String? // Reverse-geocoded label, e.g. "Newcastle CBD"
   locationUpdatedAt DateTime?
+  locationExpiresAt DateTime? // Snapshot TTL — hidden and unmatched once past
+  locationSharedVia FamilySnapshotSource? // How the snapshot was shared
   batteryLevel      Int?
-  isMoving          Boolean   @default(false)
+  isMoving          Boolean               @default(false)
 
   // Presence at a saved place (for arrival/departure detection)
   currentPlaceId String?
@@ -630,14 +633,16 @@ model FamilyMember {
   circle FamilyCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  checkIns        FamilyCheckIn[]
-  locationPings   FamilyLocationPing[]
-  placeEvents     FamilyPlaceEvent[]
-  sosEvents       FamilySosEvent[]
-  sosResponses    FamilySosResponse[]
-  hazardAlerts    FamilyMemberHazardAlert[]
-  checkInRequests FamilyCheckInRequest[]
-  placePrefsAbout FamilyPlaceNotificationPref[]
+  checkIns                 FamilyCheckIn[]
+  locationPings            FamilyLocationPing[]
+  placeEvents              FamilyPlaceEvent[]
+  sosEvents                FamilySosEvent[]
+  sosResponses             FamilySosResponse[]
+  hazardAlerts             FamilyMemberHazardAlert[]
+  checkInRequests          FamilyCheckInRequest[]
+  placePrefsAbout          FamilyPlaceNotificationPref[]
+  locationRequestsSent     FamilyLocationRequest[]       @relation("LocationRequester")
+  locationRequestsReceived FamilyLocationRequest[]       @relation("LocationTarget")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -646,6 +651,46 @@ model FamilyMember {
   @@index([userId])
   @@index([circleId])
   @@index([latitude, longitude]) // Hazard-proximity matching over live locations
+}
+
+// How a location snapshot came to be shared — always a deliberate member
+// action, never automatic tracking.
+enum FamilySnapshotSource {
+  checkIn
+  request
+  sos
+  manual
+}
+
+enum FamilyLocationRequestStatus {
+  pending
+  shared
+  declined
+  expired
+}
+
+// "Sarah asked where you are" — a one-time, consent-gated location request.
+// The target chooses Share once or Not now; declining sends nothing.
+model FamilyLocationRequest {
+  id             String @id @default(uuid())
+  circleId       String
+  requesterId    String // FamilyMember who asked
+  targetMemberId String // FamilyMember being asked
+
+  status  FamilyLocationRequestStatus @default(pending)
+  message String?
+
+  respondedAt DateTime?
+  expiresAt   DateTime // Requests go stale (24h) if unanswered
+
+  requester FamilyMember @relation("LocationRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  target    FamilyMember @relation("LocationTarget", fields: [targetMemberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([targetMemberId, status])
+  @@index([circleId, createdAt])
 }
 
 model FamilyInvite {

@@ -12,6 +12,7 @@ import {
   createFamilyPlaceSchema,
   updateFamilyPlaceSchema,
   updateFamilyPlacePrefSchema,
+  respondFamilyLocationRequestSchema,
   triggerFamilySosSchema,
   respondFamilySosSchema,
 } from "../validators/family.validator.js";
@@ -27,7 +28,10 @@ import {
   listInvitesController,
   revokeInviteController,
   joinCircleController,
-  locationPingController,
+  shareSnapshotController,
+  createLocationRequestController,
+  getPendingLocationRequestsController,
+  respondToLocationRequestController,
   checkInController,
   requestCheckInController,
   listCheckInsController,
@@ -64,8 +68,15 @@ familyRouter.get("/invites", listInvitesController);
 familyRouter.post("/invites/:inviteId/revoke", revokeInviteController);
 familyRouter.post("/join", validate(joinFamilyCircleSchema), joinCircleController);
 
-// Live location
-familyRouter.post("/location", validate(familyLocationPingSchema), locationPingController);
+// Location snapshots (ALRT never live-tracks: one-time, expiring shares)
+familyRouter.post("/location", validate(familyLocationPingSchema), shareSnapshotController);
+familyRouter.post("/members/:memberId/location-request", createLocationRequestController);
+familyRouter.get("/location-requests/pending", getPendingLocationRequestsController);
+familyRouter.post(
+  "/location-requests/:requestId/respond",
+  validate(respondFamilyLocationRequestSchema),
+  respondToLocationRequestController,
+);
 
 // Check-ins
 familyRouter.post("/check-in", validate(familyCheckInSchema), checkInController);

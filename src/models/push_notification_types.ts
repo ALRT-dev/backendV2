@@ -10,4 +10,6 @@ export enum PushNotificationType {
   familySosResolved = "familySosResolved",
   familyHazardProximity = "familyHazardProximity", // deep-links into the hazard
   familyCircleUpdate = "familyCircleUpdate",
+  familyLocationRequest = "familyLocationRequest", // opens the Share once / Not now screen
+  familyLocationShared = "familyLocationShared",
 }
