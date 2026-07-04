@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { HazardReviewStatus } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
+import { renderShareCard } from "../services/share_card.service.js";
 
 const SITE_URL = "https://safetyalrt.com";
 const GET_APP_URL = "https://safetyalrt.com/get";
@@ -168,7 +169,8 @@ const sharePage = (hazard: ShareableHazard): string => {
   const sourceName = hazard.source?.name ? escapeHtml(hazard.source.name) : "";
   const issuedAgo = escapeHtml(timeAgo(hazard.occurredAt));
   const issuedAt = escapeHtml(formatIssuedAt(hazard.occurredAt));
-  const shareUrl = `${SITE_URL}/share/alert/${encodeURIComponent(hazard.id)}`;
+  const shareUrl = `${SITE_URL}/a/${encodeURIComponent(hazard.id)}`;
+  const cardUrl = `${SITE_URL}/share/alert/${encodeURIComponent(hazard.id)}/card.png?v=${hazard.updatedAt.getTime()}`;
 
   const ogDescriptionParts = [summarySource];
   if (hazard.locationName) ogDescriptionParts.push(hazard.locationName);
@@ -190,9 +192,13 @@ const sharePage = (hazard: ShareableHazard): string => {
 <meta property="og:title" content="${escapeHtml(label)} — ${title}">
 <meta property="og:description" content="${ogDescription}">
 <meta property="og:url" content="${shareUrl}">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="${cardUrl}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(label)} — ${title}">
 <meta name="twitter:description" content="${ogDescription}">
+<meta name="twitter:image" content="${cardUrl}">
 <meta name="theme-color" content="${color}">
 <style>
   body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f5f6f8; color: #1c1c1e; }
@@ -267,6 +273,44 @@ export const shareAlertPageController = async (
     }
 
     res.status(200).send(sharePage(hazard));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /share/alert/:id/card.png — 1200x630 Open Graph card for link unfurls.
+ * Rendered once per alert revision and cached; served with long-lived
+ * immutable caching since the URL carries the revision in ?v=.
+ */
+export const shareAlertCardController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+
+    const hazard = id ? await findShareableHazard(id) : null;
+    if (!hazard) {
+      throw new HttpError(404, "Alert not found");
+    }
+
+    const png = await renderShareCard({
+      id: hazard.id,
+      updatedAt: hazard.updatedAt,
+      title: hazard.title,
+      severity: hazard.severity,
+      severityLabel: severityLabel(hazard.severity),
+      severityColor: severityColor(hazard.severity),
+      locationName: hazard.locationName,
+      issuedAtLabel: formatIssuedAt(hazard.occurredAt),
+      sourceName: hazard.source?.name ?? null,
+    });
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+    res.status(200).send(png);
   } catch (error) {
     next(error);
   }

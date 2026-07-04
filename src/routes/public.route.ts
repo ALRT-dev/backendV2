@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import rateLimit from "express-rate-limit";
 import {
   getPublicHazardController,
+  shareAlertCardController,
   shareAlertPageController,
 } from "../controllers/public.controller.js";
 import { config } from "../utils/config.js";
@@ -49,5 +50,13 @@ publicRouter.get(
   publicShareRateLimiter,
   shareAlertPageController,
 );
+publicRouter.get(
+  "/share/alert/:id/card.png",
+  publicShareRateLimiter,
+  shareAlertCardController,
+);
+// Short alias used in share sheets — easier to read and type than the
+// full /share/alert path.
+publicRouter.get("/a/:id", publicShareRateLimiter, shareAlertPageController);
 
 export default publicRouter;
