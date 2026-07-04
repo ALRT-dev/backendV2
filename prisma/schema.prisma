@@ -159,6 +159,11 @@ model Hazard {
   southwestLat Float? // Southwest corner latitude
   southwestLng Float? // Southwest corner longitude
 
+  // PostGIS generated columns (kept in sync by Postgres, GiST-indexed).
+  // See migration 20260704000200_postgis_spatial_indexes.
+  geom    Unsupported("geometry(Point, 4326)")?
+  geomBox Unsupported("geometry(Polygon, 4326)")?
+
   categoryId   String
   sourceId     String?
   reportedById String?
@@ -310,6 +315,9 @@ model LocationSubscription {
   name         String? // Optional name for the location
   address      String? // Optional human-readable address
   geoRegion    String? // PostGIS geometry as string (WKT or WKB)
+
+  // PostGIS generated column (GiST-indexed bounding box)
+  geomBox Unsupported("geometry(Polygon, 4326)")?
 
   isOwnLocation Boolean  @default(false) // True if this subscription is for the user's own location
   createdAt     DateTime @default(now())
@@ -615,6 +623,9 @@ model FamilyMember {
   currentPlace   FamilySavedPlace? @relation("PlacePresence", fields: [currentPlaceId], references: [id], onDelete: SetNull)
 
   lastCheckInAt DateTime?
+
+  // PostGIS generated column (GiST-indexed live-location point)
+  geom Unsupported("geometry(Point, 4326)")?
 
   circle FamilyCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)

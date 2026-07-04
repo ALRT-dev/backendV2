@@ -640,7 +640,7 @@ export const buildHazardsWhereClauseRaw = (
           ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
             paramIndex + 2
           }, $${paramIndex + 3}, 4326),
-          ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+          h."geom"
         )
       )`;
     } else {
@@ -651,7 +651,7 @@ export const buildHazardsWhereClauseRaw = (
            ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
              paramIndex + 2
            }, $${paramIndex + 3}, 4326),
-           ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+           h."geom"
          ))
         OR
         (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
@@ -681,7 +681,7 @@ export const buildHazardsWhereClauseRaw = (
             ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
               paramIndex + 2
             }, $${paramIndex + 3}, 4326),
-            ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+            h."geom"
           )
         )`;
       } else {
@@ -692,7 +692,7 @@ export const buildHazardsWhereClauseRaw = (
              ST_MakeEnvelope($${paramIndex}, $${paramIndex + 1}, $${
                paramIndex + 2
              }, $${paramIndex + 3}, 4326),
-             ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)
+             h."geom"
            ))
           OR
           (h."northeastLat" IS NOT NULL AND h."southwestLat" IS NOT NULL AND 
@@ -846,7 +846,7 @@ export const buildHazardsOrderByClauseRaw = (
                 ST_SetSRID(ST_MakePoint($${
                   currentParamIndex + 1
                 }, $${currentParamIndex}), 4326)::geography,
-                ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+                h."geom"::geography
               )
             ELSE 99999999
           END ${direction}`);
@@ -902,7 +902,7 @@ export const buildHazardsOrderByClauseRaw = (
               ST_SetSRID(ST_MakePoint($${
                 currentParamIndex + 1
               }, $${currentParamIndex}), 4326)::geography,
-              ST_SetSRID(ST_MakePoint(h.longitude, h.latitude), 4326)::geography
+              h."geom"::geography
             )
           ELSE 99999999
         END ASC`);
