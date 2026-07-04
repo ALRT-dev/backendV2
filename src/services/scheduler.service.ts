@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { syncHazardsFromDifferentSources } from "./ingestion.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import { processScheduledAccountDeletions } from "./user.service.js";
+import { pruneFamilyLocationPings } from "./family_alert.service.js";
 
 /**
  * Initializes scheduled tasks for the application
@@ -32,6 +33,15 @@ export const initializeScheduledTasks = () => {
       );
     } catch (error) {
       console.error("Scheduled account deletions processing failed:", error);
+    }
+  });
+
+  // Prune family live-location history daily at 3:00 AM (24h retention)
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      await pruneFamilyLocationPings();
+    } catch (error) {
+      console.error("Family location ping pruning failed:", error);
     }
   });
 

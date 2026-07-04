@@ -20,6 +20,7 @@ import {
   webhookRouter,
   supportRouter,
   mapsRouter,
+  familyRouter,
 } from "./routes/index.js";
 import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
@@ -108,6 +109,7 @@ app.use("/api/xp", xpPointsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/maps", mapsRouter);
+app.use("/api/family", familyRouter);
 
 app.get("/api/test", (req, res) => {
   res.send("Test route is working!");

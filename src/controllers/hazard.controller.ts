@@ -53,6 +53,7 @@ import type { MediaUploadResult } from "../models/media_upload_result_interface.
 import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
 import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
 import { checkMediasForProblems } from "../services/image_video_detection.service.js";
+import { notifyFamiliesAboutNewHazard } from "../services/family_alert.service.js";
 import { getAllParentHazardCategories } from "./hazard_category.controller.js";
 import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/hazard_category.service.js";
 import {
@@ -582,6 +583,9 @@ export const createHazard = async (
         hazard: hazard,
         socketEvent: SocketEvent.newHazard,
       });
+
+      // Alert family circles with members or saved places near this hazard
+      notifyFamiliesAboutNewHazard(hazard);
     }
 
     // Now also send a notification to the user who reported the hazard
