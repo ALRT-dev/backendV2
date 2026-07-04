@@ -21,6 +21,8 @@ import {
   supportRouter,
   mapsRouter,
   familyRouter,
+  guideRouter,
+  publicRouter,
 } from "./routes/index.js";
 import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
@@ -109,11 +111,16 @@ app.use("/api/xp", xpPointsRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/support", supportRouter);
 app.use("/api/maps", mapsRouter);
+app.use("/api/guides", guideRouter);
 app.use("/api/family", familyRouter);
 
 app.get("/api/test", (req, res) => {
   res.send("Test route is working!");
 });
+
+// Public (no-auth) share endpoints — mounted last before the unknown-route
+// handler; the router only claims exact public paths.
+app.use("/", publicRouter);
 
 app.use(unknownRouteMiddleware);
 app.use(errorHandlerMiddleware);

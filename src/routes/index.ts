@@ -11,6 +11,8 @@ import webhookRouter from "./webhook.route.js";
 import supportRouter from "./support.route.js";
 import mapsRouter from "./maps.route.js";
 import familyRouter from "./family.route.js";
+import guideRouter from "./guide.route.js";
+import publicRouter from "./public.route.js";
 
 export {
   authRouter,
@@ -26,4 +28,6 @@ export {
   supportRouter,
   mapsRouter,
   familyRouter,
+  guideRouter,
+  publicRouter,
 };
