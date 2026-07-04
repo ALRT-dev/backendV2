@@ -113,8 +113,8 @@ app.get("/api/test", (req, res) => {
   res.send("Test route is working!");
 });
 
-app.use(errorHandlerMiddleware);
 app.use(unknownRouteMiddleware);
+app.use(errorHandlerMiddleware);
 
 server.listen(config.port, async () => {
   console.log(

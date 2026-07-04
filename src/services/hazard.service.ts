@@ -1055,7 +1055,6 @@ export const getHazardsForGeoJson = async (
       h."fireStatus",
       h."callsToAction",
       h."isAwsCompliant",
-      h."externalId",
       h."categoryId",
       h."sourceId",
       h."expiresAt",

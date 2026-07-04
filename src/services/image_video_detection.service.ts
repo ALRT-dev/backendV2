@@ -18,6 +18,12 @@ export const checkMediasForProblems = async (
   validFiles: Express.Multer.File[];
   problematicFiles: Array<{ file: Express.Multer.File; reasons: string[] }>;
   hasProblematicFiles: boolean;
+  /**
+   * True when the moderation provider could not screen one or more files.
+   * Unscreened files are still accepted for upload, but callers must route
+   * the report to manual review instead of auto-publishing it.
+   */
+  moderationUnavailable: boolean;
 }> => {
   const THRESHOLD = 0.5; // Probability threshold for flagging content
   const validFiles: Express.Multer.File[] = [];
@@ -25,13 +31,14 @@ export const checkMediasForProblems = async (
     file: Express.Multer.File;
     reasons: string[];
   }> = [];
+  let moderationUnavailable = false;
 
-  try {
-    for (const file of files) {
-      const fileReasons: string[] = [];
-      const isVideo = file.mimetype.startsWith("video/");
-      const isImage = file.mimetype.startsWith("image/");
+  for (const file of files) {
+    const fileReasons: string[] = [];
+    const isVideo = file.mimetype.startsWith("video/");
+    const isImage = file.mimetype.startsWith("image/");
 
+    try {
       if (isVideo) {
         const result = await moderateVideoFromMulterFile(file);
 
@@ -114,42 +121,43 @@ export const checkMediasForProblems = async (
           fileReasons.push("QR code with personal information detected.");
         }
       }
-
-      // Categorize the file
-      if (fileReasons.length > 0) {
-        problematicFiles.push({ file, reasons: fileReasons });
-      } else {
-        validFiles.push(file);
-      }
-    }
-
-    const result = {
-      validFiles,
-      problematicFiles,
-      hasProblematicFiles: problematicFiles.length > 0,
-    };
-
-    if (files.length > 0) {
-      console.log(
-        `Media moderation result: ${validFiles.length} valid, ${problematicFiles.length} problematic out of ${files.length} total files`
+    } catch (error: any) {
+      // Fail safe, not open: the file is kept, but the report must go to
+      // manual review because it was never screened.
+      console.error(
+        `Media moderation unavailable for ${file.originalname}:`,
+        error?.message ?? error
       );
-      if (problematicFiles.length > 0) {
-        problematicFiles.forEach(({ file, reasons }) => {
-          console.log(`  - ${file.originalname}: ${reasons.join(", ")}`);
-        });
-      }
+      moderationUnavailable = true;
     }
 
-    return result;
-  } catch (error: any) {
-    console.error("Media moderation error:", error);
-    // On error, accept all files to not block the hazard creation
-    return {
-      validFiles: files,
-      problematicFiles: [],
-      hasProblematicFiles: false,
-    };
+    // Categorize the file
+    if (fileReasons.length > 0) {
+      problematicFiles.push({ file, reasons: fileReasons });
+    } else {
+      validFiles.push(file);
+    }
   }
+
+  const result = {
+    validFiles,
+    problematicFiles,
+    hasProblematicFiles: problematicFiles.length > 0,
+    moderationUnavailable,
+  };
+
+  if (files.length > 0) {
+    console.log(
+      `Media moderation result: ${validFiles.length} valid, ${problematicFiles.length} problematic out of ${files.length} total files${moderationUnavailable ? " (moderation unavailable for some files — routing to manual review)" : ""}`
+    );
+    if (problematicFiles.length > 0) {
+      problematicFiles.forEach(({ file, reasons }) => {
+        console.log(`  - ${file.originalname}: ${reasons.join(", ")}`);
+      });
+    }
+  }
+
+  return result;
 };
 
 /**

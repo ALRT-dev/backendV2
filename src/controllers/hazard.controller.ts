@@ -415,6 +415,17 @@ export const createHazard = async (
       // Don't fail the entire request if AI review fails
     }
 
+    // Media that could not be screened must never auto-publish: route the
+    // report to manual review instead (fail-safe, not fail-open).
+    if (
+      mediaModerationResult.moderationUnavailable &&
+      review.reviewStatus === HazardReviewStatus.accepted
+    ) {
+      review.reviewStatus = HazardReviewStatus.pending;
+      review.reviewFeedback =
+        "Your alrt is awaiting review because the attached media could not be automatically screened.";
+    }
+
     const {
       reviewStatus,
       reviewFeedback,
@@ -742,6 +753,17 @@ export const updateHazard = async (
           "We're sorry, but we couldn't review your alrt at this time. We need more time to process it.",
       };
       // Don't fail the entire request if AI review fails
+    }
+
+    // Media that could not be screened must never auto-publish: route the
+    // report to manual review instead (fail-safe, not fail-open).
+    if (
+      mediaModerationResult.moderationUnavailable &&
+      review.reviewStatus === HazardReviewStatus.accepted
+    ) {
+      review.reviewStatus = HazardReviewStatus.pending;
+      review.reviewFeedback =
+        "Your alrt is awaiting review because the attached media could not be automatically screened.";
     }
 
     const {

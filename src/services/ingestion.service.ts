@@ -471,7 +471,6 @@ export const syncHazardsFromDifferentSources = async ({
       } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
     );
     return createdHazards;
-    return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
     return [];
