@@ -83,7 +83,7 @@ export function toGeoJSONFeatureCollection(
 
   return {
     type: "FeatureCollection",
-    bbox,
+    ...(bbox && { bbox }),
     features,
     metadata: {
       totalCount,

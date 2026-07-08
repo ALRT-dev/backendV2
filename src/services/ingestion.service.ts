@@ -52,6 +52,7 @@ import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
 import { invalidateHazardListCaches } from "./hazard_cache.service.js";
+import { notifyFamiliesAboutNewHazard } from "./family_alert.service.js";
 
 export enum ExternalSourceId {
   rfs = "rfs",
@@ -471,7 +472,6 @@ export const syncHazardsFromDifferentSources = async ({
       } total hazards from all sources. Geocoding cache size: ${getGeocodingCacheSize()}`,
     );
     return createdHazards;
-    return [];
   } catch (error) {
     console.error("Error during hazard sync from different sources:", error);
     return [];
@@ -859,6 +859,11 @@ export const summarizeAndPostHazards = async ({
               hazard: createdHazard,
               socketEvent: SocketEvent.newHazard,
             });
+            // Alert family circles with members or saved places nearby.
+            // Only on genuine creation — updates would re-notify circles.
+            if (actuallyCreated) {
+              notifyFamiliesAboutNewHazard(createdHazard);
+            }
           }
 
           return createdHazard;

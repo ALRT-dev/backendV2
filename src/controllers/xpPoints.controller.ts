@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { calculateXpPoints } from "../services/xpPoints.service.js";
+import { getXpSummary } from "../services/xp_ledger.service.js";
 
 /// Controller to get user's XP points breakdown and statistics
 export const getUserXpBreakdown = async (
@@ -175,6 +176,32 @@ export const getXpLeaderboard = async (
         hasPrev: page > 1,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/xp/summary — Scoring v2 profile payload: total XP, live streak,
+ * trust tier, weekly quest progress and the recent ledger events.
+ */
+export const getXpSummaryController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    const summary = await getXpSummary(userId);
+    if (!summary) {
+      throw new HttpError(404, "User not found");
+    }
+
+    res.status(200).json(summary);
   } catch (error) {
     next(error);
   }

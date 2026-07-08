@@ -3,6 +3,7 @@ import { initializeAIPrompts } from "./ai-prompt.service.js";
 import { initializeDefaultConfigurations } from "./configuration.service.js";
 import { activateSuperAdmin } from "./user.admin.service.js";
 import { initializeHazardSources } from "./hazard.service.js";
+import { seedSafetyGuides } from "./guide_seed.service.js";
 
 /**
  * Initialize all database-dependent services and data
@@ -17,6 +18,14 @@ export const initializeDatabase = async (): Promise<void> => {
       initializeHazardCategories(),
       initializeAIPrompts().then(() => initializeDefaultConfigurations()),
     ]);
+
+    // Seed Learn hub safety guides after categories exist (guides map to
+    // hazard categories by name). Failures must not block boot.
+    try {
+      await seedSafetyGuides();
+    } catch (error) {
+      console.error("❌ Safety guide seeding failed:", error);
+    }
 
     console.log(
       "---------------------------------------> Database initialization completed successfully"

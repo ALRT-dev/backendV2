@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import rateLimit from "express-rate-limit";
 import slowDown, { type SlowDownRequestHandler } from "express-slow-down";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { HttpError } from "../models/http_error.js";
 import { config } from "../utils/config.js";
 import {
@@ -331,20 +332,64 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
+ * Cache of recently verified keys: SHA-256(presented key) -> API key id.
+ * Avoids running a bcrypt comparison against every active key on every
+ * request (O(n) bcrypt per call is both slow and a DoS amplifier).
+ * Entries are re-validated against the database on every hit so
+ * deactivation/expiry still applies immediately.
+ */
+const verifiedKeyCache = new Map<string, { keyId: string; expiresAt: number }>();
+const VERIFIED_KEY_CACHE_TTL_MS = 5 * 60 * 1000;
+const VERIFIED_KEY_CACHE_MAX_ENTRIES = 1000;
+
+function sha256Hex(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function isKeyUsable(dbKey: WebhookApiKey): boolean {
+  if (!dbKey.isActive) return false;
+  if (dbKey.expiresAt && dbKey.expiresAt < new Date()) return false;
+  return true;
+}
+
+/**
  * Find and validate API key from database
  * Uses bcrypt to compare against stored hashes
  */
 async function findValidApiKey(apiKey: string): Promise<WebhookApiKey | null> {
   try {
-    // Get all active API keys
+    const cacheKey = sha256Hex(apiKey);
+
+    // Fast path: previously verified key, re-check DB state by id only.
+    const cached = verifiedKeyCache.get(cacheKey);
+    if (cached) {
+      if (cached.expiresAt > Date.now()) {
+        const dbKey = await prisma.webhookApiKey.findUnique({
+          where: { id: cached.keyId },
+        });
+        if (dbKey && isKeyUsable(dbKey)) {
+          return dbKey;
+        }
+      }
+      verifiedKeyCache.delete(cacheKey);
+    }
+
+    // Slow path: bcrypt-compare against all active keys.
     const apiKeys = await prisma.webhookApiKey.findMany({
       where: { isActive: true },
     });
 
-    // Check each key hash (bcrypt comparison)
     for (const dbKey of apiKeys) {
       const isValid = await bcrypt.compare(apiKey, dbKey.keyHash);
       if (isValid) {
+        if (!isKeyUsable(dbKey)) return null;
+        if (verifiedKeyCache.size >= VERIFIED_KEY_CACHE_MAX_ENTRIES) {
+          verifiedKeyCache.clear();
+        }
+        verifiedKeyCache.set(cacheKey, {
+          keyId: dbKey.id,
+          expiresAt: Date.now() + VERIFIED_KEY_CACHE_TTL_MS,
+        });
         return dbKey;
       }
     }

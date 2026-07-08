@@ -5,4 +5,15 @@ export enum SocketEvent {
 
   updateUserXp = "updateUserXp",
   updateUserUpvotesReceivedCount = "updateUserUpvotesReceivedCount",
+
+  // Family Mode
+  familyCircleUpdate = "familyCircleUpdate", // membership / circle metadata changed
+  familyLocationUpdate = "familyLocationUpdate", // a member's live location moved
+  familyCheckIn = "familyCheckIn", // a member checked in
+  familyCheckInRequest = "familyCheckInRequest", // someone requested a check-in
+  familyPlaceEvent = "familyPlaceEvent", // arrival/departure at a saved place
+  familySos = "familySos", // SOS triggered
+  familySosResponse = "familySosResponse", // seen / on my way / called
+  familySosResolved = "familySosResolved", // SOS resolved or cancelled
+  familyHazardProximity = "familyHazardProximity", // a member is near an active hazard
 }

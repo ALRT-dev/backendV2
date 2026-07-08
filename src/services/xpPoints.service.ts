@@ -149,8 +149,7 @@ export const awardXpPointsForHazard = async (
   };
 
   const calculation = calculateXpPoints(updatedFactors);
-  // const pointsToAward = calculation.totalXpPoints;
-  const pointsToAward = 10; // HARDCODED TO 10 FOR NOW
+  const pointsToAward = calculation.totalXpPoints;
 
   // Update user's xpPoints
   const newXpTotal = user.xpPoints + pointsToAward;

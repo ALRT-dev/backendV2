@@ -25,7 +25,7 @@ import {
 } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
-import { awardXpPointsForHazard } from "../services/xpPoints.service.js";
+import { handleReportReviewOutcome } from "../services/xp_ledger.service.js";
 import { calculateUserReportsStatus } from "../services/user.service.js";
 import {
   calculateConfidenceScore,
@@ -53,6 +53,7 @@ import type { MediaUploadResult } from "../models/media_upload_result_interface.
 import { getSeverityBandFromDescription } from "../utils/ingestion.severity.util.js";
 import { getSingleUserLocationSubscriptionByBounds } from "../services/location_subscription.service.js";
 import { checkMediasForProblems } from "../services/image_video_detection.service.js";
+import { notifyFamiliesAboutNewHazard } from "../services/family_alert.service.js";
 import { getAllParentHazardCategories } from "./hazard_category.controller.js";
 import { getAllMainHazardCategoriesWithoutSubcategories } from "../services/hazard_category.service.js";
 import {
@@ -415,6 +416,17 @@ export const createHazard = async (
       // Don't fail the entire request if AI review fails
     }
 
+    // Media that could not be screened must never auto-publish: route the
+    // report to manual review instead (fail-safe, not fail-open).
+    if (
+      mediaModerationResult.moderationUnavailable &&
+      review.reviewStatus === HazardReviewStatus.accepted
+    ) {
+      review.reviewStatus = HazardReviewStatus.pending;
+      review.reviewFeedback =
+        "Your alrt is awaiting review because the attached media could not be automatically screened.";
+    }
+
     const {
       reviewStatus,
       reviewFeedback,
@@ -545,19 +557,10 @@ export const createHazard = async (
 
     await invalidateHazardCaches();
 
-    // Award XP points to the user based on AI review <----------------------------------------------------------------------------
+    // Scoring v2: ledger-based award for the reviewed report (never throws)
     let xpResult = null;
     if (userId && hazard.reviewStatus !== HazardReviewStatus.pending) {
-      try {
-        xpResult = await awardXpPointsForHazard(userId, hazard.id, {
-          confidence: hazard.aiConfidence || ("medium" as any),
-          severity: hazard.severity,
-          reviewStatus: hazard.reviewStatus,
-        });
-      } catch (error) {
-        console.error("Error awarding XP points:", error);
-        // Don't fail the entire request if XP calculation fails
-      }
+      xpResult = await handleReportReviewOutcome(hazard);
     }
 
     if (reviewStatus === HazardReviewStatus.accepted) {
@@ -571,6 +574,9 @@ export const createHazard = async (
         hazard: hazard,
         socketEvent: SocketEvent.newHazard,
       });
+
+      // Alert family circles with members or saved places near this hazard
+      notifyFamiliesAboutNewHazard(hazard);
     }
 
     // Now also send a notification to the user who reported the hazard
@@ -742,6 +748,17 @@ export const updateHazard = async (
           "We're sorry, but we couldn't review your alrt at this time. We need more time to process it.",
       };
       // Don't fail the entire request if AI review fails
+    }
+
+    // Media that could not be screened must never auto-publish: route the
+    // report to manual review instead (fail-safe, not fail-open).
+    if (
+      mediaModerationResult.moderationUnavailable &&
+      review.reviewStatus === HazardReviewStatus.accepted
+    ) {
+      review.reviewStatus = HazardReviewStatus.pending;
+      review.reviewFeedback =
+        "Your alrt is awaiting review because the attached media could not be automatically screened.";
     }
 
     const {
