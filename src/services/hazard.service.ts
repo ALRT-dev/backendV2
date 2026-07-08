@@ -24,7 +24,8 @@ import {
 } from "../utils/hazard.util.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
-import { executePrompt } from "./open-ai.service.js";
+import { executePrompt } from "./ai.service.js";
+import { config } from "../utils/config.js";
 import { MainCategoryId } from "./hazard_category.service.js";
 import { ExternalSourceId } from "./ingestion.service.js";
 
@@ -243,6 +244,51 @@ export const getHazardsApplyingFiltersRaw = async (
     ...queryParams,
   )) as any[];
 
+  /** One DB query for all category images referenced by this page (avoids N+1). */
+  const uniqueCategoryIds = new Set<string>();
+  for (const row of hazards) {
+    if (row.categoryId) uniqueCategoryIds.add(row.categoryId);
+    if (row.categoryParentId) uniqueCategoryIds.add(row.categoryParentId);
+  }
+
+  const categoryImageMap = new Map<
+    string,
+    Array<{
+      id: string;
+      categoryId: string;
+      imageType: string;
+      s3Key: string;
+      width: number | null;
+      height: number | null;
+      fileSizeBytes: number | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  >();
+
+  if (uniqueCategoryIds.size > 0) {
+    const imageRows = await prisma.hazardCategoryImage.findMany({
+      where: { categoryId: { in: [...uniqueCategoryIds] } },
+      orderBy: { imageType: "asc" },
+      select: {
+        id: true,
+        categoryId: true,
+        imageType: true,
+        s3Key: true,
+        width: true,
+        height: true,
+        fileSizeBytes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    for (const img of imageRows) {
+      const list = categoryImageMap.get(img.categoryId) ?? [];
+      list.push(img);
+      categoryImageMap.set(img.categoryId, list);
+    }
+  }
+
   // Get unique reporter IDs from hazards that have reporters
   const reporterIds = Array.from(
     new Set(
@@ -313,12 +359,14 @@ export const getHazardsApplyingFiltersRaw = async (
             description: categoryDescription,
             color: categoryColor,
             parentId: categoryParentId,
+            images: categoryImageMap.get(hazard.categoryId) ?? [],
             parent: categoryParentId
               ? {
                   id: categoryParentId,
                   name: categoryParentName,
                   description: categoryParentDescription,
                   color: categoryParentColor,
+                  images: categoryImageMap.get(categoryParentId) ?? [],
                 }
               : null,
           }
@@ -384,16 +432,11 @@ export const reviewHazard = async ({
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: promptContent,
     userPromptContent: userContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI review failed: Empty response from AI");
-  }
 
   try {
     const aiReview = JSON.parse(content) as {
@@ -464,16 +507,11 @@ export const summarizeHazard = async ({
   - category: ${category.name}
   - agency: ${source.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: systemPromptContent,
     userPromptContent: userPromptContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI summarization failed: Empty response from AI");
-  }
 
   try {
     const aiSummary = JSON.parse(content) as AISummaryResponse;
@@ -646,19 +684,11 @@ export const getSuggestedCategory = async ({
   Description: ${description}
   ${currentCategoryId ? `Current Category: ${currentCategoryId}` : ""}`;
 
-  const response = await executePrompt({
-    model: "gpt-5-nano",
+  const content = await executePrompt({
+    model: config.aws.bedrock.fallbackModelId,
     systemPromptContent,
     userPromptContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(
-      500,
-      "AI category suggestion failed: Empty response from AI",
-    );
-  }
 
   try {
     const aiResponse = JSON.parse(content) as {

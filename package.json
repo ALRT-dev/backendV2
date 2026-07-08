@@ -21,6 +21,7 @@
     "convert-md-to-pdf": "tsx src/scripts/convert-md-to-pdf.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1024.0",
     "@aws-sdk/client-s3": "^3.913.0",
     "@aws-sdk/s3-request-presigner": "^3.913.0",
     "@googlemaps/google-maps-services-js": "^3.4.2",
