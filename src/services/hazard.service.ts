@@ -25,6 +25,11 @@ import {
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { executePrompt } from "./ai.service.js";
+import {
+  hazardContentHash,
+  getCachedAISummary,
+  cacheAISummary,
+} from "./hazard_cache.service.js";
 import { config } from "../utils/config.js";
 import { MainCategoryId } from "./hazard_category.service.js";
 import { ExternalSourceId } from "./ingestion.service.js";
@@ -492,6 +497,23 @@ export const summarizeHazard = async ({
     };
   }
 
+  const contentHash = hazardContentHash({
+    title,
+    description,
+    locationName: locationName ?? null,
+    categoryId: category.id,
+    sourceId: source.id,
+    isAwsCompliant,
+    severityBand,
+  });
+  const cachedSummary = await getCachedAISummary<AISummaryResponse>(
+    contentHash,
+  );
+  if (cachedSummary) {
+    console.log("AI summary cache hit, skipping model call:", title);
+    return cachedSummary;
+  }
+
   const { model, content: systemPromptContent } = await getAIPromptForHazard({
     isAwsCompliant,
     severityBand,
@@ -515,6 +537,7 @@ export const summarizeHazard = async ({
 
   try {
     const aiSummary = JSON.parse(content) as AISummaryResponse;
+    await cacheAISummary(contentHash, aiSummary);
     return aiSummary;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);

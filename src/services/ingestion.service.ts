@@ -51,7 +51,12 @@ import { executePrompt, processBatchWithRateLimit } from "./ai.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { HttpError } from "../models/http_error.js";
-import { invalidateHazardListCaches } from "./hazard_cache.service.js";
+import {
+  invalidateHazardListCaches,
+  hazardContentHash,
+  wasContentNotified,
+  markContentNotified,
+} from "./hazard_cache.service.js";
 import { notifyFamiliesAboutNewHazard } from "./family_alert.service.js";
 
 export enum ExternalSourceId {
@@ -700,6 +705,18 @@ export const summarizeAndPostHazards = async ({
       geocodedHazards,
       async ({ hazardData, isUpdate }) => {
         try {
+          // Colliding-ID sources alternate a row between a handful of contents
+          // and pollers re-send unchanged feeds, so notify per (id, content)
+          // rather than per update.
+          const notifiedHash = hazardContentHash({
+            id: hazardData.id,
+            title: hazardData.title,
+            description: hazardData.description,
+          });
+          const alreadyNotified = isUpdate
+            ? await wasContentNotified(notifiedHash)
+            : false;
+
           // Summarize the hazard first
           const summarized = await summarizeHazard({
             useDummy: false,
@@ -853,7 +870,8 @@ export const summarizeAndPostHazards = async ({
 
           // Send "new hazard" notifications when we created the row or did a genuine update.
           // When we lost a race (P2002), we only updated – skip to avoid duplicate notifications.
-          if (actuallyCreated || isUpdate) {
+          // Updates whose content already triggered a notification stay silent.
+          if (actuallyCreated || (isUpdate && !alreadyNotified)) {
             sendPushNotificationAboutNewHazard(createdHazard);
             sendSocketEventAboutHazardToSubscribers({
               hazard: createdHazard,
@@ -864,6 +882,7 @@ export const summarizeAndPostHazards = async ({
             if (actuallyCreated) {
               notifyFamiliesAboutNewHazard(createdHazard);
             }
+            await markContentNotified(notifiedHash);
           }
 
           return createdHazard;

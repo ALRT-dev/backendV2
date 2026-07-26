@@ -220,3 +220,86 @@ export const invalidateHazardCaches = async (
   }
   await Promise.all(promises);
 };
+
+// ---------------------------------------------------------------------------
+// AI summary cache
+//
+// Ingestion sources re-send the same content every poll cycle (and sources
+// whose hazard IDs collide alternate between a handful of contents), so the
+// summary for a given content must only ever be generated once. Keyed on the
+// exact inputs sent to the model.
+// ---------------------------------------------------------------------------
+
+const AI_SUMMARY_TTL = 30 * 24 * 60 * 60; // 30 days
+
+const aiSummaryKey = (contentHash: string) => `hazard:aisummary:${contentHash}`;
+
+/** Deterministic hash of the content fields that drive an AI summary. */
+export const hazardContentHash = (parts: Record<string, unknown>): string =>
+  createHash("sha256").update(JSON.stringify(parts)).digest("hex").slice(0, 32);
+
+export const getCachedAISummary = async <T = unknown>(
+  contentHash: string,
+): Promise<T | null> => {
+  const redis = getCacheClient();
+  if (!redis) return null;
+  try {
+    const raw = await redis.get(aiSummaryKey(contentHash));
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+};
+
+export const cacheAISummary = async (
+  contentHash: string,
+  summary: unknown,
+): Promise<void> => {
+  const redis = getCacheClient();
+  if (!redis) return;
+  try {
+    await redis.setEx(
+      aiSummaryKey(contentHash),
+      AI_SUMMARY_TTL,
+      JSON.stringify(summary),
+    );
+  } catch {
+    /* best-effort */
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Notification dedup
+//
+// Marks (hazard id, content) pairs that already triggered notifications, so a
+// hazard row being re-written with previously seen content (poll re-sends,
+// colliding-ID ping-pong) doesn't push the same alert to users again.
+// ---------------------------------------------------------------------------
+
+const NOTIFIED_TTL = 30 * 24 * 60 * 60; // 30 days
+
+const notifiedKey = (contentHash: string) => `hazard:notified:${contentHash}`;
+
+export const wasContentNotified = async (
+  contentHash: string,
+): Promise<boolean> => {
+  const redis = getCacheClient();
+  if (!redis) return false;
+  try {
+    return (await redis.exists(notifiedKey(contentHash))) === 1;
+  } catch {
+    return false;
+  }
+};
+
+export const markContentNotified = async (
+  contentHash: string,
+): Promise<void> => {
+  const redis = getCacheClient();
+  if (!redis) return;
+  try {
+    await redis.setEx(notifiedKey(contentHash), NOTIFIED_TTL, "1");
+  } catch {
+    /* best-effort */
+  }
+};
