@@ -115,6 +115,51 @@ export const getHazardsApplyingFilters = async (
 };
 
 /**
+ * All Hazard scalar columns except the generated PostGIS columns (`geom`,
+ * `geomBox`) — Prisma cannot deserialize `geometry` values from raw queries,
+ * so `h.*` must never reach the driver. Keep in sync with schema.prisma.
+ */
+const HAZARD_RAW_COLUMNS = [
+  "id",
+  "title",
+  "description",
+  "aiSummary",
+  "aiConfidence",
+  "severity",
+  "severityBand",
+  "callsToAction",
+  "fireStatus",
+  "latitude",
+  "longitude",
+  "locationName",
+  "geoLocation",
+  "northeastLat",
+  "northeastLng",
+  "southwestLat",
+  "southwestLng",
+  "categoryId",
+  "sourceId",
+  "reportedById",
+  "isAwsCompliant",
+  "reviewStatus",
+  "reviewFeedback",
+  "reviewedAt",
+  "reviewedById",
+  "confidenceScore",
+  "confidenceScoreCalculatedAt",
+  "upvoteCount",
+  "downvoteCount",
+  "viewCount",
+  "link",
+  "occurredAt",
+  "createdAt",
+  "updatedAt",
+  "expiresAt",
+]
+  .map((c) => `h."${c}"`)
+  .join(", ");
+
+/**
  * Fetches hazards using raw SQL with database-level sorting for optimal performance.
  * This is the main function that combines WHERE and ORDER BY clause builders.
  * OPTIMIZED VERSION with improved query structure and reduced N+1 queries.
@@ -165,8 +210,8 @@ export const getHazardsApplyingFiltersRaw = async (
   // OPTIMIZED: Build a more efficient query with better JOINs and aggregations
   let query = `
     WITH hazard_data AS (
-      SELECT 
-        h.*,
+      SELECT
+        ${HAZARD_RAW_COLUMNS},
         hc.name as "categoryName",
         hc.description as "categoryDescription", 
         hc.color as "categoryColor",
