@@ -207,7 +207,7 @@ const sendPushNotificationToTokens = async ({
       return;
     }
 
-    const message = {
+    const baseMessage = {
       notification: {
         title,
         body,
@@ -216,10 +216,28 @@ const sendPushNotificationToTokens = async ({
         payload: JSON.stringify(data),
         notificationType: type.toString(),
       },
-      tokens: uniqueTokens,
     };
 
-    return firebaseAdmin.messaging().sendEachForMulticast(message);
+    // FCM caps sendEachForMulticast at 500 tokens per call. In a densely
+    // subscribed area a single hazard can exceed that, and a too-large array
+    // throws — meaning NObody in that area gets the safety alert. Chunk it.
+    const FCM_MULTICAST_LIMIT = 500;
+    const batches = [];
+    for (let i = 0; i < uniqueTokens.length; i += FCM_MULTICAST_LIMIT) {
+      batches.push(uniqueTokens.slice(i, i + FCM_MULTICAST_LIMIT));
+    }
+
+    const responses = await Promise.all(
+      batches.map((tokenBatch) =>
+        firebaseAdmin
+          .messaging()
+          .sendEachForMulticast({ ...baseMessage, tokens: tokenBatch })
+      )
+    );
+
+    // Return the first batch's response to preserve the previous single-batch
+    // return shape for existing callers.
+    return responses[0];
   } catch (error) {
     console.error("Error sending push notification:", error);
   }

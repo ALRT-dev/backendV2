@@ -181,6 +181,8 @@ const moderateImageFromUrl = async (
           api_user: config.sightengineApi.apiUser,
           api_secret: config.sightengineApi.apiSecret,
         },
+        // Don't let a slow moderation call hang the hazard submission.
+        timeout: 15000,
       }
     );
 
@@ -302,6 +304,8 @@ const moderateVideoFromUrl = async (
           api_user: config.sightengineApi.apiUser,
           api_secret: config.sightengineApi.apiSecret,
         },
+        // Don't let a slow moderation call hang the hazard submission.
+        timeout: 20000,
       }
     );
 

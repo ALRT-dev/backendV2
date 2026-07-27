@@ -82,6 +82,16 @@ export const loginWithEmailAndPassword = async (
       throw new HttpError(400, "User does not exist");
     }
 
+    // Google/Apple accounts are created without a password hash. Comparing
+    // against a null hash throws (bcrypt) and would surface as a 500; return a
+    // clear message instead so the app can guide the user to social login.
+    if (!existingUser.passwordHash) {
+      throw new HttpError(
+        400,
+        "This account uses social login. Please sign in with Google or Apple."
+      );
+    }
+
     const isPasswordValid = comparePassword(
       password,
       existingUser.passwordHash
