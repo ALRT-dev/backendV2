@@ -479,6 +479,8 @@ export const buildHazardsWhereClauseRaw = (
     dateFrom,
     dateTo,
     isAwsCompliant,
+    userId,
+    isAdminRequest,
   } = params;
 
   const whereConditions: string[] = [];
@@ -588,7 +590,29 @@ export const buildHazardsWhereClauseRaw = (
     paramIndex++;
   }
 
-  // Apply review status filter if provided
+  // Visibility guard (security): a user-facing caller may only see accepted
+  // hazards plus their own reports in any state. Official/ingested hazards are
+  // stored as accepted, so they stay visible. Without this, other users'
+  // pending and rejected reports leak to everyone — and because only accepted
+  // hazards get an expiry, those would remain visible permanently.
+  // Admin moderation endpoints set isAdminRequest to bypass this.
+  if (!isAdminRequest) {
+    if (userId) {
+      whereConditions.push(
+        `(h."reviewStatus" = 'accepted'::"HazardReviewStatus" OR h."reportedById" = $${paramIndex})`,
+      );
+      queryParams.push(userId);
+      paramIndex++;
+    } else {
+      whereConditions.push(
+        `h."reviewStatus" = 'accepted'::"HazardReviewStatus"`,
+      );
+    }
+  }
+
+  // Apply an explicit review-status filter on top if provided (e.g. a user
+  // viewing only their own pending reports). Combined with the guard above, a
+  // non-owner asking for pending/rejected simply gets nothing back.
   if (reviewStatus) {
     whereConditions.push(
       `h."reviewStatus" = $${paramIndex}::"HazardReviewStatus"`,

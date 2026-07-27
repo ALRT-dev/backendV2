@@ -68,6 +68,9 @@ export const getHazardsForAdmin = async (
     }: GetHazardsForAdminQuery = req.query;
 
     const hazards = await getHazardsApplyingFiltersRaw({
+      // Admin moderation must see pending/rejected reports; bypass the
+      // accepted-only visibility guard applied to user-facing requests.
+      isAdminRequest: true,
       searchString,
       categoryIds,
       sourceIds,
