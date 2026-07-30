@@ -1,4 +1,11 @@
 import z from "zod";
+import {
+  HazardSourceShape,
+  HazardSeveritySystem,
+  SeverityLevelHandling,
+  HazardSeverityBand,
+  SourcePushPolicy,
+} from "@prisma/client";
 
 export const getHazardSourcesForAdminQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
@@ -51,6 +58,19 @@ export const createHazardSourceForAdminBodySchema = z.object({
     .url("Copyright link must be a valid URL")
     .max(500, "Copyright link must be at most 500 characters")
     .optional(),
+
+  // V3 "One Glance" source registry (see V3 verification checklist §1).
+  shape: z.enum(HazardSourceShape).optional(),
+  severitySystem: z.enum(HazardSeveritySystem).optional(),
+  levelHandling: z.enum(SeverityLevelHandling).optional(),
+  stickiness: z
+    .number()
+    .int()
+    .min(0, "Stickiness must be a non-negative number of minutes")
+    .max(20160, "Stickiness must be at most 14 days (20160 minutes)")
+    .optional(),
+  maxInternalBand: z.enum(HazardSeverityBand).optional(),
+  pushPolicy: z.enum(SourcePushPolicy).optional(),
 });
 
 export type CreateHazardSourceForAdminBody = z.infer<
@@ -94,6 +114,21 @@ export const updateHazardSourceForAdminBodySchema = z.object({
     .max(500, "Copyright link must be at most 500 characters")
     .nullable()
     .optional(),
+
+  // V3 "One Glance" source registry (see V3 verification checklist §1).
+  // `null` clears the field back to the documented render default.
+  shape: z.enum(HazardSourceShape).nullable().optional(),
+  severitySystem: z.enum(HazardSeveritySystem).nullable().optional(),
+  levelHandling: z.enum(SeverityLevelHandling).nullable().optional(),
+  stickiness: z
+    .number()
+    .int()
+    .min(0, "Stickiness must be a non-negative number of minutes")
+    .max(20160, "Stickiness must be at most 14 days (20160 minutes)")
+    .nullable()
+    .optional(),
+  maxInternalBand: z.enum(HazardSeverityBand).nullable().optional(),
+  pushPolicy: z.enum(SourcePushPolicy).nullable().optional(),
 });
 
 export type UpdateHazardSourceForAdminBody = z.infer<
