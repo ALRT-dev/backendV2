@@ -86,6 +86,14 @@ export const config = {
     audience: getRequiredEnv("APPLE_OAUTH_AUDIENCE"),
   },
 
+  // Microsoft OAuth (Azure AD / MSAL). Optional so the server still boots when
+  // Microsoft sign-in isn't configured; the verifier returns a clear error if a
+  // Microsoft login is attempted without a client id set.
+  microsoftOAuth: {
+    clientId: getOptionalEnv("MICROSOFT_OAUTH_CLIENT_ID", ""),
+    tenantId: getOptionalEnv("MICROSOFT_OAUTH_TENANT_ID", "common"),
+  },
+
   // OpenAI
   openAI: {
     apiKey: getRequiredEnv("OPENAI_API_KEY"),
