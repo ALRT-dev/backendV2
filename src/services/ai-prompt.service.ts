@@ -12,6 +12,7 @@ import {
   getAirQualityAlertCategoryPrompt,
   getExtractLocationPrompt,
   getOfficialAlertReviewAndSummarizationPrompt,
+  getSIExtractionPrompt,
   getSmartravellerSourcePrompt,
   getUserReportedAlertReviewAndSummarizationPrompt,
 } from "../utils/ai-prompt.util.js";
@@ -560,6 +561,8 @@ export enum DefaultAIPromptNames {
   smartravellerSourceCritical = "[CRITICAL] Smartraveller Source Alert Summarization",
 
   extractLocationPrompt = "Extract Location from Text",
+
+  siExtraction = "SI Extraction",
 }
 
 /**
@@ -652,6 +655,8 @@ export const initializeAIPrompts = async (): Promise<void> => {
       getOfficialAlertReviewAndSummarizationPrompt();
 
     const extractLocationPrompt = getExtractLocationPrompt();
+
+    const siExtractionPrompt = getSIExtractionPrompt();
 
     // Define all prompts with their groups
     const defaultPrompts: Prisma.AIPromptCreateInput[] = [
@@ -872,6 +877,26 @@ export const initializeAIPrompts = async (): Promise<void> => {
           "Used to extract locations from a given text input. This is currently being used for BoM weather alerts to extract location information from the alert text.",
         content: extractLocationPrompt,
         variables: [],
+        model: "gpt-5-nano",
+        createdBy: { connect: { id: superAdmin.id } },
+        group: { connect: { id: otherGroup.id } },
+      },
+
+      // SI (Situational Information) Extraction Prompt — V2 extraction-only step.
+      // The AI writes plainMeaning + facts + location + canonicalHazard only;
+      // it never sets severity (deterministic scan) or advice (For You library).
+      {
+        name: DefaultAIPromptNames.siExtraction,
+        description:
+          "V2 extraction-only prompt. Extracts plainMeaning, facts, canonicalHazard, location and confidence from an alert as fixed JSON. Never sets severity or gives advice.",
+        content: siExtractionPrompt,
+        variables: [
+          "title",
+          "description",
+          "sourceAgency",
+          "locationHint",
+          "canonicalHazardHint",
+        ],
         model: "gpt-5-nano",
         createdBy: { connect: { id: superAdmin.id } },
         group: { connect: { id: otherGroup.id } },
