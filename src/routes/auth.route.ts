@@ -5,6 +5,7 @@ import {
   registerWithEmailAndPassword,
   verifyAppleOAuth,
   verifyGoogleOAuth,
+  verifyMicrosoftOAuth,
 } from "../controllers/auth.controller.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
@@ -12,6 +13,7 @@ import {
   loginSchema,
   googleOAuthSchema,
   appleOAuthSchema,
+  microsoftOAuthSchema,
   refreshTokenSchema,
 } from "../validators/auth.validator.js";
 
@@ -33,6 +35,11 @@ authRouter.post(
   verifyGoogleOAuth
 );
 authRouter.post("/oauth/apple", validate(appleOAuthSchema), verifyAppleOAuth);
+authRouter.post(
+  "/oauth/microsoft",
+  validate(microsoftOAuthSchema),
+  verifyMicrosoftOAuth
+);
 authRouter.post("/refresh-token", validate(refreshTokenSchema), refreshToken);
 
 export default authRouter;

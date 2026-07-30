@@ -11,11 +11,13 @@ import {
   hashPassword,
   verifyAppleToken,
   verifyGoogleToken,
+  verifyMicrosoftToken,
 } from "../services/auth.service.js";
 import type {
   AppleOAuthInput,
   GoogleOAuthInput,
   LoginInput,
+  MicrosoftOAuthInput,
   RefreshTokenInput,
   RegisterInput,
 } from "../validators/auth.validator.js";
@@ -194,6 +196,68 @@ export const verifyAppleOAuth = async (
       });
     } else if (name && !user.name) {
       // Update name if user exists but doesn't have a name
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { name },
+        select: { id: true, name: true },
+      });
+    }
+
+    const accessToken = signAccessToken({ userId: user.id });
+    if (!accessToken) {
+      throw new HttpError(500, "Error signing access token");
+    }
+
+    const refreshToken = signRefreshToken({ userId: user.id });
+    if (!refreshToken) {
+      throw new HttpError(500, "Error signing refresh token");
+    }
+
+    res.status(200).json({
+      accessToken,
+      refreshToken,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/// Controller to handle user login or registration via Microsoft OAuth.
+export const verifyMicrosoftOAuth = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { idToken }: MicrosoftOAuthInput = req.body;
+
+    const payload = await verifyMicrosoftToken(idToken);
+
+    // Microsoft may expose the email as `email` or, for work/school accounts,
+    // as `preferred_username`.
+    const email =
+      (typeof payload.email === "string" && payload.email) ||
+      (typeof payload.preferred_username === "string" &&
+        payload.preferred_username) ||
+      null;
+    if (!email) {
+      throw new HttpError(400, "Microsoft token did not include an email");
+    }
+
+    const name = typeof payload.name === "string" ? payload.name : null;
+
+    let user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, name: true },
+    });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: { email, name },
+        select: { id: true, name: true },
+      });
+    } else if (name && !user.name) {
+      // Backfill the name if we have one and the user doesn't.
       user = await prisma.user.update({
         where: { id: user.id },
         data: { name },
