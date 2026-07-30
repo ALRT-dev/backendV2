@@ -29,6 +29,13 @@ export const config = {
   env: getOptionalEnv("NODE_ENV", "dev"),
   port: parseInt(getOptionalEnv("PORT", "3000"), 10),
 
+  // RevenueCat (ALRT+ subscriptions). `webhookAuth` is the Authorization header
+  // value configured in the RevenueCat dashboard; the webhook rejects requests
+  // whose header does not match. Left empty in dev disables the check.
+  revenueCat: {
+    webhookAuth: getOptionalEnv("REVENUECAT_WEBHOOK_AUTH", ""),
+  },
+
   // CORS / Socket.IO — comma-separated origins; localhost/127.0.0.1 still allowed in non-prod when list does not match
   cors: {
     allowedOrigins: getOptionalEnv(

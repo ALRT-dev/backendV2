@@ -54,6 +54,16 @@ model User {
   streakDays       Int       @default(0)
   lastActivityDate DateTime? // Day-resolution marker used for streak math
 
+  // ALRT+ subscription. Entitlements are written ONLY by the RevenueCat
+  // webhook (never the app), so these are the server's source of truth.
+  isPlus           Boolean   @default(false) // Active ALRT+ entitlement right now
+  plusStore        String? // "APP_STORE" | "PLAY_STORE" | "PROMOTIONAL" | "STRIPE"
+  plusProductId    String? // Store product id of the active subscription
+  plusExpiresAt    DateTime? // When the entitlement lapses (grace-period aware)
+  plusWillRenew    Boolean   @default(false) // Store auto-renew flag
+  plusTrialActive  Boolean   @default(false) // Currently inside the free trial
+  revenueCatUserId String?   @unique // RevenueCat app_user_id (== our user id)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
