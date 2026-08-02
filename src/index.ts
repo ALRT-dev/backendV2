@@ -24,6 +24,7 @@ import {
   guideRouter,
   publicRouter,
   revenueCatRouter,
+  askAlrtRouter,
 } from "./routes/index.js";
 import { errorHandlerMiddleware } from "./middlewares/error_handler.middleware.js";
 import { unknownRouteMiddleware } from "./middlewares/unknown_route.middleware.js";
@@ -115,6 +116,7 @@ app.use("/api/maps", mapsRouter);
 app.use("/api/guides", guideRouter);
 app.use("/api/family", familyRouter);
 app.use("/api/revenuecat", revenueCatRouter);
+app.use("/api/ask", askAlrtRouter);
 
 app.get("/api/test", (req, res) => {
   res.send("Test route is working!");
