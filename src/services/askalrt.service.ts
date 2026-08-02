@@ -1,6 +1,8 @@
 import prisma from "../utils/prisma_client.util.js";
 import { getCacheClient } from "../utils/cache_client.util.js";
+import { config } from "../utils/config.js";
 import { executePrompt } from "./ai.service.js";
+import { getPromptByName } from "./ai-prompt.service.js";
 
 /**
  * Ask ALRT — library-first safety assistant (ported from the askalrt
@@ -235,7 +237,17 @@ const getNearbyAlerts = async (
   });
 };
 
-const SYSTEM_PROMPT = `You are Ask ALRT, the safety assistant inside the ALRT alerting app for Australia.
+/** Admin-console name of the Ask ALRT system prompt (AI Prompts section). */
+export const ASK_ALRT_PROMPT_NAME = "ask_alrt_system";
+
+/**
+ * Built-in fallback used only when the '{@link ASK_ALRT_PROMPT_NAME}' prompt
+ * row is missing. The editable copy lives in the AIPrompt table so admins can
+ * tune tone and rules from the console without a deploy — but the JSON output
+ * contract in rule 5 must be preserved in any edit, or source chips and
+ * answer parsing degrade to a plain-text fallback.
+ */
+const DEFAULT_SYSTEM_PROMPT = `You are Ask ALRT, the safety assistant inside the ALRT alerting app for Australia.
 
 Rules, in priority order:
 1. Ground every factual claim ONLY in the alerts provided in the message. Never invent alerts, closures, fires or conditions. If the provided alerts do not cover the question, say you have no alert information about that and give brief general safety guidance instead.
@@ -243,6 +255,59 @@ Rules, in priority order:
 3. If the question suggests immediate danger to life, tell the user to call 000 now.
 4. Be brief: at most 120 words, plain language, short sentences. No en-dashes.
 5. Respond with STRICT JSON only, no markdown fences: {"answer": "...", "usedAlertIds": ["id", ...]} where usedAlertIds lists only alert ids you actually relied on (empty array if none).`;
+
+/**
+ * Creates the Ask ALRT prompt row once so it shows up in the admin console's
+ * AI Prompts section. Never overwrites an existing row, so console edits
+ * survive deploys. Called on boot; failures must not block startup.
+ */
+export const ensureAskAlrtPrompt = async (): Promise<void> => {
+  try {
+    const existing = await prisma.aIPrompt.findUnique({
+      where: { name: ASK_ALRT_PROMPT_NAME },
+    });
+    if (existing) return;
+
+    const superAdmin = await prisma.admin.findUnique({
+      where: { email: config.adminCredentials.superAdminEmail },
+    });
+    if (!superAdmin) return;
+
+    const group = await prisma.aIPromptGroup.findUnique({
+      where: { name: "Other" },
+    });
+
+    await prisma.aIPrompt.create({
+      data: {
+        name: ASK_ALRT_PROMPT_NAME,
+        description:
+          "System prompt for the Ask ALRT assistant (AI fallback tier). " +
+          "Edits apply within ~5 minutes, no deploy needed. Keep rule 5's " +
+          "strict-JSON output contract intact.",
+        content: DEFAULT_SYSTEM_PROMPT,
+        variables: [],
+        model: config.aws.bedrock.fallbackModelId,
+        groupId: group?.id ?? null,
+        createdById: superAdmin.id,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Ask ALRT prompt initialization failed:", error);
+  }
+};
+
+/** Console-edited prompt when available, built-in copy otherwise. */
+const getSystemPrompt = async (): Promise<{
+  content: string;
+  model?: string;
+}> => {
+  try {
+    const prompt = await getPromptByName(ASK_ALRT_PROMPT_NAME);
+    return { content: prompt.content, model: prompt.model };
+  } catch {
+    return { content: DEFAULT_SYSTEM_PROMPT };
+  }
+};
 
 const extractJson = (
   raw: string,
@@ -326,8 +391,10 @@ export const askAlrt = async (params: {
         .join("\n")
     : "(no active alerts near the user)";
 
+  const systemPrompt = await getSystemPrompt();
   const raw = await executePrompt({
-    systemPromptContent: SYSTEM_PROMPT,
+    ...(systemPrompt.model ? { model: systemPrompt.model } : {}),
+    systemPromptContent: systemPrompt.content,
     userPromptContent: `Active alerts near the user right now:\n${alertsBlock}\n\nUser question: ${question.slice(0, 500)}`,
   });
 
