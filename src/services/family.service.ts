@@ -3,6 +3,7 @@ import type {
   FamilyCheckInStatus,
   FamilyMember,
   FamilyPlaceIcon,
+  FamilyScheduledCheckInMode,
   FamilySharingLevel,
   FamilySosResponseType,
 } from "@prisma/client";
@@ -657,6 +658,151 @@ export const listRecentCheckIns = async (userId: string, limit = 30) => {
       },
     },
   });
+};
+
+// ---------------------------------------------------------------------------
+// Scheduled check-ins — a member's daily "are you safe?" routine.
+// timeOfDay is Australia/Brisbane local time (fixed UTC+10, no DST in QLD).
+// ---------------------------------------------------------------------------
+
+const BRISBANE_UTC_OFFSET_MS = 10 * 60 * 60 * 1000;
+const MAX_SCHEDULED_CHECK_INS_PER_MEMBER = 3;
+
+const scheduledCheckInInclude = {
+  member: {
+    include: {
+      user: { select: { id: true, name: true, profilePictureUrl: true } },
+    },
+  },
+} as const;
+
+export const createScheduledCheckIn = async (
+  userId: string,
+  input: { timeOfDay: string; mode?: FamilyScheduledCheckInMode | undefined },
+) => {
+  const membership = await requireMembership(userId);
+
+  const count = await prisma.familyScheduledCheckIn.count({
+    where: { memberId: membership.id },
+  });
+  if (count >= MAX_SCHEDULED_CHECK_INS_PER_MEMBER) {
+    throw new HttpError(
+      400,
+      `You can have at most ${MAX_SCHEDULED_CHECK_INS_PER_MEMBER} scheduled check-ins`,
+    );
+  }
+
+  return prisma.familyScheduledCheckIn.upsert({
+    where: {
+      memberId_timeOfDay: {
+        memberId: membership.id,
+        timeOfDay: input.timeOfDay,
+      },
+    },
+    create: {
+      circleId: membership.circleId,
+      memberId: membership.id,
+      timeOfDay: input.timeOfDay,
+      mode: input.mode ?? "prompted",
+    },
+    update: { mode: input.mode ?? "prompted" },
+    include: scheduledCheckInInclude,
+  });
+};
+
+export const listScheduledCheckIns = async (userId: string) => {
+  const membership = await requireMembership(userId);
+  return prisma.familyScheduledCheckIn.findMany({
+    where: { circleId: membership.circleId },
+    orderBy: { timeOfDay: "asc" },
+    include: scheduledCheckInInclude,
+  });
+};
+
+export const deleteScheduledCheckIn = async (
+  userId: string,
+  scheduledCheckInId: string,
+) => {
+  const membership = await requireMembership(userId);
+  const schedule = await prisma.familyScheduledCheckIn.findUnique({
+    where: { id: scheduledCheckInId },
+  });
+  if (!schedule || schedule.circleId !== membership.circleId) {
+    throw new HttpError(404, "Scheduled check-in not found");
+  }
+  if (schedule.memberId !== membership.id && membership.role !== "owner") {
+    throw new HttpError(
+      403,
+      "Only the member or the circle owner can remove this schedule",
+    );
+  }
+  await prisma.familyScheduledCheckIn.delete({
+    where: { id: scheduledCheckInId },
+  });
+  return { deleted: true };
+};
+
+/**
+ * Fires every schedule whose timeOfDay matches the current Brisbane minute
+ * and hasn't fired yet today. Called by the scheduler once a minute.
+ */
+export const fireDueScheduledCheckIns = async () => {
+  const now = new Date();
+  const brisbaneNow = new Date(now.getTime() + BRISBANE_UTC_OFFSET_MS);
+  const hhmm = `${String(brisbaneNow.getUTCHours()).padStart(2, "0")}:${String(
+    brisbaneNow.getUTCMinutes(),
+  ).padStart(2, "0")}`;
+
+  const brisbaneDayStart = new Date(brisbaneNow);
+  brisbaneDayStart.setUTCHours(0, 0, 0, 0);
+  const dayStartUtc = new Date(
+    brisbaneDayStart.getTime() - BRISBANE_UTC_OFFSET_MS,
+  );
+
+  const due = await prisma.familyScheduledCheckIn.findMany({
+    where: {
+      timeOfDay: hhmm,
+      OR: [{ lastFiredAt: null }, { lastFiredAt: { lt: dayStartUtc } }],
+    },
+    include: scheduledCheckInInclude,
+  });
+
+  for (const schedule of due) {
+    // Claim the schedule first so a crash mid-fire can't double-notify.
+    await prisma.familyScheduledCheckIn.update({
+      where: { id: schedule.id },
+      data: { lastFiredAt: now },
+    });
+
+    try {
+      if (schedule.mode === "automatic") {
+        // Post a "safe" check-in on the member's behalf, reusing the normal
+        // check-in flow (circle notification, streak touch, lastCheckInAt).
+        await createCheckIn(schedule.member.userId, {
+          status: "safe",
+          message: "Scheduled check-in",
+        });
+      } else {
+        await sendPushNotificationToUser({
+          userId: schedule.member.userId,
+          title: "Daily check-in",
+          body: "Time for your check-in — let your family know you're safe.",
+          data: {
+            circleId: schedule.circleId,
+            scheduledCheckInId: schedule.id,
+          },
+          type: PushNotificationType.familyScheduledCheckInPrompt,
+        });
+      }
+    } catch (error) {
+      console.error(
+        `Scheduled check-in ${schedule.id} failed to fire:`,
+        error,
+      );
+    }
+  }
+
+  return due.length;
 };
 
 // ---------------------------------------------------------------------------

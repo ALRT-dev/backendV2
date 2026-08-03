@@ -6,6 +6,7 @@ import type {
   FamilyCheckInInput,
   FamilyCheckInRequestInput,
   FamilyLocationPingInput,
+  FamilyScheduledCheckInInput,
   JoinFamilyCircleInput,
   RespondFamilyLocationRequestInput,
   RespondFamilySosInput,
@@ -365,6 +366,58 @@ export const listCheckInsController = async (
     const limit = req.query.limit ? Number(req.query.limit) : 30;
     const checkIns = await familyService.listRecentCheckIns(userId, limit);
     res.status(200).json(checkIns);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- Scheduled check-ins -----------------------------------------------------
+
+export const createScheduledCheckInController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const input: FamilyScheduledCheckInInput = req.body;
+    const schedule = await familyService.createScheduledCheckIn(userId, input);
+    res.status(201).json(schedule);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listScheduledCheckInsController = async (
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const schedules = await familyService.listScheduledCheckIns(userId);
+    res.status(200).json(schedules);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteScheduledCheckInController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { scheduledCheckInId } = req.params;
+    if (!scheduledCheckInId) {
+      throw new HttpError(400, "scheduledCheckInId is required");
+    }
+    const result = await familyService.deleteScheduledCheckIn(
+      userId,
+      scheduledCheckInId,
+    );
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

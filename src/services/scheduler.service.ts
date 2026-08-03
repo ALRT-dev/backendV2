@@ -3,6 +3,7 @@ import { syncHazardsFromDifferentSources } from "./ingestion.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import { processScheduledAccountDeletions } from "./user.service.js";
 import { pruneFamilyLocationPings } from "./family_alert.service.js";
+import { fireDueScheduledCheckIns } from "./family.service.js";
 
 /**
  * Initializes scheduled tasks for the application
@@ -42,6 +43,15 @@ export const initializeScheduledTasks = () => {
       await pruneFamilyLocationPings();
     } catch (error) {
       console.error("Family location ping pruning failed:", error);
+    }
+  });
+
+  // Fire due family scheduled check-ins (timeOfDay matching runs per minute)
+  cron.schedule("* * * * *", async () => {
+    try {
+      await fireDueScheduledCheckIns();
+    } catch (error) {
+      console.error("Scheduled check-in firing failed:", error);
     }
   });
 

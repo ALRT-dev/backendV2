@@ -89,6 +89,17 @@ export type FamilyCheckInRequestInput = z.infer<
   typeof familyCheckInRequestSchema
 >;
 
+export const familyScheduledCheckInSchema = z.object({
+  timeOfDay: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "timeOfDay must be HH:mm (24h)"),
+  mode: z.enum(["automatic", "prompted"]).optional(),
+});
+
+export type FamilyScheduledCheckInInput = z.infer<
+  typeof familyScheduledCheckInSchema
+>;
+
 export const createFamilyPlaceSchema = z.object({
   name: z
     .string()

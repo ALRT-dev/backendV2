@@ -12,6 +12,7 @@ import {
   updateFamilyMemberSchema,
   familyLocationPingSchema,
   familyCheckInSchema,
+  familyScheduledCheckInSchema,
   familyCheckInRequestSchema,
   createFamilyPlaceSchema,
   updateFamilyPlaceSchema,
@@ -40,6 +41,9 @@ import {
   checkInController,
   requestCheckInController,
   listCheckInsController,
+  createScheduledCheckInController,
+  listScheduledCheckInsController,
+  deleteScheduledCheckInController,
   listPlacesController,
   createPlaceController,
   updatePlaceController,
@@ -97,6 +101,18 @@ familyRouter.post(
   requestCheckInController,
 );
 familyRouter.get("/check-ins", listCheckInsController);
+
+// Scheduled check-ins (daily routine; respond via the normal POST /check-in)
+familyRouter.post(
+  "/scheduled-check-ins",
+  validate(familyScheduledCheckInSchema),
+  createScheduledCheckInController,
+);
+familyRouter.get("/scheduled-check-ins", listScheduledCheckInsController);
+familyRouter.delete(
+  "/scheduled-check-ins/:scheduledCheckInId",
+  deleteScheduledCheckInController,
+);
 
 // Saved places
 familyRouter.get("/places", listPlacesController);

@@ -650,6 +650,7 @@ model FamilyMember {
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   checkIns                 FamilyCheckIn[]
+  scheduledCheckIns        FamilyScheduledCheckIn[]
   locationPings            FamilyLocationPing[]
   placeEvents              FamilyPlaceEvent[]
   sosEvents                FamilySosEvent[]
@@ -788,6 +789,34 @@ model FamilyCheckInRequest {
   createdAt DateTime @default(now())
 
   @@index([circleId, createdAt])
+}
+
+// How a scheduled daily check-in behaves when it fires:
+// - automatic: a "safe" check-in is posted on the member's behalf
+// - prompted:  the member gets a push asking them to check in (one tap)
+enum FamilyScheduledCheckInMode {
+  automatic
+  prompted
+}
+
+model FamilyScheduledCheckIn {
+  id       String @id @default(uuid())
+  circleId String
+  memberId String
+
+  timeOfDay String // "HH:mm" 24h, Australia/Brisbane local time
+  mode      FamilyScheduledCheckInMode @default(prompted)
+
+  lastFiredAt DateTime? // Guards against double-firing within the same day
+
+  member FamilyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([memberId, timeOfDay])
+  @@index([circleId])
+  @@index([timeOfDay])
 }
 
 model FamilySavedPlace {
