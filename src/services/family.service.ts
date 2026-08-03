@@ -54,19 +54,34 @@ export const toSuburbLabel = (formattedAddress: string): string => {
 // Membership lookups & serialization
 // ---------------------------------------------------------------------------
 
-/** Returns the user's family membership (with circle), or null. */
-export const getMembershipForUser = async (userId: string) => {
+/**
+ * Returns the user's family membership (with circle), or null.
+ *
+ * With [circleId] the membership in that specific circle is returned;
+ * without it the user's first (oldest) membership is the default, which
+ * keeps every single-circle client working unchanged.
+ */
+export const getMembershipForUser = async (
+  userId: string,
+  circleId?: string,
+) => {
   return prisma.familyMember.findFirst({
-    where: { userId },
+    where: { userId, ...(circleId && { circleId }) },
+    orderBy: { createdAt: "asc" },
     include: { circle: true },
   });
 };
 
 /** Returns the user's membership or throws 404 if they have no circle. */
-export const requireMembership = async (userId: string) => {
-  const membership = await getMembershipForUser(userId);
+export const requireMembership = async (userId: string, circleId?: string) => {
+  const membership = await getMembershipForUser(userId, circleId);
   if (!membership) {
-    throw new HttpError(404, "You are not part of a family circle yet");
+    throw new HttpError(
+      404,
+      circleId
+        ? "You are not a member of this circle"
+        : "You are not part of a family circle yet",
+    );
   }
   return membership;
 };
@@ -187,12 +202,37 @@ export const notifyCircle = async ({
 // Circle CRUD
 // ---------------------------------------------------------------------------
 
+// Seat model (locked spec): ALRT+ grants 8 seats spendable across up to 4
+// owned circles. A seat is a (person, circle) pair in a circle you own —
+// the same person in two of your circles uses two seats. Joining someone
+// else's circle consumes nothing of your own.
+const MAX_OWNED_CIRCLES = 4;
+const MAX_SEATS_TOTAL = 8;
+
+/** Seats used across every circle the user owns (each membership row = 1). */
+export const countOwnedSeats = async (ownerUserId: string) => {
+  return prisma.familyMember.count({
+    where: { circle: { createdById: ownerUserId } },
+  });
+};
+
 export const createCircle = async (userId: string, name: string) => {
-  const existing = await getMembershipForUser(userId);
-  if (existing) {
+  const ownedCircles = await prisma.familyCircle.count({
+    where: { createdById: userId },
+  });
+  if (ownedCircles >= MAX_OWNED_CIRCLES) {
     throw new HttpError(
       400,
-      "You already belong to a family circle. Leave it before creating a new one.",
+      `You can own up to ${MAX_OWNED_CIRCLES} circles on your plan`,
+    );
+  }
+
+  // The creator's own membership in the new circle consumes a seat.
+  const seatsUsed = await countOwnedSeats(userId);
+  if (seatsUsed >= MAX_SEATS_TOTAL) {
+    throw new HttpError(
+      400,
+      `All ${MAX_SEATS_TOTAL} seats on your plan are in use. Remove a member or delete a circle first.`,
     );
   }
 
@@ -209,9 +249,32 @@ export const createCircle = async (userId: string, name: string) => {
   });
 };
 
+/** The user's circles with their role and member counts, oldest first. */
+export const listCirclesForUser = async (userId: string) => {
+  const memberships = await prisma.familyMember.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      circle: { include: { _count: { select: { members: true } } } },
+    },
+  });
+
+  return memberships.map((membership) => ({
+    circleId: membership.circleId,
+    name: membership.circle.name,
+    plan: membership.circle.plan,
+    themeColor: membership.circle.themeColor,
+    role: membership.role,
+    myMemberId: membership.id,
+    memberCount: membership.circle._count.members,
+    isOwned: membership.circle.createdById === userId,
+    joinedAt: membership.createdAt,
+  }));
+};
+
 /** Full circle payload for the family hub screen. */
-export const getCircleForUser = async (userId: string) => {
-  const membership = await getMembershipForUser(userId);
+export const getCircleForUser = async (userId: string, circleId?: string) => {
+  const membership = await getMembershipForUser(userId, circleId);
   if (!membership) return null;
 
   const circle = await prisma.familyCircle.findUnique({
@@ -263,8 +326,9 @@ export const getCircleForUser = async (userId: string) => {
 export const updateCircle = async (
   userId: string,
   input: { name?: string | undefined; themeColor?: string | null | undefined },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
   if (membership.role !== "owner") {
     throw new HttpError(403, "Only the circle owner can edit the circle");
   }
@@ -283,8 +347,8 @@ export const updateCircle = async (
   return circle;
 };
 
-export const deleteCircle = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const deleteCircle = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
   if (membership.role !== "owner") {
     throw new HttpError(403, "Only the circle owner can delete the circle");
   }
@@ -297,8 +361,8 @@ export const deleteCircle = async (userId: string) => {
   });
 };
 
-export const leaveCircle = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const leaveCircle = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
 
   if (membership.role === "owner") {
     const otherMembers = await prisma.familyMember.count({
@@ -323,19 +387,21 @@ export const leaveCircle = async (userId: string) => {
 };
 
 export const removeMember = async (userId: string, memberId: string) => {
-  const membership = await requireMembership(userId);
+  // Anchor on the target so the right circle's ownership is checked even
+  // when the caller belongs to several circles.
+  const target = await prisma.familyMember.findUnique({
+    where: { id: memberId },
+  });
+  if (!target) {
+    throw new HttpError(404, "Member not found in your circle");
+  }
+
+  const membership = await requireMembership(userId, target.circleId);
   if (membership.role !== "owner") {
     throw new HttpError(403, "Only the circle owner can remove members");
   }
   if (membership.id === memberId) {
     throw new HttpError(400, "Use leave/delete instead of removing yourself");
-  }
-
-  const target = await prisma.familyMember.findFirst({
-    where: { id: memberId, circleId: membership.circleId },
-  });
-  if (!target) {
-    throw new HttpError(404, "Member not found in your circle");
   }
 
   await prisma.familyMember.delete({ where: { id: target.id } });
@@ -359,8 +425,9 @@ export const updateOwnMember = async (
     sharingLevel?: FamilySharingLevel | undefined;
     colorHex?: string | null | undefined;
   },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
 
   const data: Record<string, unknown> = {};
   if (input.nickname !== undefined) data.nickname = input.nickname;
@@ -397,8 +464,9 @@ export const updateOwnMember = async (
 export const updateOwnMemberPhoto = async (
   userId: string,
   photoUrl: string,
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
   const previous = membership.photoUrl;
 
   const updated = await prisma.familyMember.update({
@@ -428,8 +496,8 @@ const generateInviteCode = (): string => {
   return `ALRT-${code}`;
 };
 
-export const createInvite = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const createInvite = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot create invites");
   }
@@ -452,8 +520,8 @@ export const createInvite = async (userId: string) => {
   throw new HttpError(500, "Could not generate an invite code. Try again.");
 };
 
-export const listInvites = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const listInvites = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
   return prisma.familyInvite.findMany({
     where: {
       circleId: membership.circleId,
@@ -465,14 +533,15 @@ export const listInvites = async (userId: string) => {
 };
 
 export const revokeInvite = async (userId: string, inviteId: string) => {
-  const membership = await requireMembership(userId);
+  const invite = await prisma.familyInvite.findUnique({
+    where: { id: inviteId },
+  });
+  if (!invite) throw new HttpError(404, "Invite not found");
+
+  const membership = await requireMembership(userId, invite.circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot revoke invites");
   }
-  const invite = await prisma.familyInvite.findFirst({
-    where: { id: inviteId, circleId: membership.circleId },
-  });
-  if (!invite) throw new HttpError(404, "Invite not found");
   return prisma.familyInvite.update({
     where: { id: invite.id },
     data: { isRevoked: true },
@@ -480,14 +549,6 @@ export const revokeInvite = async (userId: string, inviteId: string) => {
 };
 
 export const joinCircleWithCode = async (userId: string, code: string) => {
-  const existing = await getMembershipForUser(userId);
-  if (existing) {
-    throw new HttpError(
-      400,
-      "You already belong to a family circle. Leave it before joining another.",
-    );
-  }
-
   const invite = await prisma.familyInvite.findUnique({
     where: { code: code.trim().toUpperCase() },
     include: { circle: { include: { members: true } } },
@@ -504,6 +565,19 @@ export const joinCircleWithCode = async (userId: string, code: string) => {
 
   if (invite.circle.members.length >= invite.circle.maxMembers) {
     throw new HttpError(400, "This family circle is full");
+  }
+
+  if (invite.circle.members.some((m) => m.userId === userId)) {
+    throw new HttpError(400, "You are already a member of this circle");
+  }
+
+  // Joining consumes a seat on the OWNER's plan, never the joiner's.
+  const ownerSeatsUsed = await countOwnedSeats(invite.circle.createdById);
+  if (ownerSeatsUsed >= MAX_SEATS_TOTAL) {
+    throw new HttpError(
+      400,
+      "This circle's plan has no free seats. Ask the owner to free one up.",
+    );
   }
 
   const [member] = await prisma.$transaction([
@@ -547,8 +621,9 @@ export const createCheckIn = async (
     requestId?: string | undefined;
     hazardId?: string | undefined;
   },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
   const status: FamilyCheckInStatus = input.status ?? "safe";
 
   const checkIn = await prisma.$transaction(async (tx) => {
@@ -605,8 +680,9 @@ export const createCheckIn = async (
 export const requestCheckIn = async (
   userId: string,
   input: { message?: string | undefined; hazardId?: string | undefined },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
 
   const request = await prisma.familyCheckInRequest.create({
     data: {
@@ -644,8 +720,12 @@ export const requestCheckIn = async (
   return request;
 };
 
-export const listRecentCheckIns = async (userId: string, limit = 30) => {
-  const membership = await requireMembership(userId);
+export const listRecentCheckIns = async (
+  userId: string,
+  limit = 30,
+  circleId?: string,
+) => {
+  const membership = await requireMembership(userId, circleId);
   return prisma.familyCheckIn.findMany({
     where: { circleId: membership.circleId },
     orderBy: { createdAt: "desc" },
@@ -679,8 +759,9 @@ const scheduledCheckInInclude = {
 export const createScheduledCheckIn = async (
   userId: string,
   input: { timeOfDay: string; mode?: FamilyScheduledCheckInMode | undefined },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
 
   const count = await prisma.familyScheduledCheckIn.count({
     where: { memberId: membership.id },
@@ -710,8 +791,11 @@ export const createScheduledCheckIn = async (
   });
 };
 
-export const listScheduledCheckIns = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const listScheduledCheckIns = async (
+  userId: string,
+  circleId?: string,
+) => {
+  const membership = await requireMembership(userId, circleId);
   return prisma.familyScheduledCheckIn.findMany({
     where: { circleId: membership.circleId },
     orderBy: { timeOfDay: "asc" },
@@ -723,13 +807,13 @@ export const deleteScheduledCheckIn = async (
   userId: string,
   scheduledCheckInId: string,
 ) => {
-  const membership = await requireMembership(userId);
   const schedule = await prisma.familyScheduledCheckIn.findUnique({
     where: { id: scheduledCheckInId },
   });
-  if (!schedule || schedule.circleId !== membership.circleId) {
+  if (!schedule) {
     throw new HttpError(404, "Scheduled check-in not found");
   }
+  const membership = await requireMembership(userId, schedule.circleId);
   if (schedule.memberId !== membership.id && membership.role !== "owner") {
     throw new HttpError(
       403,
@@ -778,10 +862,12 @@ export const fireDueScheduledCheckIns = async () => {
       if (schedule.mode === "automatic") {
         // Post a "safe" check-in on the member's behalf, reusing the normal
         // check-in flow (circle notification, streak touch, lastCheckInAt).
-        await createCheckIn(schedule.member.userId, {
-          status: "safe",
-          message: "Scheduled check-in",
-        });
+        // Scoped to the schedule's own circle, not the member's first one.
+        await createCheckIn(
+          schedule.member.userId,
+          { status: "safe", message: "Scheduled check-in" },
+          schedule.circleId,
+        );
       } else {
         await sendPushNotificationToUser({
           userId: schedule.member.userId,
@@ -809,8 +895,8 @@ export const fireDueScheduledCheckIns = async () => {
 // Saved places
 // ---------------------------------------------------------------------------
 
-export const listPlaces = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const listPlaces = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
   return prisma.familySavedPlace.findMany({
     where: { circleId: membership.circleId },
     include: { notificationPrefs: true },
@@ -828,8 +914,9 @@ export const createPlace = async (
     radiusMeters?: number | undefined;
     address?: string | undefined;
   },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot manage places");
   }
@@ -869,14 +956,15 @@ export const updatePlace = async (
     address?: string | undefined;
   },
 ) => {
-  const membership = await requireMembership(userId);
+  const place = await prisma.familySavedPlace.findUnique({
+    where: { id: placeId },
+  });
+  if (!place) throw new HttpError(404, "Place not found");
+
+  const membership = await requireMembership(userId, place.circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot manage places");
   }
-  const place = await prisma.familySavedPlace.findFirst({
-    where: { id: placeId, circleId: membership.circleId },
-  });
-  if (!place) throw new HttpError(404, "Place not found");
 
   const updated = await prisma.familySavedPlace.update({
     where: { id: place.id },
@@ -903,14 +991,15 @@ export const updatePlace = async (
 };
 
 export const deletePlace = async (userId: string, placeId: string) => {
-  const membership = await requireMembership(userId);
+  const place = await prisma.familySavedPlace.findUnique({
+    where: { id: placeId },
+  });
+  if (!place) throw new HttpError(404, "Place not found");
+
+  const membership = await requireMembership(userId, place.circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot manage places");
   }
-  const place = await prisma.familySavedPlace.findFirst({
-    where: { id: placeId, circleId: membership.circleId },
-  });
-  if (!place) throw new HttpError(404, "Place not found");
 
   await prisma.familySavedPlace.delete({ where: { id: place.id } });
   await notifyCircle({
@@ -929,12 +1018,12 @@ export const updatePlaceNotificationPref = async (
     notifyDepartures: boolean;
   },
 ) => {
-  const membership = await requireMembership(userId);
-
-  const place = await prisma.familySavedPlace.findFirst({
-    where: { id: placeId, circleId: membership.circleId },
+  const place = await prisma.familySavedPlace.findUnique({
+    where: { id: placeId },
   });
   if (!place) throw new HttpError(404, "Place not found");
+
+  const membership = await requireMembership(userId, place.circleId);
 
   const subject = await prisma.familyMember.findFirst({
     where: { id: input.subjectMemberId, circleId: membership.circleId },
@@ -968,8 +1057,9 @@ export const updatePlaceNotificationPref = async (
 export const triggerSos = async (
   userId: string,
   input: { latitude?: number | undefined; longitude?: number | undefined },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
 
   // A member has at most one active SOS: cancel any previous one first.
   await prisma.familySosEvent.updateMany({
@@ -1024,10 +1114,8 @@ export const respondToSos = async (
   sosEventId: string,
   type: FamilySosResponseType,
 ) => {
-  const membership = await requireMembership(userId);
-
-  const sos = await prisma.familySosEvent.findFirst({
-    where: { id: sosEventId, circleId: membership.circleId },
+  const sos = await prisma.familySosEvent.findUnique({
+    where: { id: sosEventId },
     include: {
       member: {
         include: { user: { select: { id: true, name: true } } },
@@ -1035,6 +1123,8 @@ export const respondToSos = async (
     },
   });
   if (!sos) throw new HttpError(404, "SOS event not found");
+
+  const membership = await requireMembership(userId, sos.circleId);
   if (sos.status !== "active") {
     throw new HttpError(400, "This SOS is no longer active");
   }
@@ -1087,15 +1177,15 @@ export const respondToSos = async (
 };
 
 export const resolveSos = async (userId: string, sosEventId: string) => {
-  const membership = await requireMembership(userId);
-
-  const sos = await prisma.familySosEvent.findFirst({
-    where: { id: sosEventId, circleId: membership.circleId },
+  const sos = await prisma.familySosEvent.findUnique({
+    where: { id: sosEventId },
     include: {
       member: { include: { user: { select: { id: true, name: true } } } },
     },
   });
   if (!sos) throw new HttpError(404, "SOS event not found");
+
+  const membership = await requireMembership(userId, sos.circleId);
   if (sos.status !== "active") return sos;
 
   const canResolve = sos.memberId === membership.id || membership.role === "owner";
@@ -1128,8 +1218,8 @@ export const resolveSos = async (userId: string, sosEventId: string) => {
   return resolved;
 };
 
-export const getActiveSos = async (userId: string) => {
-  const membership = await requireMembership(userId);
+export const getActiveSos = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
   return prisma.familySosEvent.findMany({
     where: { circleId: membership.circleId, status: "active" },
     include: {

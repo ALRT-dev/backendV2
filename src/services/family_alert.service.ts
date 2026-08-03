@@ -61,8 +61,9 @@ export const shareLocationSnapshot = async (
     isMoving?: boolean | undefined;
     via?: FamilySnapshotSource | undefined;
   },
+  circleId?: string,
 ) => {
-  const membership = await requireMembership(userId);
+  const membership = await requireMembership(userId, circleId);
 
   // Members who turned sharing off never share, even via other actions.
   if (membership.sharingLevel === "off") {
@@ -159,13 +160,15 @@ export const createLocationRequest = async (
   userId: string,
   targetMemberId: string,
 ) => {
-  const membership = await requireMembership(userId);
-
-  const target = await prisma.familyMember.findFirst({
-    where: { id: targetMemberId, circleId: membership.circleId },
+  // Anchor on the target member so the request lands in the right circle
+  // even when the requester belongs to several.
+  const target = await prisma.familyMember.findUnique({
+    where: { id: targetMemberId },
     include: { user: { select: { id: true, name: true } } },
   });
   if (!target) throw new HttpError(404, "Member not found in your circle");
+
+  const membership = await requireMembership(userId, target.circleId);
   if (target.id === membership.id) {
     throw new HttpError(400, "You cannot request your own location");
   }
@@ -225,12 +228,12 @@ export const createLocationRequest = async (
   return request;
 };
 
-/** Pending location requests addressed to the calling user. */
+/** Pending location requests addressed to the calling user (any circle). */
 export const getPendingLocationRequests = async (userId: string) => {
-  const membership = await requireMembership(userId);
+  await requireMembership(userId);
   return prisma.familyLocationRequest.findMany({
     where: {
-      targetMemberId: membership.id,
+      target: { userId },
       status: "pending",
       expiresAt: { gt: new Date() },
     },
@@ -254,15 +257,16 @@ export const respondToLocationRequest = async (
     longitude?: number | undefined;
   },
 ) => {
-  const membership = await requireMembership(userId);
-
+  // The request pins down which circle (and member row) is answering.
   const request = await prisma.familyLocationRequest.findFirst({
-    where: { id: requestId, targetMemberId: membership.id },
+    where: { id: requestId, target: { userId } },
     include: {
       requester: { include: { user: { select: { id: true } } } },
+      target: true,
     },
   });
   if (!request) throw new HttpError(404, "Location request not found");
+  const membership = request.target;
   if (request.status !== "pending" || request.expiresAt < new Date()) {
     throw new HttpError(400, "This request is no longer active");
   }
@@ -279,11 +283,15 @@ export const respondToLocationRequest = async (
     throw new HttpError(400, "Location is required to share a snapshot");
   }
 
-  await shareLocationSnapshot(userId, {
-    latitude: response.latitude,
-    longitude: response.longitude,
-    via: "request",
-  });
+  await shareLocationSnapshot(
+    userId,
+    {
+      latitude: response.latitude,
+      longitude: response.longitude,
+      via: "request",
+    },
+    membership.circleId,
+  );
 
   const updated = await prisma.familyLocationRequest.update({
     where: { id: request.id },

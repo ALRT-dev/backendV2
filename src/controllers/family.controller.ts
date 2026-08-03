@@ -37,6 +37,14 @@ const requireUserId = (res: Response): string => {
 
 // --- Circle ---------------------------------------------------------------
 
+/** Optional ?circleId= scoping; absent means the user's first circle. */
+const circleIdOf = (req: Request): string | undefined => {
+  const circleId = req.query.circleId;
+  return typeof circleId === "string" && circleId.length > 0
+    ? circleId
+    : undefined;
+};
+
 export const createCircleController = async (
   req: Request,
   res: Response,
@@ -45,9 +53,23 @@ export const createCircleController = async (
   try {
     const userId = requireUserId(res);
     const { name }: CreateFamilyCircleInput = req.body;
-    await familyService.createCircle(userId, name);
-    const circle = await familyService.getCircleForUser(userId);
+    const created = await familyService.createCircle(userId, name);
+    const circle = await familyService.getCircleForUser(userId, created.id);
     res.status(201).json(circle);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listCirclesController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const circles = await familyService.listCirclesForUser(userId);
+    res.status(200).json(circles);
   } catch (error) {
     next(error);
   }
@@ -60,7 +82,10 @@ export const getCircleController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const circle = await familyService.getCircleForUser(userId);
+    const circle = await familyService.getCircleForUser(
+      userId,
+      circleIdOf(req),
+    );
     if (!circle) {
       res.status(200).json(null);
       return;
@@ -79,7 +104,7 @@ export const updateCircleController = async (
   try {
     const userId = requireUserId(res);
     const input: UpdateFamilyCircleInput = req.body;
-    const circle = await familyService.updateCircle(userId, input);
+    const circle = await familyService.updateCircle(userId, input, circleIdOf(req));
     res.status(200).json(circle);
   } catch (error) {
     next(error);
@@ -93,7 +118,7 @@ export const deleteCircleController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    await familyService.deleteCircle(userId);
+    await familyService.deleteCircle(userId, circleIdOf(req));
     res.status(200).json({ success: true });
   } catch (error) {
     next(error);
@@ -107,7 +132,7 @@ export const leaveCircleController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    await familyService.leaveCircle(userId);
+    await familyService.leaveCircle(userId, circleIdOf(req));
     res.status(200).json({ success: true });
   } catch (error) {
     next(error);
@@ -138,7 +163,7 @@ export const updateOwnMemberController = async (
   try {
     const userId = requireUserId(res);
     const input: UpdateFamilyMemberInput = req.body;
-    const member = await familyService.updateOwnMember(userId, input);
+    const member = await familyService.updateOwnMember(userId, input, circleIdOf(req));
     res.status(200).json(member);
   } catch (error) {
     next(error);
@@ -162,7 +187,7 @@ export const updateOwnMemberPhotoController = async (
 
     const uploadResult = await uploadFileToS3(file, "family-member-photos");
     const { updated, previousPhotoUrl } =
-      await familyService.updateOwnMemberPhoto(userId, uploadResult.url);
+      await familyService.updateOwnMemberPhoto(userId, uploadResult.url, circleIdOf(req));
 
     // Best-effort cleanup of the replaced photo.
     if (previousPhotoUrl) {
@@ -189,7 +214,7 @@ export const createInviteController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const invite = await familyService.createInvite(userId);
+    const invite = await familyService.createInvite(userId, circleIdOf(req));
     res.status(201).json(invite);
   } catch (error) {
     next(error);
@@ -203,7 +228,7 @@ export const listInvitesController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const invites = await familyService.listInvites(userId);
+    const invites = await familyService.listInvites(userId, circleIdOf(req));
     res.status(200).json(invites);
   } catch (error) {
     next(error);
@@ -234,8 +259,11 @@ export const joinCircleController = async (
   try {
     const userId = requireUserId(res);
     const { code }: JoinFamilyCircleInput = req.body;
-    await familyService.joinCircleWithCode(userId, code);
-    const circle = await familyService.getCircleForUser(userId);
+    const member = await familyService.joinCircleWithCode(userId, code);
+    const circle = await familyService.getCircleForUser(
+      userId,
+      member.circleId,
+    );
     res.status(200).json(circle);
   } catch (error) {
     next(error);
@@ -254,10 +282,11 @@ export const shareSnapshotController = async (
   try {
     const userId = requireUserId(res);
     const input: FamilyLocationPingInput = req.body;
-    const result = await shareLocationSnapshot(userId, {
-      ...input,
-      via: "manual",
-    });
+    const result = await shareLocationSnapshot(
+      userId,
+      { ...input, via: "manual" },
+      circleIdOf(req),
+    );
     res.status(200).json(result);
   } catch (error) {
     next(error);
@@ -321,16 +350,16 @@ export const checkInController = async (
   try {
     const userId = requireUserId(res);
     const input: FamilyCheckInInput = req.body;
-    const checkIn = await familyService.createCheckIn(userId, input);
+    const checkIn = await familyService.createCheckIn(userId, input, circleIdOf(req));
 
     // Checking in with a location is a deliberate share — stamp it as a
     // snapshot so the circle sees where the check-in came from (1h TTL).
     if (input.latitude !== undefined && input.longitude !== undefined) {
-      shareLocationSnapshot(userId, {
-        latitude: input.latitude,
-        longitude: input.longitude,
-        via: "checkIn",
-      }).catch((error) =>
+      shareLocationSnapshot(
+        userId,
+        { latitude: input.latitude, longitude: input.longitude, via: "checkIn" },
+        circleIdOf(req),
+      ).catch((error) =>
         console.error("Check-in snapshot stamping failed:", error),
       );
     }
@@ -349,7 +378,7 @@ export const requestCheckInController = async (
   try {
     const userId = requireUserId(res);
     const input: FamilyCheckInRequestInput = req.body;
-    const request = await familyService.requestCheckIn(userId, input);
+    const request = await familyService.requestCheckIn(userId, input, circleIdOf(req));
     res.status(201).json(request);
   } catch (error) {
     next(error);
@@ -364,7 +393,7 @@ export const listCheckInsController = async (
   try {
     const userId = requireUserId(res);
     const limit = req.query.limit ? Number(req.query.limit) : 30;
-    const checkIns = await familyService.listRecentCheckIns(userId, limit);
+    const checkIns = await familyService.listRecentCheckIns(userId, limit, circleIdOf(req));
     res.status(200).json(checkIns);
   } catch (error) {
     next(error);
@@ -381,7 +410,7 @@ export const createScheduledCheckInController = async (
   try {
     const userId = requireUserId(res);
     const input: FamilyScheduledCheckInInput = req.body;
-    const schedule = await familyService.createScheduledCheckIn(userId, input);
+    const schedule = await familyService.createScheduledCheckIn(userId, input, circleIdOf(req));
     res.status(201).json(schedule);
   } catch (error) {
     next(error);
@@ -389,13 +418,13 @@ export const createScheduledCheckInController = async (
 };
 
 export const listScheduledCheckInsController = async (
-  _req: Request,
+  req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
     const userId = requireUserId(res);
-    const schedules = await familyService.listScheduledCheckIns(userId);
+    const schedules = await familyService.listScheduledCheckIns(userId, circleIdOf(req));
     res.status(200).json(schedules);
   } catch (error) {
     next(error);
@@ -432,7 +461,7 @@ export const listPlacesController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const places = await familyService.listPlaces(userId);
+    const places = await familyService.listPlaces(userId, circleIdOf(req));
     res.status(200).json(places);
   } catch (error) {
     next(error);
@@ -447,7 +476,7 @@ export const createPlaceController = async (
   try {
     const userId = requireUserId(res);
     const input: CreateFamilyPlaceInput = req.body;
-    const place = await familyService.createPlace(userId, input);
+    const place = await familyService.createPlace(userId, input, circleIdOf(req));
     res.status(201).json(place);
   } catch (error) {
     next(error);
@@ -523,17 +552,17 @@ export const triggerSosController = async (
     // Stamp it first so the SOS event picks up the fresh suburb label.
     if (input.latitude !== undefined && input.longitude !== undefined) {
       try {
-        await shareLocationSnapshot(userId, {
-          latitude: input.latitude,
-          longitude: input.longitude,
-          via: "sos",
-        });
+        await shareLocationSnapshot(
+          userId,
+          { latitude: input.latitude, longitude: input.longitude, via: "sos" },
+          circleIdOf(req),
+        );
       } catch (error) {
         console.error("SOS snapshot stamping failed:", error);
       }
     }
 
-    const sos = await familyService.triggerSos(userId, input);
+    const sos = await familyService.triggerSos(userId, input, circleIdOf(req));
     res.status(201).json(sos);
   } catch (error) {
     next(error);
@@ -580,7 +609,7 @@ export const getActiveSosController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const events = await familyService.getActiveSos(userId);
+    const events = await familyService.getActiveSos(userId, circleIdOf(req));
     res.status(200).json(events);
   } catch (error) {
     next(error);

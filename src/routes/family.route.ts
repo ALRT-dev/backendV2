@@ -34,6 +34,7 @@ import {
   listInvitesController,
   revokeInviteController,
   joinCircleController,
+  listCirclesController,
   shareSnapshotController,
   createLocationRequestController,
   getPendingLocationRequestsController,
@@ -61,6 +62,9 @@ const familyRouter = Router();
 familyRouter.use(requireAuth);
 
 // Circle
+// All circle-scoped endpoints accept an optional ?circleId= query param;
+// without it they default to the user's first (oldest) circle.
+familyRouter.get("/circles", listCirclesController);
 familyRouter.post("/circle", validate(createFamilyCircleSchema), createCircleController);
 familyRouter.get("/circle", getCircleController);
 familyRouter.put("/circle", validate(updateFamilyCircleSchema), updateCircleController);
