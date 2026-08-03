@@ -53,7 +53,7 @@ The system monitors **11 official data sources** across all Australian states an
 
 #### Environmental Monitoring
 
-- **Bureau of Meteorology (BoM)**: Weather warnings and forecasts for all Australian states
+- **Bureau of Meteorology (BoM)** — _currently disabled (parser commented out in `ingestion.service.ts`)_: Weather warnings and forecasts for all Australian states
   - Severe weather warnings (storms, cyclones, flooding)
   - Fire weather warnings
   - Coastal hazards
@@ -70,7 +70,7 @@ The system monitors **11 official data sources** across all Australian states an
 
 - **NSW Transport**: Road incidents, traffic hazards, and major events affecting NSW transport networks
 
-- **Smartraveller**: Official travel advisories for international destinations
+- **Smartraveller** — _currently disabled (source commented out in `ingestion.service.ts`)_: Official travel advisories for international destinations
   - Security alerts
   - Safety warnings
   - Travel restrictions

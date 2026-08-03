@@ -8,11 +8,11 @@ This document provides complete instructions for using the hazards webhook endpo
 
 ## Endpoint Information
 
-**Base URL:** `http://3.26.195.127`
+**Base URL:** `https://api.safetyalrt.com`
 
 **Endpoint:** `POST /api/webhook/hazards`
 
-**Full URL:** `http://3.26.195.127/api/webhook/hazards`
+**Full URL:** `https://api.safetyalrt.com/api/webhook/hazards`
 
 **Authentication:** API Key (Header-based)
 
@@ -207,7 +207,7 @@ The `sourceId` field must be one of the following approved values:
 ### Example 1: Single Hazard (Minimal Required Fields)
 
 ```bash
-curl -X POST http://3.26.195.127/api/webhook/hazards \
+curl -X POST https://api.safetyalrt.com/api/webhook/hazards \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Api-Key: your-api-key-here" \
   -d '{
@@ -225,7 +225,7 @@ curl -X POST http://3.26.195.127/api/webhook/hazards \
 ### Example 2: Single Hazard (Complete Information)
 
 ```bash
-curl -X POST http://3.26.195.127/api/webhook/hazards \
+curl -X POST https://api.safetyalrt.com/api/webhook/hazards \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Api-Key: your-api-key-here" \
   -d '{
@@ -266,7 +266,7 @@ curl -X POST http://3.26.195.127/api/webhook/hazards \
 ### Example 3: Multiple Hazards with Sync Options
 
 ```bash
-curl -X POST http://3.26.195.127/api/webhook/hazards \
+curl -X POST https://api.safetyalrt.com/api/webhook/hazards \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Api-Key: your-api-key-here" \
   -d '{
@@ -311,7 +311,7 @@ curl -X POST http://3.26.195.127/api/webhook/hazards \
 This example demonstrates how to use `allowedSeverityBands` to filter hazards. Only hazards with severity bands in the allowed list will be created:
 
 ```bash
-curl -X POST http://3.26.195.127/api/webhook/hazards \
+curl -X POST https://api.safetyalrt.com/api/webhook/hazards \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Api-Key: your-api-key-here" \
   -d '{
