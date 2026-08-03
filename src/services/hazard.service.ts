@@ -1011,21 +1011,42 @@ export const getHazardsForGeoJson = async (
     buildHazardsWhereClauseRaw(params);
 
   // Require valid coordinates for GeoJSON output
-  const geoWhereClause = `${whereClause} AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL`;
+  let geoWhereClause = `${whereClause} AND h.latitude IS NOT NULL AND h.longitude IS NOT NULL`;
+  let currentParamIndex = paramIndex;
 
-  // Build ORDER BY clause (no user location needed for geo endpoint)
-  const { orderByClause, paramIndex: updatedParamIndex } =
-    buildHazardsOrderByClauseRaw(
-      undefined,
-      undefined,
-      paramIndex,
-      queryParams,
-    );
+  // Incremental pulls: only rows changed since the given timestamp
+  if (params.updatedAfter) {
+    geoWhereClause += ` AND h."updatedAt" > $${currentParamIndex}::timestamptz`;
+    queryParams.push(params.updatedAfter);
+    currentParamIndex++;
+  }
+
+  // Keyset cursor: resume strictly after (updatedAt, id) of the last row served
+  if (params.cursorUpdatedAt && params.cursorId) {
+    geoWhereClause += ` AND (h."updatedAt", h.id) > ($${currentParamIndex}::timestamptz, $${currentParamIndex + 1})`;
+    queryParams.push(params.cursorUpdatedAt, params.cursorId);
+    currentParamIndex += 2;
+  }
+
+  // Cursor pagination needs a deterministic total order; the default
+  // severity-first ordering is not stable across pages.
+  let orderByClause: string;
+  if (params.stableOrder) {
+    orderByClause = `h."updatedAt" ASC, h.id ASC`;
+  } else {
+    ({ orderByClause, paramIndex: currentParamIndex } =
+      buildHazardsOrderByClauseRaw(
+        undefined,
+        undefined,
+        currentParamIndex,
+        queryParams,
+      ));
+  }
 
   // Apply limit
   const limit = params.pageSize ?? 500;
   queryParams.push(limit);
-  const limitParamIndex = updatedParamIndex;
+  const limitParamIndex = currentParamIndex;
 
   // Count query for metadata
   const countQuery = `
@@ -1057,15 +1078,22 @@ export const getHazardsForGeoJson = async (
       h."isAwsCompliant",
       h."categoryId",
       h."sourceId",
+      h."occurredAt",
       h."expiresAt",
       h."createdAt",
       h."updatedAt",
       hc.name as "categoryName",
       hc.color as "categoryColor",
-      hs.name as "sourceName"
+      hs.name as "sourceName",
+      hs.url as "sourceUrl",
+      hs."copyrightText" as "sourceCopyrightText",
+      hs."copyrightLink" as "sourceCopyrightLink",
+      hsl."badgeText" as "sourceLicenseBadge",
+      hsl.link as "sourceLicenseLink"
     FROM "Hazard" h
     LEFT JOIN "HazardCategory" hc ON h."categoryId" = hc.id
     LEFT JOIN "HazardSource" hs ON h."sourceId" = hs.id
+    LEFT JOIN "HazardSourceLicense" hsl ON hs."licenseId" = hsl.id
     WHERE ${geoWhereClause}
     ORDER BY ${orderByClause}
     LIMIT $${limitParamIndex}

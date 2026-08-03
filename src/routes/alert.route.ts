@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getAlertsGeo } from "../controllers/alert.controller.js";
-import { requireAuth } from "../middlewares/auth.middleware.js";
+import { requireUserOrExportKeyAuth } from "../middlewares/export_auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import { getAlertsGeoQuerySchema } from "../validators/alert.validator.js";
 
@@ -8,7 +8,7 @@ const alertRouter = Router();
 
 alertRouter.get(
   "/geo",
-  requireAuth,
+  requireUserOrExportKeyAuth,
   validate(getAlertsGeoQuerySchema, "query"),
   getAlertsGeo,
 );

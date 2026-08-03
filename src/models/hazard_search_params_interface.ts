@@ -53,4 +53,9 @@ export interface HazardSearchParams {
 
   page?: number | undefined;
   pageSize?: number | undefined;
+
+  updatedAfter?: Date | undefined;
+  cursorUpdatedAt?: Date | undefined;
+  cursorId?: string | undefined;
+  stableOrder?: boolean | undefined;
 }

@@ -9,7 +9,12 @@ export interface GeoJSONFeatureCollection {
   type: "FeatureCollection";
   bbox?: [number, number, number, number];
   features: GeoJSONFeature[];
-  metadata: { totalCount: number; limit: number; truncated: boolean };
+  metadata: {
+    totalCount: number;
+    limit: number;
+    truncated: boolean;
+    nextCursor?: string | null;
+  };
 }
 
 /**
@@ -20,6 +25,7 @@ export function toGeoJSONFeatureCollection(
   hazards: any[],
   totalCount: number,
   limit: number,
+  nextCursor?: string | null,
 ): GeoJSONFeatureCollection {
   const features: GeoJSONFeature[] = hazards
     .filter((h) => h.latitude != null && h.longitude != null)
@@ -49,6 +55,12 @@ export function toGeoJSONFeatureCollection(
         categoryColor: h.categoryColor ?? null,
         sourceId: h.sourceId ?? null,
         sourceName: h.sourceName ?? null,
+        sourceUrl: h.sourceUrl ?? null,
+        sourceCopyrightText: h.sourceCopyrightText ?? null,
+        sourceCopyrightLink: h.sourceCopyrightLink ?? null,
+        sourceLicenseBadge: h.sourceLicenseBadge ?? null,
+        sourceLicenseLink: h.sourceLicenseLink ?? null,
+        duplicateIds: h.duplicateIds ?? null,
         boundingBox:
           h.northeastLat != null
             ? {
@@ -58,6 +70,7 @@ export function toGeoJSONFeatureCollection(
                 west: h.southwestLng,
               }
             : null,
+        occurredAt: h.occurredAt ?? null,
         expiresAt: h.expiresAt ?? null,
         createdAt: h.createdAt,
         updatedAt: h.updatedAt,
@@ -89,6 +102,7 @@ export function toGeoJSONFeatureCollection(
       totalCount,
       limit,
       truncated: totalCount > limit,
+      ...(nextCursor !== undefined && { nextCursor }),
     },
   };
 }

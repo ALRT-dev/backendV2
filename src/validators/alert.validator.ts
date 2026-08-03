@@ -49,6 +49,17 @@ export const getAlertsGeoQuerySchema = z.object({
     .string()
     .regex(/^\d+$/, "Limit must be a number")
     .optional(),
+
+  updatedAfter: z
+    .string()
+    .datetime({ message: "updatedAfter must be a valid ISO 8601 datetime" })
+    .optional(),
+
+  cursor: z.string().max(200).optional(),
+
+  format: z.enum(["geojson", "csv"]).default("geojson").optional(),
+
+  dedupe: z.enum(["true", "false"]).optional(),
 });
 
 export type GetAlertsGeoQuery = z.infer<typeof getAlertsGeoQuerySchema>;
