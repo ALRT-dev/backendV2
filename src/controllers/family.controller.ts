@@ -7,6 +7,8 @@ import type {
   FamilyCheckInRequestInput,
   FamilyLocationPingInput,
   FamilyScheduledCheckInInput,
+  FamilySosListInput,
+  FamilySosListUpdateInput,
   JoinFamilyCircleInput,
   RespondFamilyLocationRequestInput,
   RespondFamilySosInput,
@@ -446,6 +448,70 @@ export const deleteScheduledCheckInController = async (
       userId,
       scheduledCheckInId,
     );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// --- SOS recipient presets ---------------------------------------------------
+
+export const listSosListsController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const lists = await familyService.listSosLists(userId);
+    res.status(200).json(lists);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createSosListController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const input: FamilySosListInput = req.body;
+    const list = await familyService.createSosList(userId, input);
+    res.status(201).json(list);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateSosListController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { sosListId } = req.params;
+    if (!sosListId) throw new HttpError(400, "sosListId is required");
+    const input: FamilySosListUpdateInput = req.body;
+    const list = await familyService.updateSosList(userId, sosListId, input);
+    res.status(200).json(list);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteSosListController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { sosListId } = req.params;
+    if (!sosListId) throw new HttpError(400, "sosListId is required");
+    const result = await familyService.deleteSosList(userId, sosListId);
     res.status(200).json(result);
   } catch (error) {
     next(error);

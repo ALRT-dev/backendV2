@@ -353,7 +353,16 @@ export const deleteCircle = async (userId: string, circleId?: string) => {
     throw new HttpError(403, "Only the circle owner can delete the circle");
   }
   const userIds = await getCircleUserIds(membership.circleId);
+  const memberRows = await prisma.familyMember.findMany({
+    where: { circleId: membership.circleId },
+    select: { id: true },
+  });
   await prisma.familyCircle.delete({ where: { id: membership.circleId } });
+
+  pruneMembersFromSosLists(memberRows.map((m) => m.id)).catch((error) =>
+    console.error("SOS list prune failed on circle delete:", error),
+  );
+
   sendSocketEventToUsers({
     userIds,
     event: SocketEvent.familyCircleUpdate,
@@ -379,6 +388,13 @@ export const leaveCircle = async (userId: string, circleId?: string) => {
   }
 
   await prisma.familyMember.delete({ where: { id: membership.id } });
+
+  // §28: the leaver comes off every SOS list, owners get told.
+  pruneMembersFromSosLists(
+    [membership.id],
+    membership.nickname ?? undefined,
+  ).catch((error) => console.error("SOS list prune failed on leave:", error));
+
   await notifyCircle({
     circleId: membership.circleId,
     socketEvent: SocketEvent.familyCircleUpdate,
@@ -405,6 +421,11 @@ export const removeMember = async (userId: string, memberId: string) => {
   }
 
   await prisma.familyMember.delete({ where: { id: target.id } });
+
+  // §28: departed members leave every SOS list, owners get told.
+  pruneMembersFromSosLists([target.id], target.nickname ?? undefined).catch(
+    (error) => console.error("SOS list prune failed on remove:", error),
+  );
 
   sendSocketEventToUsers({
     userIds: [target.userId],
@@ -1051,15 +1072,202 @@ export const updatePlaceNotificationPref = async (
 };
 
 // ---------------------------------------------------------------------------
+// SOS recipient presets (locked spec §28) — named lists owned by the
+// SENDER, configured in advance, never during an emergency. A list may mix
+// members across the owner's circles.
+// ---------------------------------------------------------------------------
+
+const MAX_SOS_LISTS = 4;
+
+export const listSosLists = async (userId: string) => {
+  await requireMembership(userId);
+  return prisma.familySosList.findMany({
+    where: { ownerUserId: userId },
+    orderBy: { createdAt: "asc" },
+  });
+};
+
+/** Every recipient must be a member of one of the owner's circles. */
+const assertSosListMembersValid = async (
+  userId: string,
+  memberIds: string[],
+) => {
+  if (memberIds.length === 0) return;
+  const myCircles = await prisma.familyMember.findMany({
+    where: { userId },
+    select: { circleId: true },
+  });
+  const validCount = await prisma.familyMember.count({
+    where: {
+      id: { in: memberIds },
+      circleId: { in: myCircles.map((m) => m.circleId) },
+    },
+  });
+  if (validCount !== memberIds.length) {
+    throw new HttpError(400, "Every recipient must be in one of your circles");
+  }
+};
+
+export const createSosList = async (
+  userId: string,
+  input: {
+    name: string;
+    memberIds: string[];
+    isDefault?: boolean | undefined;
+  },
+) => {
+  await requireMembership(userId);
+
+  const existing = await prisma.familySosList.count({
+    where: { ownerUserId: userId },
+  });
+  if (existing >= MAX_SOS_LISTS) {
+    throw new HttpError(
+      400,
+      `You can have at most ${MAX_SOS_LISTS} SOS lists`,
+    );
+  }
+
+  const memberIds = [...new Set(input.memberIds)];
+  await assertSosListMembersValid(userId, memberIds);
+
+  // The first list becomes the default automatically.
+  const isDefault = input.isDefault ?? existing === 0;
+
+  return prisma.$transaction(async (tx) => {
+    if (isDefault) {
+      await tx.familySosList.updateMany({
+        where: { ownerUserId: userId },
+        data: { isDefault: false },
+      });
+    }
+    return tx.familySosList.create({
+      data: { ownerUserId: userId, name: input.name, memberIds, isDefault },
+    });
+  });
+};
+
+export const updateSosList = async (
+  userId: string,
+  sosListId: string,
+  input: {
+    name?: string | undefined;
+    memberIds?: string[] | undefined;
+    isDefault?: boolean | undefined;
+  },
+) => {
+  const list = await prisma.familySosList.findFirst({
+    where: { id: sosListId, ownerUserId: userId },
+  });
+  if (!list) throw new HttpError(404, "SOS list not found");
+
+  const memberIds =
+    input.memberIds === undefined ? undefined : [...new Set(input.memberIds)];
+  if (memberIds !== undefined) {
+    await assertSosListMembersValid(userId, memberIds);
+  }
+
+  return prisma.$transaction(async (tx) => {
+    if (input.isDefault === true) {
+      await tx.familySosList.updateMany({
+        where: { ownerUserId: userId, id: { not: list.id } },
+        data: { isDefault: false },
+      });
+    }
+    return tx.familySosList.update({
+      where: { id: list.id },
+      data: {
+        ...(input.name !== undefined && { name: input.name }),
+        ...(memberIds !== undefined && { memberIds }),
+        ...(input.isDefault !== undefined && { isDefault: input.isDefault }),
+      },
+    });
+  });
+};
+
+export const deleteSosList = async (userId: string, sosListId: string) => {
+  const list = await prisma.familySosList.findFirst({
+    where: { id: sosListId, ownerUserId: userId },
+  });
+  if (!list) throw new HttpError(404, "SOS list not found");
+  await prisma.familySosList.delete({ where: { id: list.id } });
+  return { deleted: true };
+};
+
+/**
+ * Removes departed members from every SOS list referencing them and tells
+ * each list owner — lists never silently misrepresent their size (§28).
+ */
+export const pruneMembersFromSosLists = async (
+  memberIds: string[],
+  departedName?: string,
+) => {
+  if (memberIds.length === 0) return;
+  const lists = await prisma.familySosList.findMany({
+    where: { memberIds: { hasSome: memberIds } },
+  });
+
+  for (const list of lists) {
+    const remaining = list.memberIds.filter((id) => !memberIds.includes(id));
+    await prisma.familySosList.update({
+      where: { id: list.id },
+      data: { memberIds: remaining },
+    });
+    await sendPushNotificationToUser({
+      userId: list.ownerUserId,
+      title: 'SOS list updated',
+      body:
+        `${departedName ?? 'A member'} left a circle and was removed from ` +
+        `"${list.name}". It now reaches ${remaining.length} ` +
+        `${remaining.length === 1 ? 'person' : 'people'}.`,
+      data: { sosListId: list.id },
+      type: PushNotificationType.familyCircleUpdate,
+    });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // SOS
 // ---------------------------------------------------------------------------
 
 export const triggerSos = async (
   userId: string,
-  input: { latitude?: number | undefined; longitude?: number | undefined },
+  input: {
+    latitude?: number | undefined;
+    longitude?: number | undefined;
+    sosListId?: string | undefined;
+  },
   circleId?: string,
 ) => {
   const membership = await requireMembership(userId, circleId);
+
+  // §28: with a preset, the SOS reaches exactly that list's members
+  // (which may span the sender's circles). Without one, the whole
+  // selected circle — the implicit "Everyone" default.
+  let listRecipientUserIds: string[] | null = null;
+  let listName: string | null = null;
+  if (input.sosListId) {
+    const sosList = await prisma.familySosList.findFirst({
+      where: { id: input.sosListId, ownerUserId: userId },
+    });
+    if (!sosList) throw new HttpError(404, "SOS list not found");
+    const recipients = await prisma.familyMember.findMany({
+      where: { id: { in: sosList.memberIds } },
+      select: { userId: true },
+    });
+    listRecipientUserIds = [
+      ...new Set(
+        recipients.map((r) => r.userId).filter((id) => id !== userId),
+      ),
+    ];
+    listName = sosList.name;
+    if (listRecipientUserIds.length === 0) {
+      throw new HttpError(
+        400,
+        `"${sosList.name}" has no reachable members. Update the list first.`,
+      );
+    }
+  }
 
   // A member has at most one active SOS: cancel any previous one first.
   await prisma.familySosEvent.updateMany({
@@ -1092,19 +1300,45 @@ export const triggerSos = async (
 
   const memberName =
     sos.member.nickname || sos.member.user.name || "A family member";
-
-  await notifyCircle({
+  const title = `🆘 ${memberName} triggered SOS`;
+  const body = sos.locationLabel
+    ? `Live location shared near ${sos.locationLabel}. Open to respond.`
+    : "Live location shared. Open to respond.";
+  const data = {
     circleId: membership.circleId,
-    excludeMemberIds: [membership.id],
-    title: `🆘 ${memberName} triggered SOS`,
-    body: sos.locationLabel
-      ? `Live location shared near ${sos.locationLabel}. Open to respond.`
-      : "Live location shared. Open to respond.",
-    data: { circleId: membership.circleId, sosEventId: sos.id },
-    type: PushNotificationType.familySos,
-    socketEvent: SocketEvent.familySos,
-    socketData: sos,
-  });
+    sosEventId: sos.id,
+    ...(listName && { sosListName: listName }),
+  };
+
+  if (listRecipientUserIds != null) {
+    sendSocketEventToUsers({
+      userIds: listRecipientUserIds,
+      event: SocketEvent.familySos,
+      data: sos,
+    });
+    await Promise.allSettled(
+      listRecipientUserIds.map((recipientUserId) =>
+        sendPushNotificationToUser({
+          userId: recipientUserId,
+          title,
+          body,
+          data,
+          type: PushNotificationType.familySos,
+        }),
+      ),
+    );
+  } else {
+    await notifyCircle({
+      circleId: membership.circleId,
+      excludeMemberIds: [membership.id],
+      title,
+      body,
+      data,
+      type: PushNotificationType.familySos,
+      socketEvent: SocketEvent.familySos,
+      socketData: sos,
+    });
+  }
 
   return sos;
 };

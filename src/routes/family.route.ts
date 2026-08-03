@@ -13,6 +13,8 @@ import {
   familyLocationPingSchema,
   familyCheckInSchema,
   familyScheduledCheckInSchema,
+  familySosListSchema,
+  familySosListUpdateSchema,
   familyCheckInRequestSchema,
   createFamilyPlaceSchema,
   updateFamilyPlaceSchema,
@@ -51,6 +53,10 @@ import {
   deletePlaceController,
   updatePlacePrefController,
   triggerSosController,
+  listSosListsController,
+  createSosListController,
+  updateSosListController,
+  deleteSosListController,
   respondSosController,
   resolveSosController,
   getActiveSosController,
@@ -130,6 +136,21 @@ familyRouter.put(
 );
 
 // SOS
+
+// SOS recipient presets (§28) — configured in advance, never mid-emergency
+familyRouter.get("/sos-lists", listSosListsController);
+familyRouter.post(
+  "/sos-lists",
+  validate(familySosListSchema),
+  createSosListController,
+);
+familyRouter.put(
+  "/sos-lists/:sosListId",
+  validate(familySosListUpdateSchema),
+  updateSosListController,
+);
+familyRouter.delete("/sos-lists/:sosListId", deleteSosListController);
+
 familyRouter.post("/sos", validate(triggerFamilySosSchema), triggerSosController);
 familyRouter.get("/sos/active", getActiveSosController);
 familyRouter.post("/sos/:sosEventId/respond", validate(respondFamilySosSchema), respondSosController);

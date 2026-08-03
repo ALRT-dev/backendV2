@@ -141,6 +141,7 @@ export type RespondFamilyLocationRequestInput = z.infer<
 export const triggerFamilySosSchema = z.object({
   latitude: latitudeSchema.optional(),
   longitude: longitudeSchema.optional(),
+  sosListId: z.string().uuid().optional(),
 });
 
 export type TriggerFamilySosInput = z.infer<typeof triggerFamilySosSchema>;
@@ -150,3 +151,21 @@ export const respondFamilySosSchema = z.object({
 });
 
 export type RespondFamilySosInput = z.infer<typeof respondFamilySosSchema>;
+
+export const familySosListSchema = z.object({
+  name: z.string().min(1).max(40),
+  memberIds: z.array(z.string().uuid()).max(50),
+  isDefault: z.boolean().optional(),
+});
+
+export type FamilySosListInput = z.infer<typeof familySosListSchema>;
+
+export const familySosListUpdateSchema = z.object({
+  name: z.string().min(1).max(40).optional(),
+  memberIds: z.array(z.string().uuid()).max(50).optional(),
+  isDefault: z.boolean().optional(),
+});
+
+export type FamilySosListUpdateInput = z.infer<
+  typeof familySosListUpdateSchema
+>;

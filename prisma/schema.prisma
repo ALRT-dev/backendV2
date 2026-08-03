@@ -49,6 +49,7 @@ model User {
   familyMemberships        FamilyMember[]
   guideProgress            UserGuideProgress[]
   xpEvents                 XpEvent[]
+  sosLists                 FamilySosList[]
 
   // Activity streak (any qualifying action counts: report, check-in, guide)
   streakDays       Int       @default(0)
@@ -874,6 +875,27 @@ model FamilyPlaceEvent {
 
   @@index([placeId, createdAt])
   @@index([memberId, createdAt])
+}
+
+// SOS recipient preset (locked spec §28): a named list owned by the
+// SENDER, mixing members across their circles. Configured in advance in
+// Family settings, never during an emergency. Recommended cap: 4 lists.
+model FamilySosList {
+  id          String  @id @default(uuid())
+  ownerUserId String // The user (sender) this preset belongs to
+  name        String
+  isDefault   Boolean @default(false)
+
+  // FamilyMember ids across the owner's circles. Kept as an id array —
+  // membership churn prunes entries via the leave/remove paths.
+  memberIds String[] @default([])
+
+  owner User @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerUserId])
 }
 
 model FamilySosEvent {
