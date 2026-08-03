@@ -8,6 +8,7 @@ import xpPointsRouter from "./xpPoints.route.js";
 import onboardingRouter from "./onboarding.route.js";
 import adminRouter from "./admin/index.js";
 import webhookRouter from "./webhook.route.js";
+import revenuecatRouter from "./revenuecat.route.js";
 import supportRouter from "./support.route.js";
 import mapsRouter from "./maps.route.js";
 import familyRouter from "./family.route.js";
@@ -25,6 +26,7 @@ export {
   onboardingRouter,
   adminRouter,
   webhookRouter,
+  revenuecatRouter,
   supportRouter,
   mapsRouter,
   familyRouter,

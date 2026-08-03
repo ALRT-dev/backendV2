@@ -54,6 +54,13 @@ model User {
   streakDays       Int       @default(0)
   lastActivityDate DateTime? // Day-resolution marker used for streak math
 
+  // ALRT+ entitlement, synced from RevenueCat via POST /api/revenuecat/webhook.
+  // RevenueCat app_user_id == User.id (the app calls Purchases.logIn(user.id)).
+  plan          FamilyPlan @default(free)
+  planExpiresAt DateTime? // Entitlement expiry reported by RevenueCat
+  planStore     String? // APP_STORE | PLAY_STORE | STRIPE | PROMOTIONAL
+  planUpdatedAt DateTime? // Last webhook event applied
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -18,6 +18,7 @@ import {
   adminRouter,
   onboardingRouter,
   webhookRouter,
+  revenuecatRouter,
   supportRouter,
   mapsRouter,
   familyRouter,
@@ -98,6 +99,7 @@ app.use(express.json());
 
 // Rate limits: webhook first (own per-key limits), then auth (stricter), then general API.
 app.use("/api/webhook", webhookRouter);
+app.use("/api/revenuecat", revenuecatRouter);
 app.use("/api/auth", authApiRateLimiter, authRouter);
 app.use("/api", apiGeneralRateLimiter);
 

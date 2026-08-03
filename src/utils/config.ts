@@ -166,6 +166,12 @@ export const config = {
     ),
   },
 
+  // RevenueCat webhook (ALRT+ entitlement sync). Must match the
+  // Authorization header configured in the RevenueCat dashboard.
+  revenuecat: {
+    webhookAuth: getOptionalEnv("REVENUECAT_WEBHOOK_AUTH", ""),
+  },
+
   // Email configuration
   email: {
     smtpHost: getRequiredEnv("SMTP_HOST"),
