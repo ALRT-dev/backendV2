@@ -105,13 +105,10 @@ export const config = {
     apiKey: getRequiredEnv("NSW_TRANSPORT_API_KEY"),
   },
 
-  // QLD Traffic API — falls back to the long-lived public key that was
-  // previously hardcoded in the ingestion source list.
+  // QLD Traffic API. No fallback on purpose: when the key is unset the
+  // QLD Traffic source is skipped by ingestion until one is provided.
   qldTrafficApi: {
-    apiKey: getOptionalEnv(
-      "QLD_TRAFFIC_API_KEY",
-      "3e83add325cbb69ac4d8e5bf433d770b",
-    ),
+    apiKey: getOptionalEnv("QLD_TRAFFIC_API_KEY", ""),
   },
 
   // WAQI API

@@ -389,15 +389,21 @@ export const syncHazardsFromDifferentSources = async ({
           });
         },
       },
-      {
-        id: ExternalSourceId.qldTraffic,
-        apiUrl: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${config.qldTrafficApi.apiKey}`,
-        parseFunction: (responseData: any) =>
-          parseQLDTrafficToHazards({
-            data: responseData,
-            availableCategories,
-          }),
-      },
+      // QLD Traffic requires QLD_TRAFFIC_API_KEY; without it the source is
+      // skipped entirely rather than calling out with a bad URL.
+      ...(config.qldTrafficApi.apiKey
+        ? [
+            {
+              id: ExternalSourceId.qldTraffic,
+              apiUrl: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${config.qldTrafficApi.apiKey}`,
+              parseFunction: (responseData: any) =>
+                parseQLDTrafficToHazards({
+                  data: responseData,
+                  availableCategories,
+                }),
+            },
+          ]
+        : []),
       {
         id: ExternalSourceId.qldPark,
         apiUrl: "https://parks.qld.gov.au/xml/rss/parkalerts.xml",
