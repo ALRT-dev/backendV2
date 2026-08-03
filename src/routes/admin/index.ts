@@ -7,6 +7,7 @@ import adminUserRouter from "./user.route.js";
 import adminAIPromptRouter from "./ai-prompt.route.js";
 import adminConfigurationRouter from "./configuration.route.js";
 import adminWebhookApiKeyRouter from "./webhook_api_key.route.js";
+import adminStatsRouter from "./stats.route.js";
 
 const adminRouter = Router();
 
@@ -18,5 +19,6 @@ adminRouter.use("/hazard-sources", adminHazardSourceRouter);
 adminRouter.use("/ai-prompts", adminAIPromptRouter);
 adminRouter.use("/configurations", adminConfigurationRouter);
 adminRouter.use("/webhook-api-keys", adminWebhookApiKeyRouter);
+adminRouter.use("/stats", adminStatsRouter);
 
 export default adminRouter;

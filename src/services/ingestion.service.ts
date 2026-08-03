@@ -391,8 +391,7 @@ export const syncHazardsFromDifferentSources = async ({
       },
       {
         id: ExternalSourceId.qldTraffic,
-        apiUrl:
-          "https://api.qldtraffic.qld.gov.au/v2/events?apikey=3e83add325cbb69ac4d8e5bf433d770b",
+        apiUrl: `https://api.qldtraffic.qld.gov.au/v2/events?apikey=${config.qldTrafficApi.apiKey}`,
         parseFunction: (responseData: any) =>
           parseQLDTrafficToHazards({
             data: responseData,
