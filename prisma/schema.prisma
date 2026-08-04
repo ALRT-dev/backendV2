@@ -618,6 +618,7 @@ model FamilyCircle {
   places          FamilySavedPlace[]
   sosEvents       FamilySosEvent[]
   checkInRequests FamilyCheckInRequest[]
+  journeys        FamilyJourney[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -664,6 +665,8 @@ model FamilyMember {
   placeEvents              FamilyPlaceEvent[]
   sosEvents                FamilySosEvent[]
   sosResponses             FamilySosResponse[]
+  journeys                 FamilyJourney[]
+  journeysReceived         FamilyJourneyRecipient[]
   hazardAlerts             FamilyMemberHazardAlert[]
   checkInRequests          FamilyCheckInRequest[]
   placePrefsAbout          FamilyPlaceNotificationPref[]
@@ -1063,4 +1066,59 @@ model XpEvent {
   @@index([userId, createdAt])
   @@index([userId, type, createdAt])
   @@index([hazardId, type])
+}
+
+// A journey is a trip the traveller chooses to share, and it always stops on
+// its own at a time they picked. Snap points are the default (departure,
+// roughly every 10 minutes, arrival); live is a per-journey opt-in and is
+// never an ALRT+ upsell. Only the chosen recipients ever see it.
+enum FamilyJourneyStatus {
+  active
+  ended
+}
+
+model FamilyJourney {
+  id       String              @id @default(uuid())
+  circleId String
+  memberId String
+  status   FamilyJourneyStatus @default(active)
+
+  // Live is opt-in per journey. False means snap points only.
+  isLive Boolean @default(false)
+
+  // The hard stop the traveller chose. Always set, never open-ended.
+  endsAt  DateTime
+  endedAt DateTime?
+
+  // Minutes already granted, so extensions cannot outrun the total cap.
+  grantedMinutes Int @default(0)
+
+  latitude      Float?
+  longitude     Float?
+  locationLabel String?
+
+  circle     FamilyCircle             @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  member     FamilyMember             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  recipients FamilyJourneyRecipient[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([circleId, status])
+  @@index([memberId, createdAt])
+}
+
+// Who can see a journey. Chosen per journey, never inherited.
+model FamilyJourneyRecipient {
+  id        String @id @default(uuid())
+  journeyId String
+  memberId  String
+
+  journey FamilyJourney @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  member  FamilyMember  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([journeyId, memberId])
+  @@index([memberId])
 }

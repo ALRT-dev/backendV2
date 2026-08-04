@@ -180,3 +180,33 @@ export const familySosListUpdateSchema = z.object({
 export type FamilySosListUpdateInput = z.infer<
   typeof familySosListUpdateSchema
 >;
+
+export const startFamilyJourneySchema = z.object({
+  // Only the durations the app offers; extensions are a separate call.
+  durationMinutes: z.union([z.literal(30), z.literal(60)]),
+  // Live is a deliberate per-journey opt-in, never remembered for you.
+  isLive: z.boolean().optional(),
+  recipientMemberIds: z.array(z.string().uuid()).min(1).max(50),
+});
+
+export type StartFamilyJourneyInput = z.infer<
+  typeof startFamilyJourneySchema
+>;
+
+export const extendFamilyJourneySchema = z.object({
+  minutes: z.number().int().min(1).max(60).optional(),
+});
+
+export type ExtendFamilyJourneyInput = z.infer<
+  typeof extendFamilyJourneySchema
+>;
+
+export const familyJourneyPointSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  locationLabel: z.string().max(200).optional(),
+});
+
+export type FamilyJourneyPointInput = z.infer<
+  typeof familyJourneyPointSchema
+>;

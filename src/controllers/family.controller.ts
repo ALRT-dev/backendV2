@@ -7,8 +7,11 @@ import type {
   FamilyCheckInRequestInput,
   FamilyLocationPingInput,
   FamilyScheduledCheckInInput,
+  ExtendFamilyJourneyInput,
+  FamilyJourneyPointInput,
   FamilySosListInput,
   FamilySosListUpdateInput,
+  StartFamilyJourneyInput,
   JoinFamilyCircleInput,
   RespondFamilyLocationRequestInput,
   RespondFamilySosInput,
@@ -20,6 +23,7 @@ import type {
   UpdateFamilyPlacePrefInput,
 } from "../validators/family.validator.js";
 import * as familyService from "../services/family.service.js";
+import * as familyJourneyService from "../services/family_journey.service.js";
 import {
   deleteFileFromS3,
   extractS3KeyFromUrl,
@@ -719,6 +723,116 @@ export const getActiveSosController = async (
     const userId = requireUserId(res);
     const events = await familyService.getActiveSos(userId, circleIdOf(req));
     res.status(200).json(events);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Journeys
+// ---------------------------------------------------------------------------
+
+export const startJourneyController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const journey = await familyJourneyService.startJourney(
+      userId,
+      req.body as StartFamilyJourneyInput,
+      circleIdOf(req),
+    );
+    res.status(201).json(journey);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const extendJourneyController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { minutes } = req.body as ExtendFamilyJourneyInput;
+    const journey = await familyJourneyService.extendJourney(
+      userId,
+      req.params.journeyId!,
+      minutes,
+    );
+    res.status(200).json(journey);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const stopJourneyController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const journey = await familyJourneyService.stopJourney(
+      userId,
+      req.params.journeyId!,
+    );
+    res.status(200).json(journey);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const journeyPointController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const journey = await familyJourneyService.recordJourneyPoint(
+      userId,
+      req.params.journeyId!,
+      req.body as FamilyJourneyPointInput,
+    );
+    res.status(200).json(journey);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getMyJourneyController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const journey = await familyJourneyService.getMyActiveJourney(
+      userId,
+      circleIdOf(req),
+    );
+    res.status(200).json(journey);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listSharedJourneysController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const journeys = await familyJourneyService.listJourneysSharedWithMe(
+      userId,
+      circleIdOf(req),
+    );
+    res.status(200).json(journeys);
   } catch (error) {
     next(error);
   }

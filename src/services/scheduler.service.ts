@@ -7,6 +7,7 @@ import {
   purgeExpiredFamilyLocationData,
 } from "./family_alert.service.js";
 import { fireDueScheduledCheckIns } from "./family.service.js";
+import { endLapsedJourneys } from "./family_journey.service.js";
 
 /**
  * Initializes scheduled tasks for the application
@@ -54,6 +55,9 @@ export const initializeScheduledTasks = () => {
   cron.schedule("*/5 * * * *", async () => {
     try {
       await purgeExpiredFamilyLocationData();
+      // A journey past its stop time ends itself and drops its location,
+      // so nothing keeps sharing because a phone went quiet.
+      await endLapsedJourneys();
     } catch (error) {
       console.error("Expired family location purge failed:", error);
     }

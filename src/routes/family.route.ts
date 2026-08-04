@@ -7,6 +7,9 @@ import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
   createFamilyCircleSchema,
+  extendFamilyJourneySchema,
+  familyJourneyPointSchema,
+  startFamilyJourneySchema,
   updateFamilyCircleSchema,
   joinFamilyCircleSchema,
   updateFamilyMemberSchema,
@@ -34,6 +37,12 @@ import {
   updateOwnMemberController,
   updateOwnMemberPhotoController,
   createInviteController,
+  extendJourneyController,
+  getMyJourneyController,
+  journeyPointController,
+  listSharedJourneysController,
+  startJourneyController,
+  stopJourneyController,
   listInvitesController,
   revokeInviteController,
   joinCircleController,
@@ -167,5 +176,27 @@ familyRouter.post("/sos", validate(triggerFamilySosSchema), triggerSosController
 familyRouter.get("/sos/active", getActiveSosController);
 familyRouter.post("/sos/:sosEventId/respond", validate(respondFamilySosSchema), respondSosController);
 familyRouter.post("/sos/:sosEventId/resolve", resolveSosController);
+
+
+// Journeys — a trip the traveller chooses to share, always with a hard stop
+// they picked. Snap points by default; live is a per-journey opt-in.
+familyRouter.post(
+  "/journeys",
+  validate(startFamilyJourneySchema),
+  startJourneyController,
+);
+familyRouter.get("/journeys/me", getMyJourneyController);
+familyRouter.get("/journeys/shared", listSharedJourneysController);
+familyRouter.post(
+  "/journeys/:journeyId/extend",
+  validate(extendFamilyJourneySchema),
+  extendJourneyController,
+);
+familyRouter.post(
+  "/journeys/:journeyId/point",
+  validate(familyJourneyPointSchema),
+  journeyPointController,
+);
+familyRouter.post("/journeys/:journeyId/stop", stopJourneyController);
 
 export default familyRouter;
