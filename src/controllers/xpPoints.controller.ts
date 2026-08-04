@@ -135,11 +135,12 @@ export const getXpLeaderboard = async (
     );
     const skip = (page - 1) * limit;
 
+    const { userId: callerUserId } = res;
+
     const topUsers = await prisma.user.findMany({
       select: {
         id: true,
         name: true,
-        email: true,
         xpPoints: true,
         reliabilityScore: true,
         _count: {
@@ -156,15 +157,21 @@ export const getXpLeaderboard = async (
     const totalUsers = await prisma.user.count();
     const totalPages = Math.ceil(totalUsers / limit);
 
-    const leaderboard = topUsers.map((user, index) => ({
-      rank: skip + index + 1,
-      id: user.id,
-      name: user.name || "Anonymous",
-      email: user.email.substring(0, 3) + "***@" + user.email.split("@")[1], // Partially hide email
-      xpPoints: user.xpPoints,
-      reliabilityScore: user.reliabilityScore,
-      hazardsReported: user._count.hazardsReported,
-    }));
+    // Privacy: other users are never identifiable on the leaderboard.
+    // Only the caller's own row carries their name; ids and emails of
+    // other accounts are never returned.
+    const leaderboard = topUsers.map((user, index) => {
+      const isSelf = user.id === callerUserId;
+      return {
+        rank: skip + index + 1,
+        id: isSelf ? user.id : null,
+        name: isSelf ? user.name || "You" : "Community member",
+        isSelf,
+        xpPoints: user.xpPoints,
+        reliabilityScore: user.reliabilityScore,
+        hazardsReported: user._count.hazardsReported,
+      };
+    });
 
     res.status(200).json({
       leaderboard,
