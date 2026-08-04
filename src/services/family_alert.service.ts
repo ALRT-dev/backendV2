@@ -11,6 +11,7 @@ import { PushNotificationType } from "../models/push_notification_types.js";
 import { convertLatLngToAddress } from "./google_map.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
 import {
+  assertCircleNotPaused,
   haversineKm,
   notifyCircle,
   requireMembership,
@@ -169,6 +170,7 @@ export const createLocationRequest = async (
   if (!target) throw new HttpError(404, "Member not found in your circle");
 
   const membership = await requireMembership(userId, target.circleId);
+  await assertCircleNotPaused(membership.circleId);
 
   // Locked rule: guests never request locations. They receive the circle's
   // alerts and can say "I'm Safe", and that is the whole of it.

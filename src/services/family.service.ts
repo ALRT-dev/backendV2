@@ -16,6 +16,7 @@ import { sendSocketEventToUsers } from "./socket.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
 import { touchActivityStreak } from "./xp_ledger.service.js";
 import {
+  billingEnabled,
   defaultCirclePlan,
   hasActiveSubscription,
   isCirclePaused,
@@ -230,7 +231,37 @@ export const countOwnedSeats = async (ownerUserId: string) => {
   });
 };
 
+/**
+ * Paused circles keep their data but stop their safety features. This is
+ * the single gate the paused promise runs through: check-ins, snapshot
+ * requests and SOS call it before doing anything. While billing is off it
+ * never throws, because a circle can never be paused.
+ */
+export const assertCircleNotPaused = async (circleId: string) => {
+  const host = await prisma.familyMember.findFirst({
+    where: { circleId, role: "owner" },
+    select: { userId: true },
+  });
+  if (!host) return;
+  if (await isCirclePaused(host.userId)) {
+    throw new HttpError(
+      403,
+      "This group is paused because the host's ALRT+ ended. " +
+        "Alerts and the map still work for everyone.",
+    );
+  }
+};
+
 export const createCircle = async (userId: string, name: string) => {
+  // Hosting needs ALRT+ once billing ships; joining stays free. The app
+  // shows the paywall first, and this is the backstop behind it.
+  if (billingEnabled() && !(await hasActiveSubscription(userId))) {
+    throw new HttpError(
+      403,
+      "Hosting a group needs ALRT+. Joining a group is always free.",
+    );
+  }
+
   const ownedCircles = await prisma.familyCircle.count({
     where: { createdById: userId },
   });
@@ -1054,6 +1085,7 @@ export const requestCheckIn = async (
   circleId?: string,
 ) => {
   const membership = await requireMembership(userId, circleId);
+  await assertCircleNotPaused(membership.circleId);
 
   const request = await prisma.familyCheckInRequest.create({
     data: {
@@ -1222,7 +1254,25 @@ export const fireDueScheduledCheckIns = async () => {
     include: scheduledCheckInInclude,
   });
 
+  // Paused circles skip their scheduled check-ins without consuming them:
+  // lastFiredAt stays untouched, so the schedule resumes the day the
+  // circle does. Hosts are resolved once per circle, not per schedule.
+  const pausedByCircle = new Map<string, boolean>();
+  const circleIds = [...new Set(due.map((s) => s.circleId))];
+  for (const circleId of circleIds) {
+    const host = await prisma.familyMember.findFirst({
+      where: { circleId, role: "owner" },
+      select: { userId: true },
+    });
+    pausedByCircle.set(
+      circleId,
+      host ? await isCirclePaused(host.userId) : false,
+    );
+  }
+
   for (const schedule of due) {
+    if (pausedByCircle.get(schedule.circleId) === true) continue;
+
     // Claim the schedule first so a crash mid-fire can't double-notify.
     await prisma.familyScheduledCheckIn.update({
       where: { id: schedule.id },
@@ -1590,6 +1640,7 @@ export const triggerSos = async (
   circleId?: string,
 ) => {
   const membership = await requireMembership(userId, circleId);
+  await assertCircleNotPaused(membership.circleId);
 
   // §28: with a preset, the SOS reaches exactly that list's members
   // (which may span the sender's circles). Without one, the whole
