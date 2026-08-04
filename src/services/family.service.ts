@@ -265,6 +265,20 @@ export const listCirclesForUser = async (userId: string) => {
     },
   });
 
+  // Guests hold no seat, so the ledger counts everyone else. Counted
+  // separately because a filtered _count would replace the headcount.
+  const seatCounts = await prisma.familyMember.groupBy({
+    by: ["circleId"],
+    where: {
+      circleId: { in: memberships.map((m) => m.circleId) },
+      role: { not: "guest" },
+    },
+    _count: { _all: true },
+  });
+  const seatCountByCircle = new Map(
+    seatCounts.map((row) => [row.circleId, row._count._all]),
+  );
+
   return memberships.map((membership) => ({
     circleId: membership.circleId,
     name: membership.circle.name,
@@ -273,6 +287,7 @@ export const listCirclesForUser = async (userId: string) => {
     role: membership.role,
     myMemberId: membership.id,
     memberCount: membership.circle._count.members,
+    seatCount: seatCountByCircle.get(membership.circleId) ?? 0,
     isOwned: membership.circle.createdById === userId,
     joinedAt: membership.createdAt,
   }));
