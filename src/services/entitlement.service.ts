@@ -19,6 +19,58 @@ const DEACTIVATING_EVENT_TYPES = new Set(["EXPIRATION"]);
 // CANCELLATION only turns auto-renew off — access continues until EXPIRATION,
 // so it (and BILLING_ISSUE, TRANSFER, TEST) applies no plan change here.
 
+/**
+ * The single switch for the whole billing system.
+ *
+ * Billing is not launched. Until it is, every entitlement check answers
+ * yes and new circles start on `plus`, which is exactly today's behaviour.
+ * Set BILLING_ENABLED=true and the same code paths start reading the real
+ * RevenueCat-synced entitlement on User.plan — nothing else has to change.
+ */
+export const billingEnabled = (): boolean =>
+  process.env.BILLING_ENABLED === "true";
+
+/**
+ * Whether the user holds a live ALRT+ entitlement.
+ *
+ * Pre-launch this is always true. Once billing is on it reads the plan the
+ * RevenueCat webhook maintains, treating a lapsed expiry as no entitlement.
+ */
+export const hasActiveSubscription = async (
+  userId: string,
+): Promise<boolean> => {
+  if (!billingEnabled()) return true;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { plan: true, planExpiresAt: true },
+  });
+  if (!user || user.plan !== FamilyPlan.plus) return false;
+  return user.planExpiresAt === null || user.planExpiresAt > new Date();
+};
+
+/**
+ * The plan a newly created circle starts on: `plus` while billing is off so
+ * every feature is unlocked, `free` once the entitlement system decides.
+ */
+export const defaultCirclePlan = (): FamilyPlan =>
+  billingEnabled() ? FamilyPlan.free : FamilyPlan.plus;
+
+/**
+ * Whether a circle is paused because its host's entitlement lapsed.
+ *
+ * Paused means check-ins, snapshots and SOS stop for that circle while
+ * nothing is deleted. This can only ever be true once billing is switched
+ * on, so the paused surfaces stay unreachable until then rather than
+ * rendering against a state that cannot occur.
+ */
+export const isCirclePaused = async (
+  hostUserId: string,
+): Promise<boolean> => {
+  if (!billingEnabled()) return false;
+  return !(await hasActiveSubscription(hostUserId));
+};
+
 export interface RevenueCatEvent {
   type?: string;
   app_user_id?: string;

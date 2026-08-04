@@ -15,6 +15,10 @@ import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventToUsers } from "./socket.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
 import { touchActivityStreak } from "./xp_ledger.service.js";
+import {
+  defaultCirclePlan,
+  hasActiveSubscription,
+} from "./entitlement.service.js";
 
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
 const DEFAULT_MAX_MEMBERS = 10;
@@ -246,6 +250,8 @@ export const createCircle = async (userId: string, name: string) => {
     data: {
       name,
       createdById: userId,
+      // `plus` while billing is off, `free` once it is switched on.
+      plan: defaultCirclePlan(),
       maxMembers: DEFAULT_MAX_MEMBERS,
       members: {
         create: { userId, role: "owner" },
@@ -444,12 +450,6 @@ export const leaveCircle = async (userId: string, circleId?: string) => {
 // ---------------------------------------------------------------------------
 // Ownership transfer (locked spec §29 TRANSFER)
 // ---------------------------------------------------------------------------
-
-// Billing is not launched yet — every circle defaults to `plus`, so every
-// member counts as subscribed. When the entitlement system ships this
-// becomes a real lookup against the new owner's subscription state.
-const hasActiveSubscription = async (_userId: string): Promise<boolean> =>
-  true;
 
 /**
  * Why a member cannot take over the circle, or `null` when they can.
