@@ -169,6 +169,18 @@ export const createLocationRequest = async (
   if (!target) throw new HttpError(404, "Member not found in your circle");
 
   const membership = await requireMembership(userId, target.circleId);
+
+  // Group rule: when the owner has turned off 'anyone can ask for a
+  // snapshot', only the owner may send location requests.
+  if (
+    !membership.circle.anyoneCanRequestSnapshot &&
+    membership.role !== "owner"
+  ) {
+    throw new HttpError(
+      403,
+      "Only the group owner can request snapshots in this circle",
+    );
+  }
   if (target.id === membership.id) {
     throw new HttpError(400, "You cannot request your own location");
   }

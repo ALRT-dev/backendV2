@@ -603,6 +603,11 @@ model FamilyCircle {
 
   maxMembers Int @default(10)
 
+  // Group rules (locked 'Changes ALRT +' spec) — owner-set toggles.
+  anyoneCanRequestSnapshot Boolean @default(true) // false = owner only
+  sosToWholeGroup          Boolean @default(true) // SOS defaults to everyone
+  journeysSnapPointsOnly   Boolean @default(true) // journeys never live-track
+
   createdById String
 
   members         FamilyMember[]

@@ -30,6 +30,9 @@ export const updateFamilyCircleSchema = z.object({
     .max(50, "Circle name must be at most 50 characters")
     .optional(),
   themeColor: hexColor.nullable().optional(),
+  anyoneCanRequestSnapshot: z.boolean().optional(),
+  sosToWholeGroup: z.boolean().optional(),
+  journeysSnapPointsOnly: z.boolean().optional(),
 });
 
 export type UpdateFamilyCircleInput = z.infer<typeof updateFamilyCircleSchema>;

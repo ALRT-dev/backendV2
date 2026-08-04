@@ -312,6 +312,9 @@ export const getCircleForUser = async (userId: string, circleId?: string) => {
     name: circle.name,
     plan: circle.plan,
     maxMembers: circle.maxMembers,
+    anyoneCanRequestSnapshot: circle.anyoneCanRequestSnapshot,
+    sosToWholeGroup: circle.sosToWholeGroup,
+    journeysSnapPointsOnly: circle.journeysSnapPointsOnly,
     myMemberId: membership.id,
     members: circle.members.map((m) =>
       serializeMember(m, { forSelf: m.userId === userId }),
@@ -325,7 +328,13 @@ export const getCircleForUser = async (userId: string, circleId?: string) => {
 
 export const updateCircle = async (
   userId: string,
-  input: { name?: string | undefined; themeColor?: string | null | undefined },
+  input: {
+    name?: string | undefined;
+    themeColor?: string | null | undefined;
+    anyoneCanRequestSnapshot?: boolean | undefined;
+    sosToWholeGroup?: boolean | undefined;
+    journeysSnapPointsOnly?: boolean | undefined;
+  },
   circleId?: string,
 ) => {
   const membership = await requireMembership(userId, circleId);
@@ -337,6 +346,15 @@ export const updateCircle = async (
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.themeColor !== undefined && { themeColor: input.themeColor }),
+      ...(input.anyoneCanRequestSnapshot !== undefined && {
+        anyoneCanRequestSnapshot: input.anyoneCanRequestSnapshot,
+      }),
+      ...(input.sosToWholeGroup !== undefined && {
+        sosToWholeGroup: input.sosToWholeGroup,
+      }),
+      ...(input.journeysSnapPointsOnly !== undefined && {
+        journeysSnapPointsOnly: input.journeysSnapPointsOnly,
+      }),
     },
   });
   await notifyCircle({
