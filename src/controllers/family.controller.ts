@@ -500,7 +500,42 @@ export const deleteScheduledCheckInController = async (
   }
 };
 
+/**
+ * POST /family/circle/take-over — an eligible member takes over hosting a
+ * paused circle. No body: the caller is the new host, the circle comes from
+ * ?circleId= or their oldest membership like every circle-scoped endpoint.
+ */
+export const takeOverCircleController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const circleId = req.query.circleId as string | undefined;
+    const circle = await familyService.takeOverCircle(userId, circleId);
+    res.status(200).json(circle);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // --- SOS recipient presets ---------------------------------------------------
+
+/** GET /family/sos-recipients — every circle with its members, for the list editor. */
+export const listSosRecipientsController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const groups = await familyService.listSosRecipients(userId);
+    res.status(200).json(groups);
+  } catch (error) {
+    next(error);
+  }
+};
 
 export const listSosListsController = async (
   req: Request,

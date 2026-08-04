@@ -18,6 +18,7 @@ import { touchActivityStreak } from "./xp_ledger.service.js";
 import {
   defaultCirclePlan,
   hasActiveSubscription,
+  isCirclePaused,
 } from "./entitlement.service.js";
 
 const INVITE_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/L
@@ -214,6 +215,9 @@ export const notifyCircle = async ({
 const MAX_OWNED_CIRCLES = 4;
 const MAX_SEATS_TOTAL = 8;
 
+/** Days a paused circle keeps everything before anything is removed. */
+const GRACE_PERIOD_DAYS = 30;
+
 /**
  * Seats used across every circle the user owns (each membership row = 1).
  *
@@ -334,10 +338,34 @@ export const getCircleForUser = async (userId: string, circleId?: string) => {
     include: { checkIns: { select: { memberId: true } } },
   });
 
+  // Paused = the host's ALRT+ lapsed (only possible once billing is on).
+  // The payload carries who and how long is left of the 30-day grace
+  // window, so the paused screen can state both without a second call.
+  const host = circle.members.find((m) => m.role === "owner");
+  const isPaused = host ? await isCirclePaused(host.userId) : false;
+  let pausedHostName: string | null = null;
+  let graceDaysLeft: number | null = null;
+  if (isPaused && host) {
+    pausedHostName = host.nickname || host.user.name || "the host";
+    const hostUser = await prisma.user.findUnique({
+      where: { id: host.userId },
+      select: { planUpdatedAt: true },
+    });
+    const since = hostUser?.planUpdatedAt ?? new Date();
+    const elapsed = Math.floor(
+      (Date.now() - since.getTime()) / (24 * 60 * 60 * 1000),
+    );
+    graceDaysLeft = Math.max(0, GRACE_PERIOD_DAYS - elapsed);
+  }
+
   return {
     id: circle.id,
     name: circle.name,
     plan: circle.plan,
+    themeColor: circle.themeColor,
+    isPaused,
+    pausedHostName,
+    graceDaysLeft,
     maxMembers: circle.maxMembers,
     anyoneCanRequestSnapshot: circle.anyoneCanRequestSnapshot,
     sosToWholeGroup: circle.sosToWholeGroup,
@@ -590,6 +618,123 @@ export const transferOwnership = async (
     socketData: { circleId: circle.id },
   });
   return circle;
+};
+
+/**
+ * Takeover: when a circle is paused because its host's ALRT+ lapsed, an
+ * eligible member can take over hosting without the host acting. The bar
+ * is the same as a §29 transfer — active subscription, a free circle slot,
+ * and enough free seats to absorb every membership. The old host stays in
+ * the group as an ordinary member, and the circle switches back on.
+ *
+ * Only a paused circle can be taken over; a live circle changes hands
+ * through the host-initiated transfer, never out from under an active host.
+ */
+export const takeOverCircle = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
+  if (membership.role === "owner") {
+    throw new HttpError(400, "You already host this circle");
+  }
+  if (membership.role === "guest") {
+    throw new HttpError(403, "Guests can't host");
+  }
+
+  const host = await prisma.familyMember.findFirst({
+    where: { circleId: membership.circleId, role: "owner" },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  if (!host) throw new HttpError(404, "This circle has no host");
+
+  if (!(await isCirclePaused(host.userId))) {
+    throw new HttpError(
+      400,
+      "This circle isn't paused. Ask the host to hand it over instead",
+    );
+  }
+
+  const memberCount = await prisma.familyMember.count({
+    where: { circleId: membership.circleId },
+  });
+  const reason = await transferIneligibilityReason(
+    userId,
+    memberCount,
+    membership.role,
+  );
+  if (reason) {
+    throw new HttpError(400, `You can't take over this circle: ${reason}`);
+  }
+
+  const [circle] = await prisma.$transaction([
+    prisma.familyCircle.update({
+      where: { id: membership.circleId },
+      data: { createdById: userId, plan: "plus" },
+    }),
+    prisma.familyMember.update({
+      where: { id: membership.id },
+      data: { role: "owner" },
+    }),
+    prisma.familyMember.update({
+      where: { id: host.id },
+      data: { role: "adult" },
+    }),
+  ]);
+
+  const newHostName =
+    membership.nickname ||
+    (await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    }))?.name ||
+    "a member";
+  await notifyCircle({
+    circleId: circle.id,
+    title: circle.name,
+    body: `${newHostName} took over hosting — everything is back on`,
+    type: PushNotificationType.familyCircleUpdate,
+    socketEvent: SocketEvent.familyCircleUpdate,
+    socketData: { circleId: circle.id },
+  });
+  return circle;
+};
+
+/**
+ * Everyone the caller could put on an SOS list: each circle they belong to,
+ * with its members. Names are the ones those circles already show their
+ * members — nothing crosses a circle boundary that wasn't visible inside it.
+ */
+export const listSosRecipients = async (userId: string) => {
+  const memberships = await prisma.familyMember.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+    include: {
+      circle: {
+        include: {
+          members: {
+            include: {
+              user: {
+                select: { id: true, name: true, profilePictureUrl: true },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
+    },
+  });
+
+  return memberships.map((membership) => ({
+    circleId: membership.circleId,
+    name: membership.circle.name,
+    themeColor: membership.circle.themeColor,
+    members: membership.circle.members
+      .filter((member) => member.userId !== userId)
+      .map((member) => ({
+        memberId: member.id,
+        name: member.nickname || member.user.name || "Family member",
+        profilePictureUrl: member.photoUrl || member.user.profilePictureUrl,
+        role: member.role,
+      })),
+  }));
 };
 
 export const removeMember = async (userId: string, memberId: string) => {

@@ -64,6 +64,8 @@ import {
   updatePlacePrefController,
   triggerSosController,
   listSosListsController,
+  listSosRecipientsController,
+  takeOverCircleController,
   createSosListController,
   updateSosListController,
   deleteSosListController,
@@ -97,6 +99,11 @@ familyRouter.post(
   validate(transferFamilyOwnershipSchema),
   transferOwnershipController,
 );
+
+// Takeover: an eligible member revives a paused circle by becoming its
+// host. Only valid while the circle is paused — a live circle changes
+// hands through transfer-ownership above.
+familyRouter.post("/circle/take-over", takeOverCircleController);
 
 // Members
 familyRouter.delete("/members/:memberId", removeMemberController);
@@ -160,6 +167,7 @@ familyRouter.put(
 
 // SOS recipient presets (§28) — configured in advance, never mid-emergency
 familyRouter.get("/sos-lists", listSosListsController);
+familyRouter.get("/sos-recipients", listSosRecipientsController);
 familyRouter.post(
   "/sos-lists",
   validate(familySosListSchema),
