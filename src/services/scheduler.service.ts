@@ -2,7 +2,10 @@ import cron from "node-cron";
 import { syncHazardsFromDifferentSources } from "./ingestion.service.js";
 import { SyncHazardsFromExternalSourceOption } from "../enums/sync_hazards_from_external_source_option_types.js";
 import { processScheduledAccountDeletions } from "./user.service.js";
-import { pruneFamilyLocationPings } from "./family_alert.service.js";
+import {
+  pruneFamilyLocationPings,
+  purgeExpiredFamilyLocationData,
+} from "./family_alert.service.js";
 import { fireDueScheduledCheckIns } from "./family.service.js";
 
 /**
@@ -43,6 +46,16 @@ export const initializeScheduledTasks = () => {
       await pruneFamilyLocationPings();
     } catch (error) {
       console.error("Family location ping pruning failed:", error);
+    }
+  });
+
+  // Locked spec: expired snapshot coordinates are deleted, not hidden.
+  // The event log keeps who/when; no movement data outlives its window.
+  cron.schedule("*/5 * * * *", async () => {
+    try {
+      await purgeExpiredFamilyLocationData();
+    } catch (error) {
+      console.error("Expired family location purge failed:", error);
     }
   });
 

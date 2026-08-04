@@ -1598,6 +1598,13 @@ export const resolveSos = async (userId: string, sosEventId: string) => {
     data: { status: "resolved", resolvedAt: new Date() },
   });
 
+  // Stand-down wipes the trail (locked spec): every live-share point from
+  // this event is deleted now, not archived, not left to the 24h prune.
+  // History keeps only the time and duration.
+  await prisma.familyLocationPing.deleteMany({
+    where: { memberId: sos.memberId, createdAt: { gte: sos.createdAt } },
+  });
+
   const memberName =
     sos.member.nickname || sos.member.user.name || "A family member";
 

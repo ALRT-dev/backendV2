@@ -642,3 +642,57 @@ export const pruneFamilyLocationPings = async () => {
     console.log(`Pruned ${result.count} family location pings older than 24h`);
   }
 };
+
+/**
+ * Locked spec ("event log kept, locations deleted", §30): expired snapshot
+ * coordinates are DELETED from the database, not merely hidden. The event
+ * record survives without them — who shared, via what, when it started and
+ * ended — but no movement data outlives its 1-hour window. Run every few
+ * minutes.
+ *
+ * Three tables hold coordinates:
+ * - FamilyMember: the live snapshot; nulling latitude/longitude also clears
+ *   the generated PostGIS geom column and place presence.
+ * - FamilyCheckIn: the permanent event log keeps the row (who, when,
+ *   status); the optional coordinates are wiped after 1 hour.
+ * - FamilySosEvent: resolved events keep only time and duration; the
+ *   trigger location is wiped 1 hour after stand-down.
+ */
+export const purgeExpiredFamilyLocationData = async () => {
+  const now = new Date();
+  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+
+  const [members, checkIns, sosEvents] = await Promise.all([
+    prisma.familyMember.updateMany({
+      where: { locationExpiresAt: { lt: now }, latitude: { not: null } },
+      data: {
+        latitude: null,
+        longitude: null,
+        locationLabel: null,
+        batteryLevel: null,
+        isMoving: false,
+        currentPlaceId: null,
+      },
+    }),
+    prisma.familyCheckIn.updateMany({
+      where: { createdAt: { lt: hourAgo }, latitude: { not: null } },
+      data: { latitude: null, longitude: null },
+    }),
+    prisma.familySosEvent.updateMany({
+      where: {
+        status: { not: "active" },
+        resolvedAt: { lt: hourAgo },
+        latitude: { not: null },
+      },
+      data: { latitude: null, longitude: null, locationLabel: null },
+    }),
+  ]);
+
+  const total = members.count + checkIns.count + sosEvents.count;
+  if (total > 0) {
+    console.log(
+      `Purged expired family location data: ${members.count} member ` +
+        `snapshots, ${checkIns.count} check-ins, ${sosEvents.count} SOS events`,
+    );
+  }
+};
