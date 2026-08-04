@@ -170,6 +170,12 @@ export const createLocationRequest = async (
 
   const membership = await requireMembership(userId, target.circleId);
 
+  // Locked rule: guests never request locations. They receive the circle's
+  // alerts and can say "I'm Safe", and that is the whole of it.
+  if (membership.role === "guest") {
+    throw new HttpError(403, "Guests cannot request locations");
+  }
+
   // Group rule: when the owner has turned off 'anyone can ask for a
   // snapshot', only the owner may send location requests.
   if (

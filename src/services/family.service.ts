@@ -3,6 +3,7 @@ import type {
   FamilyCheckInStatus,
   FamilyMember,
   FamilyPlaceIcon,
+  FamilyRole,
   FamilyScheduledCheckInMode,
   FamilySharingLevel,
   FamilySosResponseType,
@@ -209,10 +210,15 @@ export const notifyCircle = async ({
 const MAX_OWNED_CIRCLES = 4;
 const MAX_SEATS_TOTAL = 8;
 
-/** Seats used across every circle the user owns (each membership row = 1). */
+/**
+ * Seats used across every circle the user owns (each membership row = 1).
+ *
+ * Guests are free: they receive alerts and can say "I'm Safe", but they hold
+ * no seat, so inviting one never costs the owner anything.
+ */
 export const countOwnedSeats = async (ownerUserId: string) => {
   return prisma.familyMember.count({
-    where: { circle: { createdById: ownerUserId } },
+    where: { circle: { createdById: ownerUserId }, role: { not: "guest" } },
   });
 };
 
@@ -439,7 +445,12 @@ const hasActiveSubscription = async (_userId: string): Promise<boolean> =>
 const transferIneligibilityReason = async (
   candidateUserId: string,
   circleMemberCount: number,
+  candidateRole?: FamilyRole,
 ): Promise<string | null> => {
+  // A guest holds no seat and never hosts; they stay listed but greyed (§29).
+  if (candidateRole === "guest") {
+    return "Guests can't host";
+  }
   if (!(await hasActiveSubscription(candidateUserId))) {
     return "Needs an active ALRT+ subscription";
   }
@@ -484,6 +495,7 @@ export const listTransferCandidates = async (
     const reason = await transferIneligibilityReason(
       member.userId,
       memberCount,
+      member.role,
     );
     candidates.push({
       memberId: member.id,
@@ -680,10 +692,17 @@ const generateInviteCode = (): string => {
   return `ALRT-${code}`;
 };
 
-export const createInvite = async (userId: string, circleId?: string) => {
+export const createInvite = async (
+  userId: string,
+  circleId?: string,
+  isGuestInvite = false,
+) => {
   const membership = await requireMembership(userId, circleId);
   if (membership.role === "child") {
     throw new HttpError(403, "Children cannot create invites");
+  }
+  if (membership.role === "guest") {
+    throw new HttpError(403, "Guests cannot create invites");
   }
 
   // Retry on the (unlikely) unique-code collision.
@@ -694,6 +713,7 @@ export const createInvite = async (userId: string, circleId?: string) => {
           circleId: membership.circleId,
           code: generateInviteCode(),
           createdById: membership.id,
+          isGuestInvite,
           expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
         },
       });
@@ -755,18 +775,25 @@ export const joinCircleWithCode = async (userId: string, code: string) => {
     throw new HttpError(400, "You are already a member of this circle");
   }
 
-  // Joining consumes a seat on the OWNER's plan, never the joiner's.
-  const ownerSeatsUsed = await countOwnedSeats(invite.circle.createdById);
-  if (ownerSeatsUsed >= MAX_SEATS_TOTAL) {
-    throw new HttpError(
-      400,
-      "This circle's plan has no free seats. Ask the owner to free one up.",
-    );
+  // Joining consumes a seat on the OWNER's plan, never the joiner's. Guests
+  // hold no seat, so a guest invite skips the check entirely.
+  if (!invite.isGuestInvite) {
+    const ownerSeatsUsed = await countOwnedSeats(invite.circle.createdById);
+    if (ownerSeatsUsed >= MAX_SEATS_TOTAL) {
+      throw new HttpError(
+        400,
+        "This circle's plan has no free seats. Ask the owner to free one up.",
+      );
+    }
   }
 
   const [member] = await prisma.$transaction([
     prisma.familyMember.create({
-      data: { circleId: invite.circleId, userId, role: "adult" },
+      data: {
+        circleId: invite.circleId,
+        userId,
+        role: invite.isGuestInvite ? "guest" : "adult",
+      },
       include: {
         user: { select: { id: true, name: true, profilePictureUrl: true } },
       },

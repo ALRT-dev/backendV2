@@ -254,7 +254,11 @@ export const createInviteController = async (
 ) => {
   try {
     const userId = requireUserId(res);
-    const invite = await familyService.createInvite(userId, circleIdOf(req));
+    const invite = await familyService.createInvite(
+      userId,
+      circleIdOf(req),
+      req.body?.isGuestInvite === true,
+    );
     res.status(201).json(invite);
   } catch (error) {
     next(error);

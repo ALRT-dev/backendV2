@@ -553,6 +553,9 @@ enum FamilyRole {
   owner
   adult
   child
+  // A guest receives the circle's alerts and can say "I'm Safe", but never
+  // requests anyone's location and consumes no seat on the owner's plan.
+  guest
 }
 
 // How much of a member's location the rest of the circle can see.
@@ -727,6 +730,10 @@ model FamilyInvite {
   useCount  Int       @default(0)
   isRevoked Boolean   @default(false)
   expiresAt DateTime?
+
+  // Anyone joining with this code becomes a guest: alerts and "I'm Safe"
+  // only, no location requests, and no seat consumed on the owner's plan.
+  isGuestInvite Boolean @default(false)
 
   circle FamilyCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
 
