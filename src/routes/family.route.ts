@@ -22,6 +22,7 @@ import {
   respondFamilyLocationRequestSchema,
   triggerFamilySosSchema,
   respondFamilySosSchema,
+  transferFamilyOwnershipSchema,
 } from "../validators/family.validator.js";
 import {
   createCircleController,
@@ -60,6 +61,8 @@ import {
   respondSosController,
   resolveSosController,
   getActiveSosController,
+  listTransferCandidatesController,
+  transferOwnershipController,
 } from "../controllers/family.controller.js";
 
 const familyRouter = Router();
@@ -76,6 +79,15 @@ familyRouter.get("/circle", getCircleController);
 familyRouter.put("/circle", validate(updateFamilyCircleSchema), updateCircleController);
 familyRouter.delete("/circle", deleteCircleController);
 familyRouter.post("/circle/leave", leaveCircleController);
+
+// Ownership transfer (§29): host hands the circle — and its seats — to an
+// eligible member. Ineligible members are listed greyed with a reason.
+familyRouter.get("/circle/transfer-candidates", listTransferCandidatesController);
+familyRouter.post(
+  "/circle/transfer-ownership",
+  validate(transferFamilyOwnershipSchema),
+  transferOwnershipController,
+);
 
 // Members
 familyRouter.delete("/members/:memberId", removeMemberController);

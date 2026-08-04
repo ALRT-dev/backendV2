@@ -37,6 +37,14 @@ export const updateFamilyCircleSchema = z.object({
 
 export type UpdateFamilyCircleInput = z.infer<typeof updateFamilyCircleSchema>;
 
+export const transferFamilyOwnershipSchema = z.object({
+  newOwnerMemberId: z.string().min(1, "New owner member id is required"),
+});
+
+export type TransferFamilyOwnershipInput = z.infer<
+  typeof transferFamilyOwnershipSchema
+>;
+
 export const joinFamilyCircleSchema = z.object({
   code: z
     .string()

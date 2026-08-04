@@ -12,6 +12,7 @@ import type {
   JoinFamilyCircleInput,
   RespondFamilyLocationRequestInput,
   RespondFamilySosInput,
+  TransferFamilyOwnershipInput,
   TriggerFamilySosInput,
   UpdateFamilyCircleInput,
   UpdateFamilyMemberInput,
@@ -107,6 +108,43 @@ export const updateCircleController = async (
     const userId = requireUserId(res);
     const input: UpdateFamilyCircleInput = req.body;
     const circle = await familyService.updateCircle(userId, input, circleIdOf(req));
+    res.status(200).json(circle);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listTransferCandidatesController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const result = await familyService.listTransferCandidates(
+      userId,
+      circleIdOf(req),
+    );
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const transferOwnershipController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { newOwnerMemberId }: TransferFamilyOwnershipInput = req.body;
+    await familyService.transferOwnership(
+      userId,
+      newOwnerMemberId,
+      circleIdOf(req),
+    );
+    const circle = await familyService.getCircleForUser(userId, circleIdOf(req));
     res.status(200).json(circle);
   } catch (error) {
     next(error);

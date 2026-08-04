@@ -420,6 +420,151 @@ export const leaveCircle = async (userId: string, circleId?: string) => {
   });
 };
 
+// ---------------------------------------------------------------------------
+// Ownership transfer (locked spec §29 TRANSFER)
+// ---------------------------------------------------------------------------
+
+// Billing is not launched yet — every circle defaults to `plus`, so every
+// member counts as subscribed. When the entitlement system ships this
+// becomes a real lookup against the new owner's subscription state.
+const hasActiveSubscription = async (_userId: string): Promise<boolean> =>
+  true;
+
+/**
+ * Why a member cannot take over the circle, or `null` when they can.
+ * §29: eligible = active subscription + enough free seats. Taking over
+ * means every membership of this circle moves onto the candidate's own
+ * 8-seat / 4-circle pool.
+ */
+const transferIneligibilityReason = async (
+  candidateUserId: string,
+  circleMemberCount: number,
+): Promise<string | null> => {
+  if (!(await hasActiveSubscription(candidateUserId))) {
+    return "Needs an active ALRT+ subscription";
+  }
+  const ownedCircles = await prisma.familyCircle.count({
+    where: { createdById: candidateUserId },
+  });
+  if (ownedCircles >= MAX_OWNED_CIRCLES) {
+    return `Already owns ${MAX_OWNED_CIRCLES} circles`;
+  }
+  const seatsFree = MAX_SEATS_TOTAL - (await countOwnedSeats(candidateUserId));
+  if (seatsFree < circleMemberCount) {
+    return `Needs ${circleMemberCount} free seats, has ${seatsFree}`;
+  }
+  return null;
+};
+
+/**
+ * Members the owner could hand the circle to, each with eligibility.
+ * Ineligible members are returned greyed with a reason, never hidden (§29).
+ */
+export const listTransferCandidates = async (
+  userId: string,
+  circleId?: string,
+) => {
+  const membership = await requireMembership(userId, circleId);
+  if (membership.role !== "owner") {
+    throw new HttpError(403, "Only the circle owner can transfer ownership");
+  }
+
+  const members = await prisma.familyMember.findMany({
+    where: { circleId: membership.circleId },
+    include: {
+      user: { select: { id: true, name: true, profilePictureUrl: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+  const memberCount = members.length;
+
+  const candidates = [];
+  for (const member of members) {
+    if (member.id === membership.id) continue;
+    const reason = await transferIneligibilityReason(
+      member.userId,
+      memberCount,
+    );
+    candidates.push({
+      memberId: member.id,
+      name: member.nickname || member.user.name || "Family member",
+      profilePictureUrl: member.photoUrl || member.user.profilePictureUrl,
+      role: member.role,
+      eligible: reason === null,
+      reason,
+    });
+  }
+  return { circleId: membership.circleId, memberCount, candidates };
+};
+
+/**
+ * §29 TRANSFER: seats move to the new host, features continue
+ * uninterrupted, and the prior host stays on as an adult member (they may
+ * leave immediately after if they wish).
+ */
+export const transferOwnership = async (
+  userId: string,
+  newOwnerMemberId: string,
+  circleId?: string,
+) => {
+  const membership = await requireMembership(userId, circleId);
+  if (membership.role !== "owner") {
+    throw new HttpError(403, "Only the circle owner can transfer ownership");
+  }
+  if (newOwnerMemberId === membership.id) {
+    throw new HttpError(400, "You already own this circle");
+  }
+
+  const newOwnerMember = await prisma.familyMember.findFirst({
+    where: { id: newOwnerMemberId, circleId: membership.circleId },
+    include: { user: { select: { id: true, name: true } } },
+  });
+  if (!newOwnerMember) {
+    throw new HttpError(404, "Member not found in this circle");
+  }
+
+  const memberCount = await prisma.familyMember.count({
+    where: { circleId: membership.circleId },
+  });
+  const reason = await transferIneligibilityReason(
+    newOwnerMember.userId,
+    memberCount,
+  );
+  if (reason) {
+    throw new HttpError(
+      400,
+      `This member can't take over the circle: ${reason}`,
+    );
+  }
+
+  const [circle] = await prisma.$transaction([
+    prisma.familyCircle.update({
+      where: { id: membership.circleId },
+      data: { createdById: newOwnerMember.userId },
+    }),
+    prisma.familyMember.update({
+      where: { id: newOwnerMember.id },
+      data: { role: "owner" },
+    }),
+    prisma.familyMember.update({
+      where: { id: membership.id },
+      data: { role: "adult" },
+    }),
+  ]);
+
+  const newOwnerName =
+    newOwnerMember.nickname || newOwnerMember.user.name || "a member";
+  await notifyCircle({
+    circleId: circle.id,
+    title: circle.name,
+    body: `${newOwnerName} is now hosting this circle`,
+    type: PushNotificationType.familyCircleUpdate,
+    socketEvent: SocketEvent.familyCircleUpdate,
+    socketData: { circleId: circle.id },
+  });
+  return circle;
+};
+
 export const removeMember = async (userId: string, memberId: string) => {
   // Anchor on the target so the right circle's ownership is checked even
   // when the caller belongs to several circles.
