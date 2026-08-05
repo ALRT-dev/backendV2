@@ -10,6 +10,7 @@ import {
   type AIPrompt,
 } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
+import { listBlockedUserIds } from "./community_safety.service.js";
 import { HttpError } from "../models/http_error.js";
 import type { AISummaryResponse } from "../models/ai_summary_response_interface.js";
 import type { AIReviewResponse } from "../models/ai_review_response_interface.js";
@@ -45,9 +46,18 @@ export const getHazardsApplyingFilters = async (
 
   const whereClause = buildHazardsWhereClause(params);
 
+  // A blocked account's reports drop out of this reader's feed. Nothing is
+  // deleted and everyone else still sees them: one person's block is not a
+  // verdict on whether a hazard is real.
+  const blockedIds = userId ? await listBlockedUserIds(userId) : [];
+  const scopedWhere =
+    blockedIds.length > 0
+      ? { AND: [whereClause, { reportedById: { notIn: blockedIds } }] }
+      : whereClause;
+
   // Use a more optimized query strategy
   const hazards = await prisma.hazard.findMany({
-    where: whereClause,
+    where: scopedWhere,
     include: buildHazardInclude({
       ...(userId && {
         votes: {

@@ -1,3 +1,9 @@
+import {
+  blockUserController,
+  listBlockedUsersController,
+  unblockUserController,
+} from "../controllers/community_safety.controller.js";
+import { blockUserSchema } from "../validators/community_safety.validator.js";
 import { Router } from "express";
 import {
   getUserProfile,
@@ -81,5 +87,16 @@ userRouter.put(
 userRouter.get("/account/deletion-status", requireAuth, getAccountDeletionStatusController);
 userRouter.delete("/account", requireAuth, requestAccountDeletionController);
 userRouter.post("/account/cancel-deletion", requireAuth, cancelAccountDeletionController);
+
+// Blocking hides an account's reports for the blocker alone. Nothing is
+// deleted, and the blocked person is never told.
+userRouter.get("/blocked", requireAuth, listBlockedUsersController);
+userRouter.post(
+  "/blocked",
+  requireAuth,
+  validate(blockUserSchema),
+  blockUserController,
+);
+userRouter.delete("/blocked/:userId", requireAuth, unblockUserController);
 
 export default userRouter;

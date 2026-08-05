@@ -13,6 +13,8 @@ import {
   deleteHazardMedia,
   updateHazardMedia,
 } from "../controllers/hazard_media.controller.js";
+import { flagHazardController } from "../controllers/community_safety.controller.js";
+import { flagHazardSchema } from "../validators/community_safety.validator.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
@@ -84,5 +86,15 @@ hazardRouter.delete(
   deleteHazardMedia,
 );
 hazardRouter.patch("/:hazardId/media/:mediaId", requireAuth, updateHazardMedia);
+
+// Community safety: anyone can flag a community report for review. The
+// automated pipeline screens content before it publishes; this covers what
+// automation cannot judge.
+hazardRouter.post(
+  "/:hazardId/flag",
+  requireAuth,
+  validate(flagHazardSchema),
+  flagHazardController,
+);
 
 export default hazardRouter;
