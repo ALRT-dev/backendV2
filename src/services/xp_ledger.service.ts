@@ -23,9 +23,14 @@ export const XP_POINTS: Record<XpEventType, number> = {
   reportCorroborated: 5,
   officialMatch: 15,
   onboardingCompleted: 20,
+  firstReportPosted: 10,
+  profileCompleted: 10,
+  familyJoined: 10,
+  savedPlaceAdded: 5,
+  reportWidelyCorroborated: 10,
   guideCompleted: 10,
   questCompleted: 20,
-  shareInstall: 20,
+  shareInstall: 25,
 };
 
 /** Streak bonus: reports earn 1.2x once the streak reaches 3 days. */
@@ -105,6 +110,103 @@ export const recordXpEvent = async (params: {
   });
 
   return { event, newXpTotal: user.xpPoints };
+};
+
+/**
+ * One-off milestone awards from Points & Badge Logic v1.1 section 2.
+ *
+ * All idempotent on the ledger rather than on a flag, so a retry, a double
+ * tap or a replayed request cannot pay twice. Each swallows its own errors:
+ * a milestone is never worth failing the action that earned it.
+ */
+const awardOnce = async (params: {
+  userId: string;
+  type: XpEventType;
+  meta?: Prisma.InputJsonValue;
+}): Promise<void> => {
+  try {
+    const existing = await prisma.xpEvent.findFirst({
+      where: { userId: params.userId, type: params.type },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await recordXpEvent({
+      userId: params.userId,
+      type: params.type,
+      ...(params.meta !== undefined && { meta: params.meta }),
+    });
+  } catch (error) {
+    console.error("Milestone XP award failed:", {
+      userId: params.userId,
+      type: params.type,
+      error,
+    });
+  }
+};
+
+/** First ALRT posted (+10, once). */
+export const awardFirstReport = (userId: string, hazardId: string) =>
+  awardOnce({ userId, type: XpEventType.firstReportPosted, meta: { hazardId } });
+
+/** Joined a family circle (+10, once). */
+export const awardFamilyJoined = (userId: string, circleId: string) =>
+  awardOnce({ userId, type: XpEventType.familyJoined, meta: { circleId } });
+
+/**
+ * Profile completed (+10, once): name, photo and location all present.
+ * Called after any profile write, so it fires on whichever edit finishes
+ * the set rather than needing its own button.
+ */
+export const awardProfileCompletedIfReady = async (
+  userId: string,
+): Promise<void> => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true, profilePictureUrl: true, latitude: true },
+    });
+    if (!user) return;
+
+    const isComplete =
+      (user.name ?? "").trim().length > 0 &&
+      (user.profilePictureUrl ?? "").trim().length > 0 &&
+      user.latitude != null;
+    if (!isComplete) return;
+
+    await awardOnce({ userId, type: XpEventType.profileCompleted });
+  } catch (error) {
+    console.error("Profile-completed XP check failed:", { userId, error });
+  }
+};
+
+/**
+ * Saved place added (+5). Per place, not once per user, so it is keyed on
+ * the place rather than going through awardOnce.
+ */
+export const awardSavedPlace = async (
+  userId: string,
+  placeId: string,
+): Promise<void> => {
+  try {
+    const existing = await prisma.xpEvent.findFirst({
+      where: {
+        userId,
+        type: XpEventType.savedPlaceAdded,
+        meta: { path: ["placeId"], equals: placeId },
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await recordXpEvent({
+      userId,
+      type: XpEventType.savedPlaceAdded,
+      meta: { placeId },
+    });
+  } catch (error) {
+    console.error("Saved-place XP award failed:", { userId, placeId, error });
+  }
 };
 
 // ---------------------------------------------------------------------------

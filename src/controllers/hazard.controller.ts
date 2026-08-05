@@ -25,7 +25,10 @@ import {
 } from "../services/socket.service.js";
 import { HttpError } from "../models/http_error.js";
 import { SocketEvent } from "../models/socket_event_types.js";
-import { handleReportReviewOutcome } from "../services/xp_ledger.service.js";
+import {
+  awardFirstReport,
+  handleReportReviewOutcome,
+} from "../services/xp_ledger.service.js";
 import { calculateUserReportsStatus } from "../services/user.service.js";
 import {
   calculateConfidenceScore,
@@ -561,6 +564,14 @@ export const createHazard = async (
     let xpResult = null;
     if (userId && hazard.reviewStatus !== HazardReviewStatus.pending) {
       xpResult = await handleReportReviewOutcome(hazard);
+    }
+
+    // Points & Badge Logic v1.1: the first ALRT a person posts earns 10,
+    // once, on top of whatever the review outcome pays. Awarded on posting
+    // rather than on approval, because it marks the moment someone became a
+    // contributor, not the quality of that one report.
+    if (userId) {
+      await awardFirstReport(userId, hazard.id);
     }
 
     if (reviewStatus === HazardReviewStatus.accepted) {

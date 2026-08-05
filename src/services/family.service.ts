@@ -14,7 +14,11 @@ import { SocketEvent } from "../models/socket_event_types.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { sendSocketEventToUsers } from "./socket.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
-import { touchActivityStreak } from "./xp_ledger.service.js";
+import {
+  awardFamilyJoined,
+  awardSavedPlace,
+  touchActivityStreak,
+} from "./xp_ledger.service.js";
 import {
   billingEnabled,
   defaultCirclePlan,
@@ -1066,6 +1070,9 @@ export const joinCircleWithCode = async (userId: string, code: string) => {
     socketData: { circleId: invite.circleId },
   });
 
+  // Points & Badge Logic v1.1: joining a family group earns 10, once.
+  await awardFamilyJoined(userId, invite.circleId);
+
   return member!;
 };
 
@@ -1421,6 +1428,9 @@ export const createPlace = async (
     socketEvent: SocketEvent.familyCircleUpdate,
     socketData: { circleId: membership.circleId },
   });
+
+  // Points & Badge Logic v1.1: a saved place earns 5, per place.
+  await awardSavedPlace(userId, place.id);
 
   return place;
 };

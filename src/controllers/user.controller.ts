@@ -21,6 +21,7 @@ import {
   extractS3KeyFromUrl,
   uploadFileToS3,
 } from "../services/s3.service.js";
+import { awardProfileCompletedIfReady } from "../services/xp_ledger.service.js";
 import {
   createUserLocationSubscription,
   deleteUserLocationSubscription,
@@ -55,6 +56,11 @@ export const getUserProfile = async (
 };
 
 /// Controller to handle updating user's profile.
+/**
+ * Points & Badge Logic v1.1: a complete profile earns 10, once. Checked
+ * after any profile write so it fires on whichever edit finishes the set
+ * (name + photo + location) rather than needing a button of its own.
+ */
 export const updateUserProfile = async (
   req: Request,
   res: Response,
@@ -96,6 +102,8 @@ export const updateUserProfile = async (
         ...(locationName && { locationName }),
       });
     }
+
+    await awardProfileCompletedIfReady(userId);
 
     const updatedUser = await getUserById(userId);
     if (!updatedUser) {
@@ -162,6 +170,9 @@ export const updateUserProfilePicture = async (
         // Don't fail the request if old file deletion fails
       }
     }
+
+    // A photo can be the piece that completes the profile.
+    await awardProfileCompletedIfReady(userId);
 
     const updatedUser = await getUserById(userId);
     if (!updatedUser) {
