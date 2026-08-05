@@ -163,16 +163,123 @@ not be presented with the same visual weight as an RFS/CFS incident.
 
 ---
 
+## 5. NASA EONET — global natural events (context layer)
+
+**Framing requirement**: NASA's own documentation states EONET is
+"intended to support natural event applications by providing information
+primarily for visualization and general reference, and should not be
+regarded as an official source for precise spatial or temporal data."
+Treat this the same way as FIRMS — a lower-confidence situational layer,
+never a substitute for an official warning, and never mapped to
+`critical`.
+
+- **Enum**: `ExternalSourceId.nasaEonet = "nasaEonet"`
+- **Endpoint**: `https://eonet.gsfc.nasa.gov/api/v3/events` — filterable
+  by category (`wildfires`, `severeStorms`, `volcanoes`, `floods`,
+  `seaLakeIce`, `drought`) and by bounding box.
+- **Auth**: `api.nasa.gov` key (free, generous rate limit) shared with
+  any future use of other `api.nasa.gov` services.
+- **Key fields**: `title`, `category`, `geometry` (point or polygon,
+  time-stamped), event `status` (open/closed) — no magnitude or severity
+  field is provided for most categories.
+- **Proposed severity mapping**: since EONET carries no intensity value
+  for most categories, do not attempt a graded severity — surface as a
+  flat `info`/`monitor` band "situational awareness" marker only,
+  distinct from graded hazards. Where a category overlaps a source ALRT
+  already has graded data for (e.g. `wildfires` vs FIRMS/RFS), suppress
+  the EONET row via the same dedup approach as FIRMS.
+- **Category**: new subcategory, e.g. `globalEventTracker`, kept
+  separate from graded hazard categories.
+- **ID scheme**: `` `nasaEonet-${eventId}` `` (EONET's own event ID).
+- **Attribution**: same NASA open-data citation/disclaimer requirement
+  as FIRMS.
+- **Licence**: NASA open data — no commercial restriction found.
+
+---
+
+## 6. USGS Volcano Hazards Program — volcanic activity
+
+ALRT currently has no volcanic-hazard coverage at all. Use the **USGS**
+side specifically, not raw Smithsonian Global Volcanism Program data —
+USGS inherits the same US-government public-domain status already relied
+on for the USGS earthquake feed; GVP's own terms could not be confirmed
+and should not be assumed to match.
+
+- **Enum**: `ExternalSourceId.usgsVolcano = "usgsVolcano"`
+- **Endpoint**: `https://volcanoes.usgs.gov/vsc/api/volcanoApi/` —
+  confirm exact current-activity/alert-level path at build time; this
+  API's coverage is US volcanoes (including Hawaii, Alaska, Pacific
+  Northwest) — it is not a global feed.
+- **Auth**: none required (public feed).
+- **Key fields**: USGS/VONA alert level (`Normal` / `Advisory` /
+  `Watch` / `Warning`) and aviation colour code — this is a
+  **pre-graded** field, similar to how RFS/BoM provide their own
+  severity rather than a raw number.
+- **Severity mapping**: pass the USGS alert level straight through via a
+  fixed lookup (`Warning → critical`, `Watch → action`, `Advisory →
+  monitor`, `Normal` → not stored) rather than deriving one — no
+  threshold logic needed here, this source is closer to a relayed
+  official warning for the volcanoes it covers.
+- **Category**: new AWS-adjacent subcategory, e.g. `volcanicActivity`.
+- **ID scheme**: `` `usgsVolcano-${volcanoId}` ``
+- **Attribution**: US Government public domain — courtesy credit to
+  USGS Volcano Hazards Program recommended, not legally required.
+- **Licence**: public domain (US Government work).
+- **Gap remaining**: this covers US volcanoes only. Global volcanic
+  coverage (e.g. Indonesia, Japan, PNG — relevant to Australian
+  travellers) would still need GVP's own terms confirmed, or a
+  country-specific agency feed, before it could be added.
+
+---
+
+## Also worth adding — finished alerts, not Intel Centre sources
+
+These two are **not** raw-data sources for ALRT to analyse — the issuing
+body already assigns its own graded severity, so ALRT would relay them
+the same way it relays RFS or BoM, not run them through threshold logic.
+Listed here for completeness since they came up in the same research
+pass; they belong with the ordinary source-ingestion backlog, not the
+Intel Centre pattern.
+
+- **GDACS** (Global Disaster Alert and Coordination System) — global
+  multi-hazard (earthquake, cyclone, flood, volcano) alerts, each already
+  graded Green/Orange/Red by GDACS's own impact model.
+  **Licence confirmed**: CC BY 4.0, commercial use explicit. Attribution:
+  *"Global Disaster Alert and Coordination System, GDACS."* Endpoint
+  details in `https://www.gdacs.org/Documents/2025/GDACS_API_quickstart_v1.pdf`
+  — confirm the exact REST path at build time. `ExternalSourceId.gdacsGlobal`
+  already exists as a placeholder enum value in `ingestion.service.ts` —
+  no new enum entry needed, just implementation.
+- **NOAA National Hurricane Center** — tropical cyclone/hurricane
+  Watches and Warnings, already graded by NHC. Very likely public domain
+  (same basis as NWS/USGS data), but the exact terms page for this
+  specific product was not confirmed in this pass — verify before
+  building. Would need a new `ExternalSourceId` entry (e.g. `noaaNhc`).
+  Fills a hazard type (cyclones) ALRT has no dedicated global source for
+  today.
+
+---
+
 ## Build order (suggested)
 
 1. **Geoscience Australia** — lowest effort, no auth, reuses existing
    USGS parsing logic almost verbatim.
 2. **OpenAQ** — clean CC BY 4.0 licence, resolves the WAQI conflict,
    reuses existing AQI threshold logic.
-3. **NASA FIRMS** — new category and dedup work needed, but no blocked
+3. **GDACS** — licence now confirmed; low effort since severity is
+   pre-graded, no threshold logic to design.
+4. **USGS Volcano** — pre-graded severity, no threshold logic, but a
+   genuinely new hazard type (fills a real gap) so allow time for new
+   category/UI work.
+5. **NASA FIRMS** — new category and dedup work needed, but no blocked
    dependencies; do the "unconfirmed" framing and dedup pass before
    shipping, not after.
-4. **GloFAS** — confirm the operational-access question with Copernicus
+6. **NASA EONET** — similar effort to FIRMS; do the dedup pass against
+   FIRMS/RFS/BoM for the `wildfires` category specifically before
+   shipping.
+7. **NOAA NHC** — confirm the commercial-use terms for this specific
+   product first.
+8. **GloFAS** — confirm the operational-access question with Copernicus
    first; this is the only one with an open access question rather than
    just an implementation task.
 
@@ -180,4 +287,5 @@ not be presented with the same visual weight as an RFS/CFS incident.
 
 EMSC (earthquakes) is not in this spec — its terms bar commercial use
 without written permission, same blocker as ARPANSA. Do not build against
-it until/unless that's resolved.
+it until/unless that's resolved. Global (non-US) volcanic coverage is
+also out of scope until Smithsonian GVP's own terms are confirmed.
