@@ -8,6 +8,7 @@ import {
 } from "./family_alert.service.js";
 import { fireDueScheduledCheckIns } from "./family.service.js";
 import { endLapsedJourneys } from "./family_journey.service.js";
+import { endLapsedSosEvents } from "./family.service.js";
 
 /**
  * Initializes scheduled tasks for the application
@@ -58,6 +59,9 @@ export const initializeScheduledTasks = () => {
       // A journey past its stop time ends itself and drops its location,
       // so nothing keeps sharing because a phone went quiet.
       await endLapsedJourneys();
+      // Same guarantee for SOS: live share stops at the 4 hour cap even if
+      // nobody stands it down by hand.
+      await endLapsedSosEvents();
     } catch (error) {
       console.error("Expired family location purge failed:", error);
     }

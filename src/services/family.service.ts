@@ -1860,6 +1860,66 @@ export const resolveSos = async (userId: string, sosEventId: string) => {
   return resolved;
 };
 
+/**
+ * Locked spec: SOS live share caps at 4 hours. An SOS that is never stood
+ * down by hand must stand itself down, or a phone that goes quiet keeps
+ * sharing a location forever: the 1-hour purge only touches events with a
+ * `resolvedAt`, so an event left active is never swept at all.
+ *
+ * Same shape as endLapsedJourneys: mark it resolved, wipe the coordinates,
+ * and delete the live-share trail the way a manual stand-down does. History
+ * keeps only the time and the duration.
+ */
+export const SOS_MAX_DURATION_MS = 4 * 60 * 60 * 1000;
+
+export const endLapsedSosEvents = async (): Promise<number> => {
+  const cutoff = new Date(Date.now() - SOS_MAX_DURATION_MS);
+  const lapsed = await prisma.familySosEvent.findMany({
+    where: { status: "active", createdAt: { lte: cutoff } },
+    select: { id: true, circleId: true, memberId: true, createdAt: true },
+  });
+  if (lapsed.length === 0) return 0;
+
+  const now = new Date();
+  await prisma.familySosEvent.updateMany({
+    where: { id: { in: lapsed.map((sos) => sos.id) } },
+    data: {
+      status: "resolved",
+      resolvedAt: now,
+      latitude: null,
+      longitude: null,
+      locationLabel: null,
+    },
+  });
+
+  // Wipe each trail from the moment its own SOS started.
+  await Promise.all(
+    lapsed.map((sos) =>
+      prisma.familyLocationPing.deleteMany({
+        where: { memberId: sos.memberId, createdAt: { gte: sos.createdAt } },
+      }),
+    ),
+  );
+
+  // Tell the open screens, so a receiver's map stops showing a live dot.
+  await Promise.allSettled(
+    lapsed.map((sos) =>
+      notifyCircle({
+        circleId: sos.circleId,
+        excludeMemberIds: [],
+        title: "SOS ended",
+        body: "Live sharing reached its 4 hour limit and has stopped.",
+        data: { circleId: sos.circleId, sosEventId: sos.id },
+        type: PushNotificationType.familySosResolved,
+        socketEvent: SocketEvent.familySosResolved,
+        socketData: { id: sos.id, circleId: sos.circleId, status: "resolved" },
+      }),
+    ),
+  );
+
+  return lapsed.length;
+};
+
 export const getActiveSos = async (userId: string, circleId?: string) => {
   const membership = await requireMembership(userId, circleId);
   return prisma.familySosEvent.findMany({
