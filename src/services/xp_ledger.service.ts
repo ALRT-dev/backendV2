@@ -345,11 +345,16 @@ const currentWeekStart = (): Date => {
 };
 
 /**
- * Ledger hook for a completed guide: records the event, extends the streak
- * and awards the weekly quest bonus when the target is hit.
- * The guide service still owns the UserGuideProgress + xpPoints increment
- * for the guide itself; this must be called AFTER that increment with
- * applyPoints=false so the total is not double-counted.
+ * Ledger hook for a completed guide: awards the XP, extends the streak and
+ * awards the weekly quest bonus when the target is hit.
+ *
+ * This is the ONLY place a guide's XP is applied. The guide service used
+ * to increment user.xpPoints itself and then ask this to journal a
+ * matching row, which meant the header total and the ledger were two
+ * separate writes that could disagree: the journal is best-effort, so a
+ * failure here left the user with the points but no ledger row, and the
+ * weekly quest counter (which counts guideCompleted rows) never moved.
+ * One write now, one source of truth.
  */
 export const recordGuideCompletion = async (params: {
   userId: string;
@@ -357,14 +362,11 @@ export const recordGuideCompletion = async (params: {
   xpAwarded: number;
 }) => {
   try {
-    // The guide service already incremented xpPoints; only journal it.
-    await prisma.xpEvent.create({
-      data: {
-        userId: params.userId,
-        type: XpEventType.guideCompleted,
-        points: params.xpAwarded,
-        guideId: params.guideId,
-      },
+    await recordXpEvent({
+      userId: params.userId,
+      type: XpEventType.guideCompleted,
+      points: params.xpAwarded,
+      guideId: params.guideId,
     });
 
     await touchActivityStreak(params.userId);

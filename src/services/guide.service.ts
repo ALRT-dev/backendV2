@@ -1,8 +1,6 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
-import { sendSocketEventToUsers } from "./socket.service.js";
-import { SocketEvent } from "../models/socket_event_types.js";
 import { recordGuideCompletion } from "./xp_ledger.service.js";
 
 /**
@@ -152,22 +150,16 @@ export const completeGuide = async (userId: string, slugOrId: string) => {
   }
 
   let progress;
-  let updatedUser;
   try {
-    [progress, updatedUser] = await prisma.$transaction([
-      prisma.userGuideProgress.create({
-        data: {
-          userId,
-          guideId: guide.id,
-          xpAwarded: guide.xpReward,
-        },
-      }),
-      prisma.user.update({
-        where: { id: userId },
-        data: { xpPoints: { increment: guide.xpReward } },
-        select: { id: true, xpPoints: true, reliabilityScore: true },
-      }),
-    ]);
+    // Only the progress row here. The XP itself is applied by the ledger
+    // below, so there is exactly one write that moves a user's points.
+    progress = await prisma.userGuideProgress.create({
+      data: {
+        userId,
+        guideId: guide.id,
+        xpAwarded: guide.xpReward,
+      },
+    });
   } catch (error) {
     // Unique constraint hit by a concurrent completion — treat as idempotent.
     if (
@@ -179,42 +171,32 @@ export const completeGuide = async (userId: string, slugOrId: string) => {
     throw error;
   }
 
-  // Journal into the XP ledger, extend the streak, and award the weekly
-  // quest bonus if this completion finished it.
-  //
-  // AWAITED on purpose. This used to be fire-and-forget, and the quest
-  // bonus is applied inside it, so the completion that finished the quest
-  // returned a total computed BEFORE the +20 landed. The card said
-  // "Weekly quest complete! +20 XP" while the header went up by the guide
-  // reward alone, which is exactly the arithmetic not adding up.
+  const startingTotal = (
+    await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { xpPoints: true },
+    })
+  ).xpPoints;
+
+  // Awards the guide XP, extends the streak, and adds the weekly quest
+  // bonus if this completion finished it. Awaited so the total we report
+  // includes the bonus: it used to be fire-and-forget, and the quest bonus
+  // is applied inside, so the completion that finished the quest returned
+  // a total computed before the +20 landed. The card said
+  // "Weekly quest complete! +20 XP" while the header moved by the guide
+  // reward alone.
   await recordGuideCompletion({
     userId,
     guideId: guide.id,
     xpAwarded: guide.xpReward,
   });
 
-  // Re-read after the hook so the total we report and broadcast includes
-  // any quest bonus it just applied.
-  const settledUser = await prisma.user.findUnique({
+  // recordXpEvent already pushed the socket update for each award, so the
+  // client has the settled figure; this is just what we return.
+  const finalUser = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
     select: { id: true, xpPoints: true, reliabilityScore: true },
   });
-  const finalUser = settledUser ?? updatedUser;
-
-  sendSocketEventToUsers({
-    userIds: [userId],
-    event: SocketEvent.updateUserXp,
-    data: {
-      userId: finalUser.id,
-      xpPoints: finalUser.xpPoints,
-      reliabilityScore: finalUser.reliabilityScore,
-    },
-  });
-
-  // What the user actually gained in this call, quest bonus included.
-  // updatedUser.xpPoints is the total after the guide reward and before
-  // the hook, so subtracting the guide reward recovers the starting total.
-  const startingTotal = updatedUser.xpPoints - guide.xpReward;
 
   return {
     progress,
