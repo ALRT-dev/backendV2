@@ -179,30 +179,48 @@ export const completeGuide = async (userId: string, slugOrId: string) => {
     throw error;
   }
 
+  // Journal into the XP ledger, extend the streak, and award the weekly
+  // quest bonus if this completion finished it.
+  //
+  // AWAITED on purpose. This used to be fire-and-forget, and the quest
+  // bonus is applied inside it, so the completion that finished the quest
+  // returned a total computed BEFORE the +20 landed. The card said
+  // "Weekly quest complete! +20 XP" while the header went up by the guide
+  // reward alone, which is exactly the arithmetic not adding up.
+  await recordGuideCompletion({
+    userId,
+    guideId: guide.id,
+    xpAwarded: guide.xpReward,
+  });
+
+  // Re-read after the hook so the total we report and broadcast includes
+  // any quest bonus it just applied.
+  const settledUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, xpPoints: true, reliabilityScore: true },
+  });
+  const finalUser = settledUser ?? updatedUser;
+
   sendSocketEventToUsers({
     userIds: [userId],
     event: SocketEvent.updateUserXp,
     data: {
-      userId: updatedUser.id,
-      xpPoints: updatedUser.xpPoints,
-      reliabilityScore: updatedUser.reliabilityScore,
+      userId: finalUser.id,
+      xpPoints: finalUser.xpPoints,
+      reliabilityScore: finalUser.reliabilityScore,
     },
   });
 
-  // Journal into the XP ledger + streak + weekly quest (non-blocking).
-  recordGuideCompletion({
-    userId,
-    guideId: guide.id,
-    xpAwarded: guide.xpReward,
-  }).catch((error) =>
-    console.error("Guide completion ledger hook failed:", error),
-  );
+  // What the user actually gained in this call, quest bonus included.
+  // updatedUser.xpPoints is the total after the guide reward and before
+  // the hook, so subtracting the guide reward recovers the starting total.
+  const startingTotal = updatedUser.xpPoints - guide.xpReward;
 
   return {
     progress,
     alreadyCompleted: false,
-    xpAwarded: guide.xpReward,
-    newXpTotal: updatedUser.xpPoints,
+    xpAwarded: finalUser.xpPoints - startingTotal,
+    newXpTotal: finalUser.xpPoints,
   };
 };
 

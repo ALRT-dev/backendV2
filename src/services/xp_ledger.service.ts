@@ -397,7 +397,15 @@ export const recordGuideCompletion = async (params: {
       });
     }
   } catch (error) {
-    console.error("Guide completion ledger hook failed:", error);
+    // The streak and the quest bonus are the parts that can fail here.
+    // Swallowing kept the guide completion itself safe, but it also meant
+    // a lost +20 was invisible to everyone, which is how the totals drift
+    // away from what the quest card promises. Still non-fatal, but loud.
+    console.error("Guide completion ledger hook failed:", {
+      userId: params.userId,
+      guideId: params.guideId,
+      error,
+    });
   }
 };
 
