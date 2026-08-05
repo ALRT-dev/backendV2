@@ -451,10 +451,15 @@ export const summarizeHazard = async ({
   useDummy?: boolean;
 }): Promise<AISummaryResponse> => {
   if (useDummy) {
+    // No-AI mode passes the source through untouched. It used to invent a
+    // call to action here ("Please stay informed and take necessary
+    // precautions"), which the app then displayed under WHAT TO DO as if an
+    // agency had said it. ALRT does not write advice (locked rule): with no
+    // callsToAction the app simply hides the section, which is honest.
     return {
       title,
       summary: description,
-      callsToAction: ["Please stay informed and take necessary precautions."],
+      callsToAction: [],
       confidence: "high",
     };
   }
