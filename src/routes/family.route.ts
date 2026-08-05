@@ -36,6 +36,8 @@ import {
   removeMemberController,
   updateOwnMemberController,
   updateOwnMemberPhotoController,
+  updateCirclePhotoController,
+  removeCirclePhotoController,
   createInviteController,
   extendJourneyController,
   getMyJourneyController,
@@ -89,6 +91,16 @@ familyRouter.post("/circle", validate(createFamilyCircleSchema), createCircleCon
 familyRouter.get("/circle", getCircleController);
 familyRouter.put("/circle", validate(updateFamilyCircleSchema), updateCircleController);
 familyRouter.delete("/circle", deleteCircleController);
+
+// Group picture (owner only) — how the circle is recognised on the hub,
+// the switcher and the home-screen widget.
+familyRouter.put(
+  "/circle/photo",
+  uploadProfilePicture,
+  handleMulterError,
+  updateCirclePhotoController,
+);
+familyRouter.delete("/circle/photo", removeCirclePhotoController);
 familyRouter.post("/circle/leave", leaveCircleController);
 
 // Ownership transfer (§29): host hands the circle — and its seats — to an

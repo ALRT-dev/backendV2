@@ -607,6 +607,7 @@ model FamilyCircle {
   plan FamilyPlan @default(plus)
 
   themeColor String? // Hex accent colour chosen by the owner
+  photoUrl   String? // Group picture chosen by the owner (S3 URL)
 
   maxMembers Int @default(10)
 

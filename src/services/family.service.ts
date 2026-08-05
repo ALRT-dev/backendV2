@@ -325,6 +325,7 @@ export const listCirclesForUser = async (userId: string) => {
     name: membership.circle.name,
     plan: membership.circle.plan,
     themeColor: membership.circle.themeColor,
+    photoUrl: membership.circle.photoUrl,
     role: membership.role,
     myMemberId: membership.id,
     memberCount: membership.circle._count.members,
@@ -394,6 +395,7 @@ export const getCircleForUser = async (userId: string, circleId?: string) => {
     name: circle.name,
     plan: circle.plan,
     themeColor: circle.themeColor,
+    photoUrl: circle.photoUrl,
     isPaused,
     pausedHostName,
     graceDaysLeft,
@@ -757,6 +759,7 @@ export const listSosRecipients = async (userId: string) => {
     circleId: membership.circleId,
     name: membership.circle.name,
     themeColor: membership.circle.themeColor,
+    photoUrl: membership.circle.photoUrl,
     members: membership.circle.members
       .filter((member) => member.userId !== userId)
       .map((member) => ({
@@ -845,6 +848,63 @@ export const updateOwnMember = async (
   });
 
   return updated;
+};
+
+/**
+ * Stores an uploaded group picture for the circle itself.
+ *
+ * Owner-only, like every other circle setting: the picture is how the whole
+ * group is recognised on the hub, the switcher and the home-screen widget,
+ * so one person sets it rather than the last member to upload winning.
+ */
+export const updateCirclePhoto = async (
+  userId: string,
+  photoUrl: string,
+  circleId?: string,
+) => {
+  const membership = await requireMembership(userId, circleId);
+  if (membership.role !== "owner") {
+    throw new HttpError(403, "Only the circle owner can change the group picture");
+  }
+
+  const previous = membership.circle.photoUrl;
+  const circle = await prisma.familyCircle.update({
+    where: { id: membership.circleId },
+    data: { photoUrl },
+  });
+
+  await notifyCircle({
+    circleId: circle.id,
+    socketEvent: SocketEvent.familyCircleUpdate,
+    socketData: { circleId: circle.id },
+  });
+
+  return { circle, previousPhotoUrl: previous };
+};
+
+/**
+ * Clears the group picture, dropping the circle back to its initial and
+ * theme colour. Returns the old URL so the caller can delete the object.
+ */
+export const removeCirclePhoto = async (userId: string, circleId?: string) => {
+  const membership = await requireMembership(userId, circleId);
+  if (membership.role !== "owner") {
+    throw new HttpError(403, "Only the circle owner can change the group picture");
+  }
+
+  const previous = membership.circle.photoUrl;
+  const circle = await prisma.familyCircle.update({
+    where: { id: membership.circleId },
+    data: { photoUrl: null },
+  });
+
+  await notifyCircle({
+    circleId: circle.id,
+    socketEvent: SocketEvent.familyCircleUpdate,
+    socketData: { circleId: circle.id },
+  });
+
+  return { circle, previousPhotoUrl: previous };
 };
 
 /** Stores an uploaded circle photo for the calling member. */

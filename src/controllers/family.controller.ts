@@ -214,6 +214,72 @@ export const updateOwnMemberController = async (
   }
 };
 
+/** PUT /api/family/circle/photo — the group picture (owner only). */
+export const updateCirclePhotoController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+
+    const file = req.file;
+    if (!file) throw new HttpError(400, "Photo file is required");
+    if (!file.mimetype.startsWith("image/")) {
+      throw new HttpError(400, "Photo must be an image file");
+    }
+
+    const uploadResult = await uploadFileToS3(file, "family-circle-photos");
+    const { circle, previousPhotoUrl } = await familyService.updateCirclePhoto(
+      userId,
+      uploadResult.url,
+      circleIdOf(req),
+    );
+
+    // Best-effort cleanup of the replaced picture.
+    if (previousPhotoUrl) {
+      try {
+        const oldKey = extractS3KeyFromUrl(previousPhotoUrl);
+        if (oldKey) await deleteFileFromS3(oldKey);
+      } catch (error) {
+        console.error("Error deleting old family circle photo:", error);
+      }
+    }
+
+    res.status(200).json(circle);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** DELETE /api/family/circle/photo — back to the initial + theme colour. */
+export const removeCirclePhotoController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const { circle, previousPhotoUrl } = await familyService.removeCirclePhoto(
+      userId,
+      circleIdOf(req),
+    );
+
+    if (previousPhotoUrl) {
+      try {
+        const oldKey = extractS3KeyFromUrl(previousPhotoUrl);
+        if (oldKey) await deleteFileFromS3(oldKey);
+      } catch (error) {
+        console.error("Error deleting old family circle photo:", error);
+      }
+    }
+
+    res.status(200).json(circle);
+  } catch (error) {
+    next(error);
+  }
+};
+
 /** PUT /api/family/members/me/photo — circle-specific member photo. */
 export const updateOwnMemberPhotoController = async (
   req: Request,
