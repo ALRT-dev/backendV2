@@ -1050,6 +1050,7 @@ enum XpEventType {
   reportRejected // A report failed review (-15)
   reportCorroborated // Someone else reported the same thing nearby (+5)
   officialMatch // An official source confirmed the report (+15)
+  onboardingCompleted // Finished onboarding (+20, once per user)
   guideCompleted // Finished a safety guide (+10)
   questCompleted // Finished the weekly quest (+20)
   shareInstall // Someone installed via a shared link (+20, future)

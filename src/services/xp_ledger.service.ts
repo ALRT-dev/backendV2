@@ -22,6 +22,7 @@ export const XP_POINTS: Record<XpEventType, number> = {
   reportRejected: -15,
   reportCorroborated: 5,
   officialMatch: 15,
+  onboardingCompleted: 20,
   guideCompleted: 10,
   questCompleted: 20,
   shareInstall: 20,

@@ -4,6 +4,8 @@ import { updateUserPushNotificationSettings } from "./user.service.js";
 import type { PushNotificationSettings } from "../models/push_notification_settings_interface.js";
 import { updateUserOwnLocationSubscriptionRadius } from "./location_subscription.service.js";
 import { getAllMainHazardCategoryIds } from "./hazard_category.service.js";
+import { recordXpEvent } from "./xp_ledger.service.js";
+import { XpEventType } from "@prisma/client";
 
 /**
  * Marks the disclaimer as accepted for a given user
@@ -33,10 +35,39 @@ export const acceptTermsOfService = async (userId: string): Promise<void> => {
 
       // Complete the onboarding process.
       isOnboardingCompleted: true,
-      // Give 20 XP points for completing the onboarding process.
-      xpPoints: { increment: 20 },
     },
   });
+
+  await awardOnboardingXp(userId);
+};
+
+/**
+ * Awards the one-off 20 XP for finishing onboarding, through the ledger.
+ *
+ * This used to be a bare `xpPoints: { increment: 20 }` on the user row, so
+ * a person's very first 20 points had no entry in their points history:
+ * the total said 20 and the history explained none of it. Every other
+ * award goes through recordXpEvent, and now so does this one.
+ *
+ * Idempotent on the ledger rather than on a boolean, so re-running the
+ * step (or a client retry) cannot pay twice.
+ */
+const awardOnboardingXp = async (userId: string): Promise<void> => {
+  try {
+    const existing = await prisma.xpEvent.findFirst({
+      where: { userId, type: XpEventType.onboardingCompleted },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    await recordXpEvent({
+      userId,
+      type: XpEventType.onboardingCompleted,
+    });
+  } catch (error) {
+    // Onboarding must complete even if the award fails.
+    console.error("Onboarding XP award failed:", { userId, error });
+  }
 };
 
 /**
@@ -116,18 +147,9 @@ export const setPushNotificationPreference = async ({
   await updateUserPushNotificationSettings(userId, settings);
 };
 
-/**
- * Completes the onboarding process for a given user
- * @param userId - The ID of the user
- */
-export const completeOnboarding = async (userId: string): Promise<void> => {
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      isOnboardingCompleted: true,
-
-      // Give 20 XP points for completing onboarding.
-      xpPoints: { increment: 20 },
-    },
-  });
-};
+// completeOnboarding used to live here: a second, unreferenced copy of the
+// same step carrying its own unguarded `xpPoints: { increment: 20 }`. It was
+// never routed, so it paid nobody, but wiring it up would have handed out
+// onboarding XP twice with no ledger row either time. Deleted rather than
+// left as a trap; acceptTermsOfService is the one path that completes
+// onboarding.
