@@ -20,6 +20,7 @@ import {
   cancelAccountDeletionController,
   getAccountDeletionStatusController,
 } from "../controllers/user.controller.js";
+import { getFirebaseCustomTokenController } from "../controllers/firebase_token.controller.js";
 import { requireAuth } from "../middlewares/auth.middleware.js";
 import { validate } from "../middlewares/validation.middleware.js";
 import {
@@ -98,5 +99,13 @@ userRouter.post(
   blockUserController,
 );
 userRouter.delete("/blocked/:userId", requireAuth, unblockUserController);
+
+// A Firebase custom token for the signed-in user, so the app can sign in
+// to Firebase Auth and reach the Ask ALRT callable, which requires a uid.
+userRouter.post(
+  "/firebase-token",
+  requireAuth,
+  getFirebaseCustomTokenController,
+);
 
 export default userRouter;
