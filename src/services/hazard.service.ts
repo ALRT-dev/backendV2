@@ -25,7 +25,13 @@ import {
 } from "../utils/hazard.util.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
-import { executePrompt } from "./open-ai.service.js";
+import { executePrompt } from "./ai.service.js";
+import {
+  hazardContentHash,
+  getCachedAISummary,
+  cacheAISummary,
+} from "./hazard_cache.service.js";
+import { config } from "../utils/config.js";
 import { MainCategoryId } from "./hazard_category.service.js";
 import { ExternalSourceId } from "./ingestion.service.js";
 
@@ -119,6 +125,51 @@ export const getHazardsApplyingFilters = async (
 };
 
 /**
+ * All Hazard scalar columns except the generated PostGIS columns (`geom`,
+ * `geomBox`) — Prisma cannot deserialize `geometry` values from raw queries,
+ * so `h.*` must never reach the driver. Keep in sync with schema.prisma.
+ */
+const HAZARD_RAW_COLUMNS = [
+  "id",
+  "title",
+  "description",
+  "aiSummary",
+  "aiConfidence",
+  "severity",
+  "severityBand",
+  "callsToAction",
+  "fireStatus",
+  "latitude",
+  "longitude",
+  "locationName",
+  "geoLocation",
+  "northeastLat",
+  "northeastLng",
+  "southwestLat",
+  "southwestLng",
+  "categoryId",
+  "sourceId",
+  "reportedById",
+  "isAwsCompliant",
+  "reviewStatus",
+  "reviewFeedback",
+  "reviewedAt",
+  "reviewedById",
+  "confidenceScore",
+  "confidenceScoreCalculatedAt",
+  "upvoteCount",
+  "downvoteCount",
+  "viewCount",
+  "link",
+  "occurredAt",
+  "createdAt",
+  "updatedAt",
+  "expiresAt",
+]
+  .map((c) => `h."${c}"`)
+  .join(", ");
+
+/**
  * Fetches hazards using raw SQL with database-level sorting for optimal performance.
  * This is the main function that combines WHERE and ORDER BY clause builders.
  * OPTIMIZED VERSION with improved query structure and reduced N+1 queries.
@@ -169,8 +220,8 @@ export const getHazardsApplyingFiltersRaw = async (
   // OPTIMIZED: Build a more efficient query with better JOINs and aggregations
   let query = `
     WITH hazard_data AS (
-      SELECT 
-        h.*,
+      SELECT
+        ${HAZARD_RAW_COLUMNS},
         hc.name as "categoryName",
         hc.description as "categoryDescription", 
         hc.color as "categoryColor",
@@ -253,6 +304,51 @@ export const getHazardsApplyingFiltersRaw = async (
     ...queryParams,
   )) as any[];
 
+  /** One DB query for all category images referenced by this page (avoids N+1). */
+  const uniqueCategoryIds = new Set<string>();
+  for (const row of hazards) {
+    if (row.categoryId) uniqueCategoryIds.add(row.categoryId);
+    if (row.categoryParentId) uniqueCategoryIds.add(row.categoryParentId);
+  }
+
+  const categoryImageMap = new Map<
+    string,
+    Array<{
+      id: string;
+      categoryId: string;
+      imageType: string;
+      s3Key: string;
+      width: number | null;
+      height: number | null;
+      fileSizeBytes: number | null;
+      createdAt: Date;
+      updatedAt: Date;
+    }>
+  >();
+
+  if (uniqueCategoryIds.size > 0) {
+    const imageRows = await prisma.hazardCategoryImage.findMany({
+      where: { categoryId: { in: [...uniqueCategoryIds] } },
+      orderBy: { imageType: "asc" },
+      select: {
+        id: true,
+        categoryId: true,
+        imageType: true,
+        s3Key: true,
+        width: true,
+        height: true,
+        fileSizeBytes: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+    for (const img of imageRows) {
+      const list = categoryImageMap.get(img.categoryId) ?? [];
+      list.push(img);
+      categoryImageMap.set(img.categoryId, list);
+    }
+  }
+
   // Get unique reporter IDs from hazards that have reporters
   const reporterIds = Array.from(
     new Set(
@@ -323,12 +419,14 @@ export const getHazardsApplyingFiltersRaw = async (
             description: categoryDescription,
             color: categoryColor,
             parentId: categoryParentId,
+            images: categoryImageMap.get(hazard.categoryId) ?? [],
             parent: categoryParentId
               ? {
                   id: categoryParentId,
                   name: categoryParentName,
                   description: categoryParentDescription,
                   color: categoryParentColor,
+                  images: categoryImageMap.get(categoryParentId) ?? [],
                 }
               : null,
           }
@@ -394,16 +492,11 @@ export const reviewHazard = async ({
       LOCATION: ${locationName || ""} (${latitude}, ${longitude})
       CATEGORY: ${category.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: promptContent,
     userPromptContent: userContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI review failed: Empty response from AI");
-  }
 
   try {
     const aiReview = JSON.parse(content) as {
@@ -464,6 +557,23 @@ export const summarizeHazard = async ({
     };
   }
 
+  const contentHash = hazardContentHash({
+    title,
+    description,
+    locationName: locationName ?? null,
+    categoryId: category.id,
+    sourceId: source.id,
+    isAwsCompliant,
+    severityBand,
+  });
+  const cachedSummary = await getCachedAISummary<AISummaryResponse>(
+    contentHash,
+  );
+  if (cachedSummary) {
+    console.log("AI summary cache hit, skipping model call:", title);
+    return cachedSummary;
+  }
+
   const { model, content: systemPromptContent } = await getAIPromptForHazard({
     isAwsCompliant,
     severityBand,
@@ -479,19 +589,15 @@ export const summarizeHazard = async ({
   - category: ${category.name}
   - agency: ${source.name}`;
 
-  const response = await executePrompt({
+  const content = await executePrompt({
     model: model,
     systemPromptContent: systemPromptContent,
     userPromptContent: userPromptContent,
   });
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(500, "AI summarization failed: Empty response from AI");
-  }
-
   try {
     const aiSummary = JSON.parse(content) as AISummaryResponse;
+    await cacheAISummary(contentHash, aiSummary);
     return aiSummary;
   } catch (parseError) {
     console.error("Failed to parse AI summary response:", parseError);
@@ -661,19 +767,11 @@ export const getSuggestedCategory = async ({
   Description: ${description}
   ${currentCategoryId ? `Current Category: ${currentCategoryId}` : ""}`;
 
-  const response = await executePrompt({
-    model: "gpt-5-nano",
+  const content = await executePrompt({
+    model: config.aws.bedrock.fallbackModelId,
     systemPromptContent,
     userPromptContent,
   });
-
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new HttpError(
-      500,
-      "AI category suggestion failed: Empty response from AI",
-    );
-  }
 
   try {
     const aiResponse = JSON.parse(content) as {

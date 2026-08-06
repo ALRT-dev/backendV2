@@ -16,8 +16,4 @@ hazardCategoryRouter.get("/parent", requireAuth, getAllParentHazardCategories);
 hazardCategoryRouter.get("/sub", requireAuth, getAllSubHazardCategories);
 hazardCategoryRouter.post("/", requireAuth, createHazardCategory);
 
-// admin
-hazardCategoryRouter.post("/delete-all", deleteAllHazardCategories);
-hazardCategoryRouter.post("/populate", populateCategories);
-
 export default hazardCategoryRouter;

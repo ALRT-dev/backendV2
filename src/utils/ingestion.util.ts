@@ -13,7 +13,6 @@ import type {
   Point,
 } from "geojson";
 import Parser from "rss-parser";
-import puppeteer from "puppeteer";
 import { readFileSync } from "fs";
 import { join } from "path";
 import type { GeocodeResult } from "@googlemaps/google-maps-services-js";
@@ -2350,34 +2349,25 @@ export async function parseQLDParkToHazards({
     },
   });
 
-  // Use Puppeteer to bypass Cloudflare protection
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-
   try {
-    const page = await browser.newPage();
-
-    // Set realistic viewport and user agent
-    await page.setViewport({ width: 1920, height: 1080 });
-    await page.setUserAgent(
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    );
-
-    // Navigate to the RSS feed URL and wait for the response
-    const response = await page.goto(url, {
-      waitUntil: "networkidle0",
-      timeout: 30000,
+    // Cloudflare admits plain requests carrying a realistic browser
+    // User-Agent; the previous headless-Chrome fetch needed system libraries
+    // the runtime image doesn't ship.
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "application/rss+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(30000),
     });
 
-    if (!response || !response.ok()) {
+    if (!response.ok) {
       throw new Error(
-        `Failed to fetch QLD Parks RSS feed: ${response?.status()} ${response?.statusText()}`,
+        `Failed to fetch QLD Parks RSS feed: ${response.status} ${response.statusText}`,
       );
     }
 
-    // Get the raw XML content from the response
     const xmlString = await response.text();
 
     if (!xmlString) {
@@ -2471,8 +2461,6 @@ export async function parseQLDParkToHazards({
   } catch (error) {
     console.error("Error in parseQLDParkToHazards:", error);
     throw error;
-  } finally {
-    await browser.close();
   }
 }
 

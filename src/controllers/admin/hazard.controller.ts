@@ -36,6 +36,10 @@ import {
   invalidateHazardCaches,
   invalidateHazardListCaches,
 } from "../../services/hazard_cache.service.js";
+import {
+  enrichHazardsWithPresignedUrls,
+  enrichHazardWithPresignedUrls,
+} from "../../services/s3.service.js";
 
 export const getHazardsForAdmin = async (
   req: Request,
@@ -93,7 +97,11 @@ export const getHazardsForAdmin = async (
       page: Number(page),
       pageSize: Number(pageSize),
     });
-    res.status(200).json(hazards);
+
+    const hazardsWithPresignedUrls =
+      await enrichHazardsWithPresignedUrls(hazards);
+
+    res.status(200).json(hazardsWithPresignedUrls);
   } catch (error) {
     next(error);
   }
@@ -236,7 +244,10 @@ export const createHazardForAdmin = async (
 
     await invalidateHazardCaches();
 
-    res.status(201).json(createdHazard);
+    const createdHazardWithPresignedUrls =
+      await enrichHazardWithPresignedUrls(createdHazard);
+
+    res.status(201).json(createdHazardWithPresignedUrls);
   } catch (error) {
     next(error);
   }
@@ -345,7 +356,10 @@ export const updateHazardForAdmin = async (
 
     await invalidateHazardCaches(hazardId);
 
-    res.status(200).json(updatedHazard);
+    const updatedHazardWithPresignedUrls =
+      await enrichHazardWithPresignedUrls(updatedHazard);
+
+    res.status(200).json(updatedHazardWithPresignedUrls);
   } catch (error) {
     next(error);
   }

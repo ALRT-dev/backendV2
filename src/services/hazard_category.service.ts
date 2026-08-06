@@ -52,7 +52,7 @@ export const initializeHazardCategories = async (): Promise<void> => {
     if (!categoriesExist) {
       await populateInitialCategories();
       console.log(
-        "---------------------------------------> Hazard categories initialized successfully"
+        "---------------------------------------> Hazard categories initialized successfully",
       );
     }
   } catch (error) {
@@ -1711,7 +1711,7 @@ export const getCategoriesApplyingFilters = async ({
       const parentHazardsCount = category._count.hazards;
       const subCategoriesHazardsCount = category.subCategories.reduce(
         (total, subCategory) => total + subCategory._count.hazards,
-        0
+        0,
       );
       const totalHazardsCount = parentHazardsCount + subCategoriesHazardsCount;
 

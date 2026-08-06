@@ -11,8 +11,8 @@ import type { MediaUploadResult } from "../models/media_upload_result_interface.
 import { config } from "../utils/config.js";
 import type { Hazard, HazardMedia } from "@prisma/client";
 
-const BUCKET_NAME = config.aws.s3BucketName;
-const CLOUDFRONT_DOMAIN = config.aws.cloudfrontDomain;
+const BUCKET_NAME = config.aws.s3.bucketName;
+const CLOUDFRONT_DOMAIN = config.aws.s3.cloudfrontDomain;
 
 /**
  * Upload a file to S3 and return the public URL
@@ -44,7 +44,7 @@ export const uploadFileToS3 = async (
     const url =
       CLOUDFRONT_DOMAIN.length > 0
         ? `https://${CLOUDFRONT_DOMAIN}/${key}`
-        : `https://${BUCKET_NAME}.s3.${config.aws.region}.amazonaws.com/${key}`;
+        : `https://${BUCKET_NAME}.s3.${config.aws.s3.region}.amazonaws.com/${key}`;
 
     return {
       key,
@@ -226,14 +226,27 @@ export const generateMultiplePresignedUrls = async (
  * @param expiresIn - Expiration time for presigned URLs in seconds (default: 1 hour)
  * @returns Hazards with presigned URLs added to media
  */
+type CategoryWithImagesForHazard = {
+  images?: { s3Key: string }[];
+  parent?: { images?: { s3Key: string }[] } | null;
+};
+
+function collectCategoryImageS3Keys(
+  category: CategoryWithImagesForHazard | null | undefined,
+  keys: string[],
+) {
+  if (!category) return;
+  for (const img of category.images ?? []) keys.push(img.s3Key);
+  for (const img of category.parent?.images ?? []) keys.push(img.s3Key);
+}
+
 export const enrichHazardsWithPresignedUrls = async <
-  T extends Hazard & { medias?: HazardMedia[] },
+  T extends Hazard & { medias?: HazardMedia[]; category?: unknown },
 >(
   hazards: T[],
   expiresIn: number = 3600, // 1 hour default
 ): Promise<T[]> => {
   try {
-    // Collect all S3 keys from all hazards
     const s3Keys: string[] = [];
     hazards.forEach((hazard) => {
       if (hazard.medias) {
@@ -243,41 +256,62 @@ export const enrichHazardsWithPresignedUrls = async <
           }
         });
       }
+      collectCategoryImageS3Keys(
+        hazard.category as CategoryWithImagesForHazard | null | undefined,
+        s3Keys,
+      );
     });
 
-    // If no media files, return hazards as-is
-    if (s3Keys.length === 0) {
+    const uniqueKeys = [...new Set(s3Keys)];
+    if (uniqueKeys.length === 0) {
       return hazards;
     }
 
-    // Generate presigned URLs for all keys
     const presignedUrls = await generateMultiplePresignedUrls(
-      s3Keys,
+      uniqueKeys,
       expiresIn,
     );
 
-    // Enrich hazards with presigned URLs
-    const enrichedHazards = hazards.map((hazard) => {
-      if (!hazard.medias || hazard.medias.length === 0) {
-        return hazard;
+    return hazards.map((hazard) => {
+      const cat = hazard.category as
+        | CategoryWithImagesForHazard
+        | null
+        | undefined;
+      let next: Record<string, unknown> = { ...hazard };
+
+      if (hazard.medias?.length) {
+        next.medias = hazard.medias.map((media) => ({
+          ...media,
+          presignedUrl: media.s3Key ? presignedUrls[media.s3Key] : undefined,
+        }));
       }
 
-      const enrichedMedias = hazard.medias.map((media) => ({
-        ...media,
-        // Add presigned URL while keeping the original URL for reference
-        presignedUrl: media.s3Key ? presignedUrls[media.s3Key] : undefined,
-      }));
+      if (cat) {
+        next.category = {
+          ...cat,
+          images: cat.images?.map((img) => ({
+            ...img,
+            presignedUrl: presignedUrls[img.s3Key],
+          })),
+          parent:
+            cat.parent === null
+              ? null
+              : cat.parent
+                ? {
+                    ...cat.parent,
+                    images: cat.parent.images?.map((img) => ({
+                      ...img,
+                      presignedUrl: presignedUrls[img.s3Key],
+                    })),
+                  }
+                : undefined,
+        };
+      }
 
-      return {
-        ...hazard,
-        medias: enrichedMedias,
-      };
+      return next as T;
     });
-
-    return enrichedHazards;
   } catch (error) {
     console.error("Error enriching hazards with presigned URLs:", error);
-    // Return original hazards if presigned URL generation fails
     return hazards;
   }
 };
@@ -304,12 +338,14 @@ export const enrichHazardWithPresignedUrls = async <
 type CategoryWithImagesLike = {
   images?: { s3Key: string; [k: string]: unknown }[];
   subCategories?: CategoryWithImagesLike[];
+  /** Parent category (e.g. Prisma include parent: { include: { images: true } }) */
+  parent?: CategoryWithImagesLike | null;
 };
 
 /**
  * Enriches category images with presigned URLs (generated from s3Key).
- * Use when returning categories in API responses so clients get a temporary URL.
- * @param categories - Categories (and nested subCategories) that have images
+ * Walks each category's `images`, nested `subCategories`, and `parent` (and parent's chain).
+ * @param categories - Categories that may include subCategories and/or parent with images
  * @param expiresIn - Presigned URL expiry in seconds (default: 1 hour)
  */
 export const enrichCategoryImagesWithPresignedUrls = async <T>(
@@ -321,7 +357,8 @@ export const enrichCategoryImagesWithPresignedUrls = async <T>(
     function collectKeys(cats: CategoryWithImagesLike[]) {
       for (const c of cats) {
         if (c.images) for (const img of c.images) keys.push(img.s3Key);
-        if (c.subCategories) collectKeys(c.subCategories);
+        if (c.subCategories?.length) collectKeys(c.subCategories);
+        if (c.parent) collectKeys([c.parent]);
       }
     }
     collectKeys(categories as CategoryWithImagesLike[]);
@@ -338,6 +375,9 @@ export const enrichCategoryImagesWithPresignedUrls = async <T>(
         }
         if (c.subCategories?.length) {
           out.subCategories = enrich(c.subCategories);
+        }
+        if (c.parent) {
+          out.parent = enrich([c.parent])[0] ?? null;
         }
         return out;
       });

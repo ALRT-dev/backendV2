@@ -12,6 +12,7 @@ import adminStatsRouter from "./stats.route.js";
 const adminRouter = Router();
 
 adminRouter.use("/auth", adminAuthRouter);
+adminRouter.use("/stats", adminStatsRouter);
 adminRouter.use("/users", adminUserRouter);
 adminRouter.use("/categories", adminHazardCategoryRouter);
 adminRouter.use("/hazards", adminHazardRouter);

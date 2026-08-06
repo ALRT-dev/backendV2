@@ -13,6 +13,7 @@ import {
   type CreatePromptData,
   type UpdatePromptData,
 } from "../../services/ai-prompt.service.js";
+import { validateModelId } from "../../services/ai.service.js";
 import { HttpError } from "../../models/http_error.js";
 import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
 import type {
@@ -26,7 +27,7 @@ import type {
 export const getAllAIPrompts = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const result = await getAllPrompts();
@@ -42,7 +43,7 @@ export const getAllAIPrompts = async (
 export const getGroupedAIPrompts = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const result = await getGroupedPrompts();
@@ -58,7 +59,7 @@ export const getGroupedAIPrompts = async (
 export const getAIPromptById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -81,7 +82,7 @@ export const getAIPromptById = async (
 export const createAIPrompt = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -103,6 +104,8 @@ export const createAIPrompt = async (
     if (!validation.isValid) {
       throw new HttpError(400, "Invalid prompt content");
     }
+
+    await validateModelId(model);
 
     const createData: CreatePromptData = {
       name,
@@ -127,7 +130,7 @@ export const createAIPrompt = async (
 export const updateAIPrompt = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -158,6 +161,10 @@ export const updateAIPrompt = async (
       }
     }
 
+    if (model) {
+      await validateModelId(model);
+    }
+
     const updateData: UpdatePromptData = {
       ...(name && { name }),
       ...(description && { description }),
@@ -181,7 +188,7 @@ export const updateAIPrompt = async (
 export const deleteAIPrompt = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -204,7 +211,7 @@ export const deleteAIPrompt = async (
 export const createAIPromptGroup = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -231,7 +238,7 @@ export const createAIPromptGroup = async (
 export const updateAIPromptGroup = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {
@@ -260,7 +267,7 @@ export const updateAIPromptGroup = async (
 export const deleteAIPromptGroup = async (
   req: AdminRequest,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (!req.admin) {

@@ -1,6 +1,8 @@
 import type { NextFunction, Response } from "express";
 import type { AdminRequest } from "../../middlewares/auth.admin.middleware.js";
 import prisma from "../../utils/prisma_client.util.js";
+import { getDashboardStats } from "../../services/stats.admin.service.js";
+import { HttpError } from "../../models/http_error.js";
 
 // Queensland does not observe daylight saving, so Australia/Brisbane is a
 // fixed UTC+10 offset year-round and the day boundary can be computed
@@ -54,6 +56,24 @@ export const getAdminStatsController = async (
         dayStartedAt: dayStart.toISOString(),
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDashboardStatsController = async (
+  req: AdminRequest,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (!req.admin) {
+      throw new HttpError(401, "Admin authentication required");
+    }
+
+    const stats = await getDashboardStats();
+
+    res.status(200).json(stats);
   } catch (error) {
     next(error);
   }

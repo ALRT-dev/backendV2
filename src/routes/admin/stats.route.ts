@@ -3,7 +3,10 @@ import {
   requireAdminAuth,
   requireAnyAdmin,
 } from "../../middlewares/auth.admin.middleware.js";
-import { getAdminStatsController } from "../../controllers/admin/stats.controller.js";
+import {
+  getAdminStatsController,
+  getDashboardStatsController,
+} from "../../controllers/admin/stats.controller.js";
 
 const adminStatsRouter = Router();
 
@@ -16,5 +19,8 @@ adminStatsRouter.use(requireAdminAuth);
  *          with a pending deletion request.
  */
 adminStatsRouter.get("/", requireAnyAdmin, getAdminStatsController);
+
+// Read-only overview from live-sync — every admin role including moderators.
+adminStatsRouter.get("/dashboard", requireAnyAdmin, getDashboardStatsController);
 
 export default adminStatsRouter;

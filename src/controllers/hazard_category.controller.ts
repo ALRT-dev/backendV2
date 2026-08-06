@@ -11,14 +11,14 @@ import { enrichCategoryImagesWithPresignedUrls } from "../services/s3.service.js
 export const getAllHazardCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const categories = await prisma.hazardCategory.findMany({
       include: {
-        parent: true,
-        subCategories: { include: { images: true } },
         images: true,
+        parent: { include: { images: true } },
+        subCategories: { include: { images: true } },
       },
     });
     const enriched = await enrichCategoryImagesWithPresignedUrls(categories);
@@ -34,7 +34,7 @@ export const getAllHazardCategories = async (
 export const getAllParentHazardCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const categories = await prisma.hazardCategory.findMany({
@@ -59,7 +59,7 @@ export const getAllParentHazardCategories = async (
 export const getAllSubHazardCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const subCategories = await prisma.hazardCategory.findMany({
@@ -67,7 +67,7 @@ export const getAllSubHazardCategories = async (
         parentId: { not: null },
       },
       include: {
-        parent: true,
+        parent: { include: { images: true } },
         images: true,
       },
     });
@@ -81,7 +81,7 @@ export const getAllSubHazardCategories = async (
 export const createHazardCategory = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { name, description, parentId }: CreateHazardCategoryInput = req.body;
@@ -110,7 +110,7 @@ export const createHazardCategory = async (
 export const deleteAllHazardCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const deletedHazards = await prisma.hazard.deleteMany({});
@@ -128,7 +128,7 @@ export const deleteAllHazardCategories = async (
 export const populateCategories = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const createdCategories = await populateInitialCategories();
