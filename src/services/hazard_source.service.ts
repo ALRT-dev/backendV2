@@ -1,6 +1,15 @@
 import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
-import type { Prisma, HazardSource, HazardSourceLicense } from "@prisma/client";
+import type {
+  Prisma,
+  HazardSource,
+  HazardSourceLicense,
+  HazardSourceShape,
+  HazardSeveritySystem,
+  SeverityLevelHandling,
+  HazardSeverityBand,
+  SourcePushPolicy,
+} from "@prisma/client";
 
 /**
  * Interface for search parameters
@@ -23,6 +32,13 @@ export interface CreateHazardSourceData {
   advisoryText?: string | undefined;
   copyrightText?: string | undefined;
   copyrightLink?: string | undefined;
+  // V3 "One Glance" source registry (see V3 verification checklist §1).
+  shape?: HazardSourceShape | undefined;
+  severitySystem?: HazardSeveritySystem | undefined;
+  levelHandling?: SeverityLevelHandling | undefined;
+  stickiness?: number | undefined;
+  maxInternalBand?: HazardSeverityBand | undefined;
+  pushPolicy?: SourcePushPolicy | undefined;
 }
 
 /**
@@ -36,6 +52,14 @@ export interface UpdateHazardSourceData {
   advisoryText?: string | null | undefined;
   copyrightText?: string | null | undefined;
   copyrightLink?: string | null | undefined;
+  // V3 "One Glance" source registry (see V3 verification checklist §1).
+  // `null` clears the field back to the documented default at render time.
+  shape?: HazardSourceShape | null | undefined;
+  severitySystem?: HazardSeveritySystem | null | undefined;
+  levelHandling?: SeverityLevelHandling | null | undefined;
+  stickiness?: number | null | undefined;
+  maxInternalBand?: HazardSeverityBand | null | undefined;
+  pushPolicy?: SourcePushPolicy | null | undefined;
 }
 
 /**
@@ -175,6 +199,12 @@ export const createHazardSource = async (data: CreateHazardSourceData) => {
       ...(data.advisoryText && { advisoryText: data.advisoryText }),
       ...(data.copyrightText && { copyrightText: data.copyrightText }),
       ...(data.copyrightLink && { copyrightLink: data.copyrightLink }),
+      ...(data.shape && { shape: data.shape }),
+      ...(data.severitySystem && { severitySystem: data.severitySystem }),
+      ...(data.levelHandling && { levelHandling: data.levelHandling }),
+      ...(data.stickiness !== undefined && { stickiness: data.stickiness }),
+      ...(data.maxInternalBand && { maxInternalBand: data.maxInternalBand }),
+      ...(data.pushPolicy && { pushPolicy: data.pushPolicy }),
     },
     include: {
       license: true,
@@ -242,6 +272,18 @@ export const updateHazardSource = async (
       ...(data.copyrightLink !== undefined && {
         copyrightLink: data.copyrightLink,
       }),
+      ...(data.shape !== undefined && { shape: data.shape }),
+      ...(data.severitySystem !== undefined && {
+        severitySystem: data.severitySystem,
+      }),
+      ...(data.levelHandling !== undefined && {
+        levelHandling: data.levelHandling,
+      }),
+      ...(data.stickiness !== undefined && { stickiness: data.stickiness }),
+      ...(data.maxInternalBand !== undefined && {
+        maxInternalBand: data.maxInternalBand,
+      }),
+      ...(data.pushPolicy !== undefined && { pushPolicy: data.pushPolicy }),
     },
     include: {
       license: true,

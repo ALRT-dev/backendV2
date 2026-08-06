@@ -29,6 +29,13 @@ export const config = {
   env: getOptionalEnv("NODE_ENV", "dev"),
   port: parseInt(getOptionalEnv("PORT", "3000"), 10),
 
+  // RevenueCat (ALRT+ subscriptions). `webhookAuth` is the Authorization header
+  // value configured in the RevenueCat dashboard; the webhook rejects requests
+  // whose header does not match. Left empty in dev disables the check.
+  revenueCat: {
+    webhookAuth: getOptionalEnv("REVENUECAT_WEBHOOK_AUTH", ""),
+  },
+
   // CORS / Socket.IO — comma-separated origins; localhost/127.0.0.1 still allowed in non-prod when list does not match
   cors: {
     allowedOrigins: getOptionalEnv(
@@ -84,6 +91,14 @@ export const config = {
   // Apple OAuth
   appleOAuth: {
     audience: getRequiredEnv("APPLE_OAUTH_AUDIENCE"),
+  },
+
+  // Microsoft OAuth (Azure AD / MSAL). Optional so the server still boots when
+  // Microsoft sign-in isn't configured; the verifier returns a clear error if a
+  // Microsoft login is attempted without a client id set.
+  microsoftOAuth: {
+    clientId: getOptionalEnv("MICROSOFT_OAUTH_CLIENT_ID", ""),
+    tenantId: getOptionalEnv("MICROSOFT_OAUTH_TENANT_ID", "common"),
   },
 
   // OpenAI

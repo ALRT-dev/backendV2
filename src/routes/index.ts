@@ -14,6 +14,8 @@ import mapsRouter from "./maps.route.js";
 import familyRouter from "./family.route.js";
 import guideRouter from "./guide.route.js";
 import publicRouter from "./public.route.js";
+import revenueCatRouter from "./revenuecat.route.js";
+import askAlrtRouter from "./askalrt.route.js";
 
 export {
   authRouter,
@@ -32,4 +34,6 @@ export {
   familyRouter,
   guideRouter,
   publicRouter,
+  revenueCatRouter,
+  askAlrtRouter,
 };

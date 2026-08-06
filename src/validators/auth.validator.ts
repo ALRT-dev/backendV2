@@ -39,6 +39,12 @@ export const appleOAuthSchema = z.object({
 
 export type AppleOAuthInput = z.infer<typeof appleOAuthSchema>;
 
+export const microsoftOAuthSchema = z.object({
+  idToken: z.string().min(1, "ID Token is required"),
+});
+
+export type MicrosoftOAuthInput = z.infer<typeof microsoftOAuthSchema>;
+
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),
 });

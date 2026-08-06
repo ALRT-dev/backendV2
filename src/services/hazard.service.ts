@@ -34,6 +34,10 @@ import {
 import { config } from "../utils/config.js";
 import { MainCategoryId } from "./hazard_category.service.js";
 import { ExternalSourceId } from "./ingestion.service.js";
+import {
+  SOURCE_REGISTRY_DEFAULTS,
+  type SourceSystemKey,
+} from "../utils/source_registry.util.js";
 
 /**
  * Fetches hazards from the database applying various filters and pagination.
@@ -1087,6 +1091,35 @@ export const initializeHazardSources = async (): Promise<void> => {
       },
     ];
 
+    // Map each seeded source to its One Glance system so the §1 registry
+    // defaults (shape · severity system · level handling · band cap · push
+    // policy) are applied at seed time. Anything not listed here falls back to
+    // the render default (diamond / band threshold) via `source.shape ?? diamond`.
+    const sourceSystemById: Partial<Record<string, SourceSystemKey>> = {
+      // Australian Warning System agencies — bushfire/flood/storm warnings that
+      // carry Advice / Watch and Act / Emergency levels (triangle).
+      [ExternalSourceId.rfs]: "aws",
+      [ExternalSourceId.actEs]: "aws",
+      [ExternalSourceId.cfs]: "aws",
+      [ExternalSourceId.viceFire]: "aws",
+      [ExternalSourceId.qldFire]: "aws",
+      [ExternalSourceId.ntFireAndRescue]: "aws",
+      [ExternalSourceId.waDfes]: "aws",
+      [ExternalSourceId.nswSes]: "aws",
+      // Official agencies / data sources — band colour only, diamond.
+      [ExternalSourceId.bom]: "official",
+      [ExternalSourceId.nswTransport]: "official",
+      [ExternalSourceId.waqi]: "official",
+      [ExternalSourceId.openMeteo]: "official",
+      [ExternalSourceId.smartraveller]: "official",
+      [ExternalSourceId.earthquakeUsgs]: "official",
+      [ExternalSourceId.qldTraffic]: "official",
+      [ExternalSourceId.qldPark]: "official",
+      [ExternalSourceId.canadaGovTra]: "official",
+      // GDACS — square, level-exempt, Green = no push.
+      [ExternalSourceId.gdacsGlobal]: "gdacs",
+    };
+
     await Promise.all(
       hazardSources.map((source) => {
         // Always require id for upsert since url is no longer unique
@@ -1095,10 +1128,26 @@ export const initializeHazardSources = async (): Promise<void> => {
             `HazardSource must have an id for upsert operation: ${source.name}`,
           );
         }
+        const system = sourceSystemById[source.id];
+        const registry = system ? SOURCE_REGISTRY_DEFAULTS[system] : undefined;
+        const sourceWithRegistry: Prisma.HazardSourceCreateInput = registry
+          ? {
+              ...source,
+              shape: registry.shape,
+              severitySystem: registry.severitySystem,
+              ...(registry.levelHandling && {
+                levelHandling: registry.levelHandling,
+              }),
+              ...(registry.maxInternalBand && {
+                maxInternalBand: registry.maxInternalBand,
+              }),
+              pushPolicy: registry.pushPolicy,
+            }
+          : source;
         return prisma.hazardSource.upsert({
           where: { id: source.id },
-          create: source,
-          update: source,
+          create: sourceWithRegistry,
+          update: sourceWithRegistry,
         });
       }),
     );

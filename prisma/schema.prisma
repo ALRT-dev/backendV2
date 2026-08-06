@@ -157,6 +157,46 @@ enum FireStatus {
   closed
 }
 
+// --- V3 source registry enums (see V3 verification checklist §1) ---
+
+/// Marker shape in the "five-system One Glance" model. Shape encodes the source
+/// system; the render path resolves user reports to `circle` first, then falls
+/// back to `source.shape ?? diamond`.
+enum HazardSourceShape {
+  triangle // AWS
+  diamond // Official agencies (default)
+  circle // Community / user reports
+  square // GDACS
+  shield // ALRT Intel
+}
+
+/// The severity vocabulary a source speaks. Determines what (if anything) is
+/// rendered as a severity word and how the internal band is coloured.
+enum HazardSeveritySystem {
+  awsLevel // AWS: writes the level text verbatim (Advice / Watch and Act / Emergency)
+  band // Official agencies: internal band colour only; the band word is never rendered
+  category // Community: coloured by category, never by severity
+  gdacsColour // GDACS: "GDACS {colour}" verbatim plus a fixed meaning sentence
+  advisory // ALRT Intel: advisory only, "not an official warning"
+}
+
+/// How a source's severity level/word is handled at render time.
+enum SeverityLevelHandling {
+  verbatim // Render the source's own level/colour words as issued (AWS, GDACS)
+  bandColourOnly // Colour identity only; never render a band word (official agencies)
+  categoryColour // Colour by category, never by severity (community)
+  levelExempt // No internal band is applied at all (GDACS)
+}
+
+/// When alerts from a source generate a push notification.
+enum SourcePushPolicy {
+  everyLevel // Push at every level (AWS)
+  bandThreshold // Push once the internal band crosses the threshold (official agencies, default)
+  afterConfirmation // Push only after the nearby-confirmation threshold, never on submission (community)
+  greenExempt // Push except for the suppressed colour (GDACS Green = no push)
+  advisoryOnly // Quiet advisory push at most (ALRT Intel)
+}
+
 model Hazard {
   id            String             @id @default(uuid())
   title         String
@@ -265,6 +305,17 @@ model HazardSource {
   advisoryText  String? // Standard advisory text associated with this source
   copyrightText String? // Copyright information for this source
   copyrightLink String? // Link to copyright or attribution details
+
+  // V3 "One Glance" source registry (see V3 verification checklist §1).
+  // These describe how alerts FROM this source are rendered and pushed. All are
+  // optional so existing rows are unaffected; the render path falls back to the
+  // documented defaults (shape → diamond, push → band threshold) when unset.
+  shape           HazardSourceShape? // Marker shape for this source's alerts. User reports always render as a circle regardless of this value.
+  severitySystem  HazardSeveritySystem? // Which severity vocabulary the source speaks (AWS level / band / category / GDACS colour / advisory).
+  levelHandling   SeverityLevelHandling? // How the source's severity word/level is rendered (verbatim vs band-colour-only vs category vs level-exempt).
+  stickiness      Int? // Minutes a marker lingers after the underlying alert clears. Null = default lifecycle.
+  maxInternalBand HazardSeverityBand? // Ceiling on the internal band for this source (e.g. community caps at `action`). Null = no cap.
+  pushPolicy      SourcePushPolicy? // When alerts from this source generate a push notification.
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
