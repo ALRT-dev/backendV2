@@ -1,5 +1,7 @@
 import type { LocationSubscription } from "@prisma/client";
 import prisma from "../utils/prisma_client.util.js";
+import { HttpError } from "../models/http_error.js";
+import { hasActiveSubscription } from "./entitlement.service.js";
 
 /**
  * Retrieves all location subscriptions for a user, optionally filtered by bounding box.
@@ -116,6 +118,9 @@ export const getSingleUserLocationSubscriptionByBounds = async ({
  * @param name - The name of the subscription (optional)
  * @returns The created LocationSubscription
  */
+/** Free-tier cap on saved locations, matching kFreeSavedLocationsLimit in the app. */
+const FREE_SAVED_LOCATIONS_LIMIT = 3;
+
 export const createUserLocationSubscription = async ({
   userId,
   northeastLat,
@@ -133,6 +138,24 @@ export const createUserLocationSubscription = async ({
   address?: string | undefined;
   name?: string | undefined;
 }): Promise<LocationSubscription> => {
+  // Free tier caps SAVED locations at 3 (the own-location follow is
+  // exempt). The app shows the paywall at the same threshold, but the
+  // limit was client-side only, so any direct API call or a multi-device
+  // race sailed past it. Like the circle gate in family.service, this is
+  // dormant until BILLING_ENABLED flips: hasActiveSubscription returns
+  // true for everyone pre-billing.
+  if (!(await hasActiveSubscription(userId))) {
+    const savedCount = await prisma.locationSubscription.count({
+      where: { userId, isOwnLocation: false },
+    });
+    if (savedCount >= FREE_SAVED_LOCATIONS_LIMIT) {
+      throw new HttpError(
+        403,
+        `Free accounts can save up to ${FREE_SAVED_LOCATIONS_LIMIT} locations. ALRT+ removes the limit.`,
+      );
+    }
+  }
+
   return await prisma.locationSubscription.create({
     data: {
       userId,
