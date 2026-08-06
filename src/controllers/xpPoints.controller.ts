@@ -1,11 +1,19 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
+import { HazardReviewStatus } from "@prisma/client";
 import { HttpError } from "../models/http_error.js";
-import { calculateXpPoints } from "../services/xpPoints.service.js";
 import { getXpSummary } from "../services/xp_ledger.service.js";
 import { getBadgesFor } from "../services/badge.service.js";
 
-/// Controller to get user's XP points breakdown and statistics
+/**
+ * GET /api/xp/breakdown — where the caller's points actually came from.
+ *
+ * This used to recompute an estimate from AI confidence, upvotes and view
+ * counts, none of which award points any more. It produced a number that
+ * disagreed with the total on the same screen (product owner 2026-08-06).
+ * It now reads the XP ledger, which is the single writer for every point
+ * awarded, so the parts always add up to the whole.
+ */
 export const getUserXpBreakdown = async (
   req: Request,
   res: Response,
@@ -17,86 +25,87 @@ export const getUserXpBreakdown = async (
       throw new HttpError(400, "Unauthenticated user");
     }
 
-    // Get user's current stats
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         xpPoints: true,
         reliabilityScore: true,
-        _count: {
-          select: {
-            hazardsReported: true,
-            hazardVotes: true,
-            hazardViews: true,
-          },
-        },
+        _count: { select: { hazardsReported: true } },
       },
     });
-
     if (!user) {
       throw new HttpError(404, "User not found");
     }
 
-    // Get breakdown of user's reported hazards
-    const reportedHazards = await prisma.hazard.findMany({
-      where: { reportedById: userId },
+    const [byType, events, approvedCount, corroborations] = await Promise.all([
+      prisma.xpEvent.groupBy({
+        by: ["type"],
+        where: { userId },
+        _sum: { points: true },
+        _count: { _all: true },
+      }),
+      // Report-linked events only: the per-report list below is built from
+      // these, so a guide or a milestone never appears against a report.
+      prisma.xpEvent.findMany({
+        where: { userId, hazardId: { not: null } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          type: true,
+          points: true,
+          hazardId: true,
+          createdAt: true,
+        },
+        take: 200,
+      }),
+      prisma.hazard.count({
+        where: { reportedById: userId, reviewStatus: HazardReviewStatus.accepted },
+      }),
+      prisma.hazardCorroboration.count({
+        where: { hazard: { reportedById: userId } },
+      }),
+    ]);
+
+    // Every point the ledger has ever applied. Equal to the user's total
+    // unless a floor-at-zero clamp bit, which is worth being able to see.
+    const ledgerTotal = byType.reduce(
+      (sum, row) => sum + (row._sum.points ?? 0),
+      0
+    );
+
+    const hazardIds = [
+      ...new Set(events.map((e) => e.hazardId).filter((id): id is string => !!id)),
+    ];
+    const hazards = await prisma.hazard.findMany({
+      where: { id: { in: hazardIds } },
       select: {
         id: true,
         title: true,
         reviewStatus: true,
-        aiConfidence: true,
-        severity: true,
-        upvoteCount: true,
-        downvoteCount: true,
-        viewCount: true,
         createdAt: true,
       },
-      orderBy: { createdAt: "desc" },
     });
+    const hazardById = new Map(hazards.map((h) => [h.id, h]));
 
-    // Calculate what XP should be for each hazard (for transparency)
-    const hazardBreakdowns = reportedHazards.map((hazard) => {
-      const baseCalculation = calculateXpPoints({
-        confidence: hazard.aiConfidence || ("medium" as any),
-        severity: hazard.severity,
-        reviewStatus: hazard.reviewStatus,
-        userReliabilityScore: user.reliabilityScore,
-      });
+    const reports = hazardIds
+      .map((hazardId) => {
+        const hazard = hazardById.get(hazardId);
+        const own = events.filter((e) => e.hazardId === hazardId);
+        return {
+          hazardId,
+          title: hazard?.title ?? "Removed report",
+          reviewStatus: hazard?.reviewStatus ?? "unknown",
+          // What this report actually earned, positive or negative.
+          points: own.reduce((sum, e) => sum + e.points, 0),
+          events: own.map((e) => ({
+            type: e.type,
+            points: e.points,
+            createdAt: e.createdAt,
+          })),
+          createdAt: hazard?.createdAt ?? null,
+        };
+      })
+      .sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
 
-      // Calculate engagement XP separately (this is awarded in real-time)
-      const engagementXp =
-        hazard.upvoteCount * 2 -
-        hazard.downvoteCount * 1 +
-        Math.min(hazard.viewCount * 0.1, 5);
-      const totalEstimatedXp =
-        baseCalculation.totalXpPoints + Math.round(engagementXp);
-
-      return {
-        hazardId: hazard.id,
-        title: hazard.title,
-        reviewStatus: hazard.reviewStatus,
-        baseXpPoints: baseCalculation.totalXpPoints,
-        engagementXpPoints: Math.round(engagementXp),
-        totalEstimatedXp: totalEstimatedXp,
-        breakdown: {
-          ...baseCalculation.breakdown,
-          engagementBreakdown: `+${Math.round(engagementXp)} engagement (${
-            hazard.upvoteCount
-          } upvotes, ${hazard.downvoteCount} downvotes, ${
-            hazard.viewCount
-          } views)`,
-        },
-        createdAt: hazard.createdAt,
-      };
-    });
-
-    // Calculate total expected XP (might not match actual due to timing of calculations)
-    const expectedTotalXp = hazardBreakdowns.reduce(
-      (sum, h) => sum + h.totalEstimatedXp,
-      0
-    );
-
-    // Get some ranking information
     const usersWithMoreXp = await prisma.user.count({
       where: { xpPoints: { gt: user.xpPoints } },
     });
@@ -106,16 +115,27 @@ export const getUserXpBreakdown = async (
     res.status(200).json({
       currentXpPoints: user.xpPoints,
       reliabilityScore: user.reliabilityScore,
-      expectedXpFromCalculation: expectedTotalXp,
+      ledgerTotal,
       rank: userRank,
-      totalUsers: totalUsers,
-      percentile: Math.round(((totalUsers - userRank) / totalUsers) * 100),
+      totalUsers,
+      percentile:
+        totalUsers > 0
+          ? Math.round(((totalUsers - userRank) / totalUsers) * 100)
+          : 0,
       stats: {
         totalHazardsReported: user._count.hazardsReported,
-        totalVotesCast: user._count.hazardVotes,
-        totalHazardViews: user._count.hazardViews,
+        approvedReports: approvedCount,
+        corroborationsReceived: corroborations,
       },
-      hazardBreakdowns: hazardBreakdowns.slice(0, 10), // Limit to last 10 for API response size
+      // Where the points came from, by kind of event.
+      byType: byType
+        .map((row) => ({
+          type: row.type,
+          count: row._count._all,
+          points: row._sum.points ?? 0,
+        }))
+        .sort((a, b) => b.points - a.points),
+      reports: reports.slice(0, 20),
     });
   } catch (error) {
     next(error);

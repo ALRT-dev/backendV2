@@ -42,15 +42,6 @@ export const initializeScheduledTasks = () => {
     }
   });
 
-  // Prune family live-location history daily at 3:00 AM (24h retention)
-  cron.schedule("0 3 * * *", async () => {
-    try {
-      await pruneFamilyLocationPings();
-    } catch (error) {
-      console.error("Family location ping pruning failed:", error);
-    }
-  });
-
   // Locked spec: expired snapshot coordinates are deleted, not hidden.
   // The event log keeps who/when; no movement data outlives its window.
   cron.schedule("*/5 * * * *", async () => {
@@ -62,6 +53,11 @@ export const initializeScheduledTasks = () => {
       // Same guarantee for SOS: live share stops at the 4 hour cap even if
       // nobody stands it down by hand.
       await endLapsedSosEvents();
+      // Stored location points follow the same rules: gone an hour after
+      // they were shared, with only a running SOS trail excepted, and
+      // nothing at all past the 4-hour live-share cap. This ran daily,
+      // which left expired coordinates on disk for up to another 23 hours.
+      await pruneFamilyLocationPings();
     } catch (error) {
       console.error("Expired family location purge failed:", error);
     }

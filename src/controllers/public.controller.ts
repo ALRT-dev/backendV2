@@ -6,8 +6,11 @@ import { renderShareCard } from "../services/share_card.service.js";
 
 const SITE_URL = "https://safetyalrt.com";
 const GET_APP_URL = "https://safetyalrt.com/get";
+// Shared share cards are read anywhere in the world, which is exactly why
+// this cannot name one country's number (product owner 2026-08-05,
+// reaffirmed 2026-08-06).
 const DISCLAIMER =
-  "ALRT shares safety information and does not issue emergency instructions. In a life-threatening emergency call 000.";
+  "ALRT shares safety information and does not issue emergency instructions. In a life-threatening emergency call your local emergency number.";
 
 /** Escapes hazard-derived strings for safe interpolation into HTML/attributes. */
 const escapeHtml = (value: string): string =>

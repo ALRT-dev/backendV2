@@ -235,6 +235,7 @@ export const getHazardsApplyingFiltersRaw = async (
         hcp.color as "categoryParentColor",
         hs.name as "sourceName",
         hs.url as "sourceUrl",
+        hs.shape as "sourceShape",
         hs."advisoryText" as "sourceAdvisoryText",
         hs."copyrightText" as "sourceCopyrightText",
         hs."copyrightLink" as "sourceCopyrightLink",
@@ -397,6 +398,7 @@ export const getHazardsApplyingFiltersRaw = async (
       categoryParentColor,
       sourceName,
       sourceUrl,
+      sourceShape,
       sourceAdvisoryText,
       sourceCopyrightText,
       sourceCopyrightLink,
@@ -440,6 +442,10 @@ export const getHazardsApplyingFiltersRaw = async (
             id: hazard.sourceId,
             name: sourceName,
             url: sourceUrl,
+            // The One Glance shape this source renders as. The app needs
+            // it to draw the ALRT Intel shield, which it could not do at
+            // all while this was only ever stored, never returned.
+            shape: sourceShape,
             advisoryText: sourceAdvisoryText,
             copyrightText: sourceCopyrightText,
             copyrightLink: sourceCopyrightLink,

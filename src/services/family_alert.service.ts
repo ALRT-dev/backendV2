@@ -640,14 +640,60 @@ export const notifyFamiliesAboutNewHazard = async (hazard: Hazard) => {
 // Maintenance
 // ---------------------------------------------------------------------------
 
-/** Prunes location-ping history older than 24h. Run daily. */
+/**
+ * Prunes stored location points to the locked retention rules.
+ *
+ * These rows are every position a phone has ever shared: a check-in, a
+ * snapshot, an answered "where are you", and each point of an SOS live
+ * share. They were kept for 24 hours, which outlived the 1-hour snapshot
+ * expiry the rest of the system enforces, so the coordinates a member
+ * thought had expired were still on disk for another 23 hours (product
+ * owner 2026-08-06).
+ *
+ * Now:
+ * - Ordinary points are deleted after 1 hour, the snapshot rule.
+ * - The exception is the trail of a live SOS, which has to survive while
+ *   the SOS runs so receivers can watch movement. It is bounded by the
+ *   4-hour live-share cap and deleted outright at stand-down, so nothing
+ *   here can keep a trail alive past its event.
+ *
+ * Run every few minutes, alongside the snapshot purge.
+ */
 export const pruneFamilyLocationPings = async () => {
-  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const result = await prisma.familyLocationPing.deleteMany({
-    where: { createdAt: { lt: cutoff } },
+  const now = Date.now();
+  const snapshotCutoff = new Date(now - 60 * 60 * 1000);
+  const liveShareCapCutoff = new Date(now - 4 * 60 * 60 * 1000);
+
+  // Members with an SOS still running inside the 4-hour cap: their recent
+  // points are the live trail and are not ordinary snapshots.
+  const activeSos = await prisma.familySosEvent.findMany({
+    where: { status: "active", createdAt: { gte: liveShareCapCutoff } },
+    select: { memberId: true },
   });
-  if (result.count > 0) {
-    console.log(`Pruned ${result.count} family location pings older than 24h`);
+  const sosMemberIds = [...new Set(activeSos.map((sos) => sos.memberId))];
+
+  const [expired, overCap] = await Promise.all([
+    prisma.familyLocationPing.deleteMany({
+      where: {
+        createdAt: { lt: snapshotCutoff },
+        ...(sosMemberIds.length > 0 && {
+          memberId: { notIn: sosMemberIds },
+        }),
+      },
+    }),
+    // Nothing outlives the live-share cap, whatever its event says.
+    prisma.familyLocationPing.deleteMany({
+      where: { createdAt: { lt: liveShareCapCutoff } },
+    }),
+  ]);
+
+  const total = expired.count + overCap.count;
+  if (total > 0) {
+    console.log(
+      `Pruned ${total} family location points ` +
+        `(${expired.count} past the 1-hour snapshot expiry, ` +
+        `${overCap.count} past the 4-hour live-share cap)`,
+    );
   }
 };
 

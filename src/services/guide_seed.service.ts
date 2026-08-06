@@ -31,8 +31,11 @@ type GuideSeed = {
   categoryKeywords: string[];
 };
 
+// ALRT is a global app: copy never hard-codes one country's emergency
+// number (product owner 2026-08-05, reaffirmed 2026-08-06). The app puts
+// the caller's own local number on the call button.
 const DISCLAIMER =
-  "ALRT shares safety information and does not issue emergency instructions. In a life-threatening emergency call 000.";
+  "ALRT shares safety information and does not issue emergency instructions. In a life-threatening emergency call your local emergency number.";
 
 const sourceNoteFor = (sourceName: string, sourceUrl: string): string =>
   `This guide summarises publicly available safety information from ${sourceName} (${sourceUrl}). ${DISCLAIMER}`;
@@ -193,7 +196,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Call for help if trapped",
-          body: "If you become trapped by rising water and it is life-threatening, call 000. For emergency help in floods and storms, the SES can be reached on 132 500.",
+          body: "If you become trapped by rising water and it is life-threatening, call your local emergency number. In Australia, the SES can be reached on 132 500 for flood and storm help that is not life-threatening.",
         },
       ],
       after: [
@@ -248,7 +251,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "If your car stalls in water",
-          body: "If your vehicle is caught in rising water and you are in danger, authorities advise leaving the vehicle and moving to higher ground if it is safe to do so, and calling 000 if your life is at risk.",
+          body: "If your vehicle is caught in rising water and you are in danger, authorities advise leaving the vehicle and moving to higher ground if it is safe to do so, and calling your local emergency number if your life is at risk.",
         },
       ],
       after: [
@@ -303,7 +306,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Stay clear of fallen powerlines",
-          body: "Authorities advise treating all fallen powerlines as live and staying at least eight metres away. Report them to your electricity provider or 000 if they pose immediate danger.",
+          body: "Authorities advise treating all fallen powerlines as live and staying at least eight metres away. Report them to your electricity provider, or your local emergency number if they pose immediate danger.",
         },
       ],
       after: [
@@ -313,7 +316,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Request help for storm damage",
-          body: "For emergency assistance with storm damage such as fallen trees on buildings, the SES can be contacted on 132 500.",
+          body: "For help with storm damage such as fallen trees on buildings, contact your local storm and flood service. In Australia that is the SES on 132 500.",
         },
         {
           title: "Be patient with restoration",
@@ -427,7 +430,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Stay informed if trapped",
-          body: "If a fire threatens and you cannot leave, authorities suggest sheltering in a cleared area or a building away from the fire front, and calling 000 if your life is at risk.",
+          body: "If a fire threatens and you cannot leave, authorities suggest sheltering in a cleared area or a building away from the fire front, and calling your local emergency number if your life is at risk.",
         },
       ],
       after: [
@@ -606,7 +609,7 @@ const guides: GuideSeed[] = [
       after: [
         {
           title: "Watch for heat illness",
-          body: "Symptoms like dizziness, nausea, headache and confusion can indicate heat exhaustion or heatstroke. Heatstroke is a medical emergency — call 000 if someone becomes confused or collapses.",
+          body: "Symptoms like dizziness, nausea, headache and confusion can indicate heat exhaustion or heatstroke. Heatstroke is a medical emergency: call your local emergency number if someone becomes confused or collapses.",
         },
         {
           title: "Keep checking on others",
@@ -653,7 +656,7 @@ const guides: GuideSeed[] = [
       during: [
         {
           title: "If you hear an intruder",
-          body: "Authorities generally suggest not confronting an intruder. If safe, move to a secure room with your phone and call 000.",
+          body: "Authorities generally suggest not confronting an intruder. If safe, move to a secure room with your phone and call your local emergency number.",
         },
         {
           title: "If you arrive home to signs of a break-in",
@@ -667,7 +670,7 @@ const guides: GuideSeed[] = [
       after: [
         {
           title: "Report to police",
-          body: "Report break-ins to police via 131 444 (or 000 if the offender may still be nearby). A police event number is usually needed for insurance claims.",
+          body: "Report break-ins to police on their non-urgent line, or your local emergency number if the offender may still be nearby. In Australia the non-urgent police line is 131 444. A police event number is usually needed for insurance claims.",
         },
         {
           title: "Preserve the scene",
@@ -716,7 +719,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "If you feel followed",
-          body: "Consider crossing the street, changing direction, or entering an open business or well-lit populated area. If you believe you are in danger, call 000.",
+          body: "Consider crossing the street, changing direction, or entering an open business or well-lit populated area. If you believe you are in danger, call your local emergency number.",
         },
         {
           title: "Keep valuables out of sight",
@@ -730,7 +733,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Report incidents",
-          body: "If something happened or nearly happened, consider reporting it to police on 131 444. Reports help police identify patterns even when no offence is completed.",
+          body: "If something happened or nearly happened, consider reporting it to police on their non-urgent line (131 444 in Australia). Reports help police identify patterns even when no offence is completed.",
         },
         {
           title: "Adjust your routine",
@@ -1007,7 +1010,7 @@ const guides: GuideSeed[] = [
         },
         {
           title: "Leave and call from a distance",
-          body: "Authorities suggest moving everyone away from the smell and calling your gas distributor's leak line from a safe distance. If the situation is dangerous, call 000.",
+          body: "Authorities suggest moving everyone away from the smell and calling your gas distributor's leak line from a safe distance. If the situation is dangerous, call your local emergency number.",
         },
       ],
       after: [

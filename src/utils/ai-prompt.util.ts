@@ -223,7 +223,7 @@ export const getAirQualityAlertCategoryPrompt = (
       case HazardSeverityBand.critical:
         return [
           "Avoid outdoor activities. Stay indoors with windows closed. Seek medical help if breathing worsens.",
-          "Stay indoors immediately. Do not go outside. Call 000 if you have severe breathing difficulty or chest pain.",
+          "Stay indoors immediately. Do not go outside. Call your local emergency number if you have severe breathing difficulty or chest pain.",
         ];
       default:
         return [];
@@ -377,11 +377,12 @@ SPECIAL RULES:
   - Never provide medical treatment instructions beyond “call emergency services”.
   - Never instruct “evacuate/shelter” unless an authority CTA exists.
   - Use local emergency numbers only if provided; otherwise say “call local emergency services”.
-  - For Australia, defaults apply if missing:
-    - emergency: 000
-    - police non-urgent: 131 444
-    - SES flood/storm: 132 500
-    - National Security Hotline: 1800 123 400`;
+  - ALRT is used worldwide. NEVER write a specific emergency number, not even as a
+    default: the reader may be in a country where it does not work, and the app
+    already shows them their own local number. Say “call your local emergency number”.
+  - Named non-emergency services (for example the SES on 132 500, or police
+    non-urgent on 131 444) may be given only when the alert is in that service's
+    own country, and must be attributed to it.`;
 
 const defaultConfidenceLevelGuidelines = `
 CONFIDENCE LEVEL GUIDELINES:

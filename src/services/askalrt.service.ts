@@ -156,8 +156,9 @@ const matchLibrary = (question: string): LibraryEntry | null => {
 };
 
 // ---------------------------------------------------------------------------
-// Tier 2 — emergency number lookup. Australia-first product; the answer keeps
-// the "if overseas" caveat rather than guessing the caller's country.
+// Tier 2 — emergency number question. The backend does not know where the
+// caller is; the app does, and resolves it on the device. So the answer
+// points at the app's own call button instead of naming a number.
 // ---------------------------------------------------------------------------
 
 const EMERGENCY_PATTERNS = [
@@ -174,8 +175,13 @@ const isEmergencyNumberQuestion = (question: string): boolean => {
   return EMERGENCY_PATTERNS.some((p) => p.test(q));
 };
 
+// ALRT is a global app, so the backend never asserts one country's number
+// (product owner 2026-08-05, reaffirmed 2026-08-06). The app resolves the
+// caller's local number from SIM country, then device region, then locale,
+// falling back to 112, and shows it on the call button. This answer points
+// at that rather than naming a number the caller may not be able to dial.
 const EMERGENCY_ANSWER =
-  "In Australia call 000 (Triple Zero) for police, fire or ambulance when life or property is in danger. From a mobile, 112 also works. For storm and flood help that is not life-threatening, call the SES on 132 500. If you are outside Australia, use that country's local emergency number.";
+  "Call your local emergency number for police, fire or ambulance when life or property is in danger. ALRT shows the right number for where you are on the call button, and 112 works from a mobile in most countries. ALRT never contacts emergency services for you.";
 
 // ---------------------------------------------------------------------------
 // Tier 3 — AI fallback, grounded in nearby active alerts, counted per day.
@@ -248,12 +254,12 @@ export const ASK_ALRT_PROMPT_NAME = "ask_alrt_system";
  * contract in rule 5 must be preserved in any edit, or source chips and
  * answer parsing degrade to a plain-text fallback.
  */
-const DEFAULT_SYSTEM_PROMPT = `You are Ask ALRT, the safety assistant inside the ALRT alerting app for Australia.
+const DEFAULT_SYSTEM_PROMPT = `You are Ask ALRT, the safety assistant inside the ALRT alerting app. ALRT is used worldwide.
 
 Rules, in priority order:
 1. Ground every factual claim ONLY in the alerts provided in the message. Never invent alerts, closures, fires or conditions. If the provided alerts do not cover the question, say you have no alert information about that and give brief general safety guidance instead.
 2. Never declare a situation safe. When asked "is it safe", describe what the official sources say and add that you cannot judge overall safety.
-3. If the question suggests immediate danger to life, tell the user to call 000 now.
+3. If the question suggests immediate danger to life, tell the user to call their local emergency number now. ALRT is used worldwide: never name a specific emergency number, because the caller may be in a country where it does not work.
 4. Be brief: at most 120 words, plain language, short sentences. No en-dashes.
 5. Respond with STRICT JSON only, no markdown fences: {"answer": "...", "usedAlertIds": ["id", ...]} where usedAlertIds lists only alert ids you actually relied on (empty array if none).`;
 
@@ -402,7 +408,7 @@ export const askAlrt = async (params: {
   const parsed = extractJson(raw);
   const answer =
     parsed?.answer ??
-    "I could not put together a reliable answer just now. Please check the alerts on the map, and if you are in immediate danger call 000.";
+    "I could not put together a reliable answer just now. Please check the alerts on the map, and if you are in immediate danger call your local emergency number.";
 
   const referenced: ReferencedAlert[] = (parsed?.usedAlertIds ?? [])
     .map((id) => nearby.find((a) => a.id === id))

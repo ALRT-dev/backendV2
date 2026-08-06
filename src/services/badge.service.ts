@@ -52,8 +52,13 @@ export const WIDELY_CORROBORATED_THRESHOLD = 9;
 
 export const BADGES: BadgeDefinition[] = [
   {
+    // v1.1 names this one "Trusted Reporter", which is already the name of
+    // trust tier 3 (20 approved reports at 80%). Two different things
+    // under one name on one profile screen is a defect, so the badge takes
+    // a distinct name (product owner 2026-08-06); the live tier is
+    // untouched. It also now pairs with the 25 badge as a progression.
     id: "accurate_5",
-    name: "Trusted Reporter",
+    name: "Eyes on the Ground",
     description: "5 of your reports were confirmed by people nearby",
     metric: "corroboratedReports",
     threshold: 5,
