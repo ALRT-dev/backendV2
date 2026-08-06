@@ -1881,6 +1881,41 @@ export const respondToSos = async (
   return response;
 };
 
+/**
+ * The live trail behind an SOS, for circle members watching the map.
+ *
+ * Only points since the SOS started, only while the event exists: after
+ * stand-down the rows are already deleted (locked spec), so this endpoint
+ * cannot leak a wiped trail. Caller must be in the event's circle.
+ */
+export const getSosTrail = async (userId: string, sosEventId: string) => {
+  const sos = await prisma.familySosEvent.findUnique({
+    where: { id: sosEventId },
+    select: { id: true, circleId: true, memberId: true, createdAt: true },
+  });
+  if (!sos) throw new HttpError(404, "SOS event not found");
+
+  const membership = await prisma.familyMember.findFirst({
+    where: { userId, circleId: sos.circleId },
+    select: { id: true },
+  });
+  if (!membership) {
+    throw new HttpError(403, "You are not a member of this circle");
+  }
+
+  const points = await prisma.familyLocationPing.findMany({
+    where: { memberId: sos.memberId, createdAt: { gte: sos.createdAt } },
+    orderBy: { createdAt: "asc" },
+    select: {
+      latitude: true,
+      longitude: true,
+      isMoving: true,
+      createdAt: true,
+    },
+  });
+  return { sosEventId: sos.id, points };
+};
+
 export const resolveSos = async (userId: string, sosEventId: string) => {
   const sos = await prisma.familySosEvent.findUnique({
     where: { id: sosEventId },

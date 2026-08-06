@@ -799,6 +799,24 @@ export const respondSosController = async (
   }
 };
 
+/** GET /api/family/sos/:sosEventId/trail — live points for the map. */
+export const getSosTrailController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const userId = requireUserId(res);
+    const trail = await familyService.getSosTrail(
+      userId,
+      req.params.sosEventId as string,
+    );
+    res.status(200).json(trail);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const resolveSosController = async (
   req: Request,
   res: Response,

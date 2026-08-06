@@ -73,6 +73,7 @@ import {
   deleteSosListController,
   respondSosController,
   resolveSosController,
+  getSosTrailController,
   getActiveSosController,
   listTransferCandidatesController,
   transferOwnershipController,
@@ -196,6 +197,8 @@ familyRouter.post("/sos", validate(triggerFamilySosSchema), triggerSosController
 familyRouter.get("/sos/active", getActiveSosController);
 familyRouter.post("/sos/:sosEventId/respond", validate(respondFamilySosSchema), respondSosController);
 familyRouter.post("/sos/:sosEventId/resolve", resolveSosController);
+// Live trail behind an active SOS: exists only until stand-down wipes it.
+familyRouter.get("/sos/:sosEventId/trail", getSosTrailController);
 
 
 // Journeys — a trip the traveller chooses to share, always with a hard stop
