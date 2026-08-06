@@ -29,6 +29,15 @@ export interface HazardSearchParams {
   reportedById?: string | undefined;
   reviewStatus?: HazardReviewStatus | undefined;
 
+  /// The id of the user making the request. Used to scope visibility so a
+  /// caller only ever sees accepted hazards plus their own reports.
+  userId?: string | undefined;
+
+  /// Set by the admin moderation endpoints to bypass the accepted-only
+  /// visibility guard so moderators can see pending/rejected reports.
+  /// Never set from a user-facing route.
+  isAdminRequest?: boolean | undefined;
+
   severities?: HazardSeverity[] | undefined;
   severityBands?: HazardSeverityBand[] | undefined;
 

@@ -951,8 +951,12 @@ const fetchHazardsFromSource = async <T = any>(
         }));
       }
 
-      // Standard JSON API fetching
-      const response = await fetch(apiUrl, fetchOptions);
+      // Standard JSON API fetching. Bound the request so one hung external
+      // feed can't stall the whole scheduled sync (Node fetch has no default).
+      const response = await fetch(apiUrl, {
+        ...fetchOptions,
+        signal: AbortSignal.timeout(20000),
+      });
       if (!response.ok) {
         throw new Error(
           `Failed to fetch ${sourceId} data: ${response.statusText}`,
@@ -975,7 +979,10 @@ const fetchHazardsFromSource = async <T = any>(
     if (apiUrls && apiUrls.length > 0) {
       const hazardsPromises = apiUrls.map(async (singleUrl) => {
         try {
-          const response = await fetch(singleUrl, fetchOptions);
+          const response = await fetch(singleUrl, {
+            ...fetchOptions,
+            signal: AbortSignal.timeout(20000),
+          });
           if (!response.ok) {
             throw new Error(
               `Failed to fetch ${sourceId} data from ${singleUrl}: ${response.statusText}`,
