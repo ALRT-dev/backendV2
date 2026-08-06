@@ -52,6 +52,8 @@ model User {
   familyMemberships        FamilyMember[]
   guideProgress            UserGuideProgress[]
   xpEvents                 XpEvent[]
+  badges                   UserBadge[]
+  corroborationsGiven      HazardCorroboration[]
   sosLists                 FamilySosList[]
 
   // Activity streak (any qualifying action counts: report, check-in, guide)
@@ -257,6 +259,8 @@ model Hazard {
   flags      HazardFlag[]
   views      HazardView[]
   medias     HazardMedia[]
+
+  corroborations HazardCorroboration[]
 
   // Performance indexes
   @@index([latitude, longitude]) // Geographic queries
@@ -1133,6 +1137,46 @@ model XpEvent {
   @@index([userId, createdAt])
   @@index([userId, type, createdAt])
   @@index([hazardId, type])
+}
+
+// One nearby person confirming one report, by reporting the same thing.
+// XP is still paid once per report (locked), but badges are earned on how
+// many people confirmed, so the confirmations themselves have to be
+// countable. Unique on (hazard, confirming user) so one person cannot
+// inflate another's badge by posting repeatedly.
+model HazardCorroboration {
+  id       String @id @default(uuid())
+  hazardId String
+  hazard   Hazard @relation(fields: [hazardId], references: [id], onDelete: Cascade)
+
+  // The person whose separate report confirms this one.
+  corroboratedByUserId   String
+  corroboratedByUser     User   @relation(fields: [corroboratedByUserId], references: [id], onDelete: Cascade)
+  corroboratedByHazardId String
+
+  distanceKm Float?
+  createdAt  DateTime @default(now())
+
+  @@unique([hazardId, corroboratedByUserId])
+  @@index([hazardId])
+  @@index([corroboratedByUserId])
+}
+
+// A badge a user has earned, from the catalogue in badge.service.ts.
+// Definitions live in code so they are versioned with the repo; only the
+// earning is stored. Badges are never revoked once earned.
+model UserBadge {
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId String
+
+  // What the counter stood at when it was earned, for the award message.
+  progressAtAward Int?
+  earnedAt        DateTime @default(now())
+
+  @@unique([userId, badgeId])
+  @@index([userId, earnedAt])
 }
 
 // A journey is a trip the traveller chooses to share, and it always stops on

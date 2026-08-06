@@ -8,6 +8,11 @@ import prisma from "../utils/prisma_client.util.js";
 import { haversineKm } from "./family.service.js";
 import { sendSocketEventToUsers } from "./socket.service.js";
 import { SocketEvent } from "../models/socket_event_types.js";
+import {
+  getBadgesFor,
+  isWidelyCorroborated,
+  recordCorroboration,
+} from "./badge.service.js";
 
 /**
  * Scoring v2 — every XP change flows through a single auditable ledger.
@@ -393,6 +398,38 @@ const applyMatchBonuses = async (
       candidate.reportedById !== reporterId &&
       distanceKm <= CORROBORATION_RADIUS_KM
     ) {
+      // The confirmation itself is always recorded, even when the XP for
+      // this report has already been paid: badges and the wide-
+      // corroboration milestone are counted on how many people confirmed,
+      // not on how many times it paid.
+      const confirmations = await recordCorroboration({
+        hazardId: candidate.id,
+        reporterUserId: candidate.reportedById,
+        corroboratedByUserId: reporterId,
+        corroboratedByHazardId: hazard.id,
+        distanceKm,
+      });
+
+      // Wide corroboration (+10, once per report). This event has been in
+      // the XP table since v1.1 and was never awarded by anything.
+      if (isWidelyCorroborated(confirmations)) {
+        const alreadyWide = await prisma.xpEvent.findFirst({
+          where: {
+            hazardId: candidate.id,
+            type: XpEventType.reportWidelyCorroborated,
+          },
+          select: { id: true },
+        });
+        if (!alreadyWide) {
+          await recordXpEvent({
+            userId: candidate.reportedById,
+            type: XpEventType.reportWidelyCorroborated,
+            hazardId: candidate.id,
+            meta: { confirmations },
+          });
+        }
+      }
+
       // Once per corroborated report, no matter how many confirmations.
       const alreadyAwarded = await prisma.xpEvent.findFirst({
         where: {
@@ -568,8 +605,15 @@ export const trustTierFor = (
 export const getXpSummary = async (userId: string) => {
   const weekStart = currentWeekStart();
 
-  const [user, approvedCount, rejectedCount, guidesThisWeek, quest, events] =
-    await Promise.all([
+  const [
+    user,
+    approvedCount,
+    rejectedCount,
+    guidesThisWeek,
+    quest,
+    events,
+    badges,
+  ] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -611,6 +655,7 @@ export const getXpSummary = async (userId: string) => {
         orderBy: { createdAt: "desc" },
         take: 20,
       }),
+      getBadgesFor(userId),
     ]);
 
   if (!user) return null;
@@ -629,6 +674,8 @@ export const getXpSummary = async (userId: string) => {
     streakMultiplierActive:
       streakAlive && streakMultiplierFor(user.streakDays) > 1,
     trustTier: trustTierFor(approvedCount, rejectedCount),
+    badges: badges.badges,
+    badgeCounts: badges.counts,
     weeklyQuest: {
       id: WEEKLY_QUEST.id,
       title: WEEKLY_QUEST.title,

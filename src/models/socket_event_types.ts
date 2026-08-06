@@ -4,6 +4,7 @@ export enum SocketEvent {
   deleteHazard = "deleteHazard",
 
   updateUserXp = "updateUserXp",
+  badgeEarned = "badgeEarned",
   updateUserUpvotesReceivedCount = "updateUserUpvotesReceivedCount",
 
   // Family Mode

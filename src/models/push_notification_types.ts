@@ -1,6 +1,9 @@
 export enum PushNotificationType {
   viewHazard = "viewHazard",
 
+  // Scoring: opens the safety profile, where the badge grid lives.
+  badgeEarned = "badgeEarned",
+
   // Family Mode — all deep-link into the family hub unless noted
   familyCheckIn = "familyCheckIn",
   familyCheckInRequest = "familyCheckInRequest",

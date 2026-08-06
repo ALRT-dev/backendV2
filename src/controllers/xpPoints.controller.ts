@@ -3,6 +3,7 @@ import prisma from "../utils/prisma_client.util.js";
 import { HttpError } from "../models/http_error.js";
 import { calculateXpPoints } from "../services/xpPoints.service.js";
 import { getXpSummary } from "../services/xp_ledger.service.js";
+import { getBadgesFor } from "../services/badge.service.js";
 
 /// Controller to get user's XP points breakdown and statistics
 export const getUserXpBreakdown = async (
@@ -209,6 +210,28 @@ export const getXpSummaryController = async (
     }
 
     res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * GET /api/xp/badges — the whole badge catalogue for the caller: earned
+ * ones with their date, the rest with how far off they are. Locked badges
+ * are returned too, so the app can show what accuracy earns.
+ */
+export const getBadgesController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { userId } = res;
+    if (!userId) {
+      throw new HttpError(400, "Unauthenticated user");
+    }
+
+    res.status(200).json(await getBadgesFor(userId));
   } catch (error) {
     next(error);
   }
