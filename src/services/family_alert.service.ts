@@ -664,15 +664,28 @@ export const pruneFamilyLocationPings = async () => {
   const snapshotCutoff = new Date(now - 60 * 60 * 1000);
   const liveShareCapCutoff = new Date(now - 4 * 60 * 60 * 1000);
 
-  // Members with an SOS still running inside the 4-hour cap: their recent
-  // points are the live trail and are not ordinary snapshots.
+  // Members with an SOS still running inside the 4-hour cap. The trail is
+  // exactly the points since that SOS started (the same definition
+  // getSosTrail and stand-down use) — NOT everything the member ever
+  // shared. A snapshot from before the SOS still expires on its hour,
+  // whatever happens afterwards.
   const activeSos = await prisma.familySosEvent.findMany({
     where: { status: "active", createdAt: { gte: liveShareCapCutoff } },
-    select: { memberId: true },
+    select: { memberId: true, createdAt: true },
   });
-  const sosMemberIds = [...new Set(activeSos.map((sos) => sos.memberId))];
+  // A member has at most one active SOS (triggerSos cancels the previous
+  // one), but keep the earliest start if data ever disagrees.
+  const sosStartByMember = new Map<string, Date>();
+  for (const sos of activeSos) {
+    const existing = sosStartByMember.get(sos.memberId);
+    if (!existing || sos.createdAt < existing) {
+      sosStartByMember.set(sos.memberId, sos.createdAt);
+    }
+  }
+  const sosMemberIds = [...sosStartByMember.keys()];
 
-  const [expired, overCap] = await Promise.all([
+  const results = await Promise.all([
+    // Everyone without a running SOS: the plain 1-hour expiry.
     prisma.familyLocationPing.deleteMany({
       where: {
         createdAt: { lt: snapshotCutoff },
@@ -681,19 +694,32 @@ export const pruneFamilyLocationPings = async () => {
         }),
       },
     }),
+    // Members mid-SOS: expired points from BEFORE their SOS started are
+    // still deleted on the hour; only the trail itself is spared.
+    ...sosMemberIds.map((memberId) =>
+      prisma.familyLocationPing.deleteMany({
+        where: {
+          memberId,
+          createdAt: {
+            lt: new Date(
+              Math.min(
+                snapshotCutoff.getTime(),
+                sosStartByMember.get(memberId)!.getTime(),
+              ),
+            ),
+          },
+        },
+      }),
+    ),
     // Nothing outlives the live-share cap, whatever its event says.
     prisma.familyLocationPing.deleteMany({
       where: { createdAt: { lt: liveShareCapCutoff } },
     }),
   ]);
 
-  const total = expired.count + overCap.count;
+  const total = results.reduce((sum, result) => sum + result.count, 0);
   if (total > 0) {
-    console.log(
-      `Pruned ${total} family location points ` +
-        `(${expired.count} past the 1-hour snapshot expiry, ` +
-        `${overCap.count} past the 4-hour live-share cap)`,
-    );
+    console.log(`Pruned ${total} expired family location points`);
   }
 };
 

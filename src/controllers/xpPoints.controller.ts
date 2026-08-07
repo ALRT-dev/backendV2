@@ -37,33 +37,32 @@ export const getUserXpBreakdown = async (
       throw new HttpError(404, "User not found");
     }
 
-    const [byType, events, approvedCount, corroborations] = await Promise.all([
-      prisma.xpEvent.groupBy({
-        by: ["type"],
-        where: { userId },
-        _sum: { points: true },
-        _count: { _all: true },
-      }),
-      // Report-linked events only: the per-report list below is built from
-      // these, so a guide or a milestone never appears against a report.
-      prisma.xpEvent.findMany({
-        where: { userId, hazardId: { not: null } },
-        orderBy: { createdAt: "desc" },
-        select: {
-          type: true,
-          points: true,
-          hazardId: true,
-          createdAt: true,
-        },
-        take: 200,
-      }),
-      prisma.hazard.count({
-        where: { reportedById: userId, reviewStatus: HazardReviewStatus.accepted },
-      }),
-      prisma.hazardCorroboration.count({
-        where: { hazard: { reportedById: userId } },
-      }),
-    ]);
+    const [byType, byHazard, approvedCount, corroborations] =
+      await Promise.all([
+        prisma.xpEvent.groupBy({
+          by: ["type"],
+          where: { userId },
+          _sum: { points: true },
+          _count: { _all: true },
+        }),
+        // Per-report totals over the WHOLE ledger, never a capped window:
+        // a truncated sum shown as "what this report earned" is the exact
+        // parts-don't-add-up defect this endpoint exists to kill.
+        prisma.xpEvent.groupBy({
+          by: ["hazardId"],
+          where: { userId, hazardId: { not: null } },
+          _sum: { points: true },
+        }),
+        prisma.hazard.count({
+          where: {
+            reportedById: userId,
+            reviewStatus: HazardReviewStatus.accepted,
+          },
+        }),
+        prisma.hazardCorroboration.count({
+          where: { hazard: { reportedById: userId } },
+        }),
+      ]);
 
     // Every point the ledger has ever applied. Equal to the user's total
     // unless a floor-at-zero clamp bit, which is worth being able to see.
@@ -72,39 +71,52 @@ export const getUserXpBreakdown = async (
       0
     );
 
-    const hazardIds = [
-      ...new Set(events.map((e) => e.hazardId).filter((id): id is string => !!id)),
-    ];
-    const hazards = await prisma.hazard.findMany({
-      where: { id: { in: hazardIds } },
-      select: {
-        id: true,
-        title: true,
-        reviewStatus: true,
-        createdAt: true,
-      },
-    });
-    const hazardById = new Map(hazards.map((h) => [h.id, h]));
+    // Only the reports actually shown get their titles and event detail
+    // fetched: biggest movers first, top 20.
+    const topHazards = byHazard
+      .map((row) => ({
+        hazardId: row.hazardId as string,
+        points: row._sum.points ?? 0,
+      }))
+      .sort((a, b) => Math.abs(b.points) - Math.abs(a.points))
+      .slice(0, 20);
+    const topIds = topHazards.map((row) => row.hazardId);
 
-    const reports = hazardIds
-      .map((hazardId) => {
-        const hazard = hazardById.get(hazardId);
-        const own = events.filter((e) => e.hazardId === hazardId);
-        return {
-          hazardId,
-          title: hazard?.title ?? "Removed report",
-          reviewStatus: hazard?.reviewStatus ?? "unknown",
-          // What this report actually earned, positive or negative.
-          points: own.reduce((sum, e) => sum + e.points, 0),
-          events: own.map((e) => ({
-            type: e.type,
-            points: e.points,
-            createdAt: e.createdAt,
-          })),
-          createdAt: hazard?.createdAt ?? null,
-        };
-      })
-      .sort((a, b) => Math.abs(b.points) - Math.abs(a.points));
+    const [hazards, events] = await Promise.all([
+      prisma.hazard.findMany({
+        where: { id: { in: topIds } },
+        select: { id: true, title: true, reviewStatus: true, createdAt: true },
+      }),
+      prisma.xpEvent.findMany({
+        where: { userId, hazardId: { in: topIds } },
+        orderBy: { createdAt: "desc" },
+        select: { type: true, points: true, hazardId: true, createdAt: true },
+      }),
+    ]);
+    const hazardById = new Map(hazards.map((h) => [h.id, h]));
+    const eventsByHazard = new Map<string, typeof events>();
+    for (const event of events) {
+      const list = eventsByHazard.get(event.hazardId!) ?? [];
+      list.push(event);
+      eventsByHazard.set(event.hazardId!, list);
+    }
+
+    const reports = topHazards.map(({ hazardId, points }) => {
+      const hazard = hazardById.get(hazardId);
+      return {
+        hazardId,
+        title: hazard?.title ?? "Removed report",
+        reviewStatus: hazard?.reviewStatus ?? "unknown",
+        // What this report actually earned, positive or negative.
+        points,
+        events: (eventsByHazard.get(hazardId) ?? []).map((e) => ({
+          type: e.type,
+          points: e.points,
+          createdAt: e.createdAt,
+        })),
+        createdAt: hazard?.createdAt ?? null,
+      };
+    });
 
     const usersWithMoreXp = await prisma.user.count({
       where: { xpPoints: { gt: user.xpPoints } },
@@ -135,7 +147,7 @@ export const getUserXpBreakdown = async (
           points: row._sum.points ?? 0,
         }))
         .sort((a, b) => b.points - a.points),
-      reports: reports.slice(0, 20),
+      reports,
     });
   } catch (error) {
     next(error);

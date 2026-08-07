@@ -376,7 +376,6 @@ const defaultSpecialRules = `
 SPECIAL RULES:
   - Never provide medical treatment instructions beyond “call emergency services”.
   - Never instruct “evacuate/shelter” unless an authority CTA exists.
-  - Use local emergency numbers only if provided; otherwise say “call local emergency services”.
   - ALRT is used worldwide. NEVER write a specific emergency number, not even as a
     default: the reader may be in a country where it does not work, and the app
     already shows them their own local number. Say “call your local emergency number”.
