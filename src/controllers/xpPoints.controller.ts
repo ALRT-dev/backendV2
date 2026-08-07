@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import prisma from "../utils/prisma_client.util.js";
-import { HazardReviewStatus } from "@prisma/client";
+import { HazardReviewStatus, XpEventType } from "@prisma/client";
 import { HttpError } from "../models/http_error.js";
 import { getXpSummary } from "../services/xp_ledger.service.js";
 import { getBadgesFor } from "../services/badge.service.js";
@@ -101,6 +101,48 @@ export const getUserXpBreakdown = async (
       eventsByHazard.set(event.hazardId!, list);
     }
 
+    // Learning, itemised the way reports are: each completed guide by
+    // name with what it paid, plus the weekly challenge. "Safety guide
+    // completed x4" told nobody WHICH guides earned their points.
+    const learningEvents = await prisma.xpEvent.findMany({
+      where: {
+        userId,
+        type: {
+          in: [XpEventType.guideCompleted, XpEventType.questCompleted],
+        },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { type: true, points: true, guideId: true, createdAt: true },
+      take: 50,
+    });
+    const guideIds = [
+      ...new Set(
+        learningEvents
+          .map((e) => e.guideId)
+          .filter((id): id is string => !!id),
+      ),
+    ];
+    const guideTitles = await prisma.safetyGuide.findMany({
+      where: { id: { in: guideIds } },
+      select: { id: true, title: true },
+    });
+    const guideTitleById = new Map(guideTitles.map((g) => [g.id, g.title]));
+
+    const learning = {
+      guides: learningEvents
+        .filter((e) => e.type === XpEventType.guideCompleted)
+        .map((e) => ({
+          guideId: e.guideId,
+          title:
+            (e.guideId && guideTitleById.get(e.guideId)) || "Safety guide",
+          points: e.points,
+          createdAt: e.createdAt,
+        })),
+      challenges: learningEvents
+        .filter((e) => e.type === XpEventType.questCompleted)
+        .map((e) => ({ points: e.points, createdAt: e.createdAt })),
+    };
+
     const reports = topHazards.map(({ hazardId, points }) => {
       const hazard = hazardById.get(hazardId);
       return {
@@ -148,6 +190,7 @@ export const getUserXpBreakdown = async (
         }))
         .sort((a, b) => b.points - a.points),
       reports,
+      learning,
     });
   } catch (error) {
     next(error);
