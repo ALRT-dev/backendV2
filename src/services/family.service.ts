@@ -1876,9 +1876,33 @@ export const respondToSos = async (
         ? `${responderName} is calling for help`
         : `${responderName} has seen the SOS`;
 
+  // The person IN SOS gets their own directed message — knowing who has
+  // seen it and who is coming is the whole point of responding (product
+  // owner 2026-08-07). Socket first so the open app updates instantly,
+  // then the push for a pocketed phone.
+  const ownerCopy =
+    type === "onMyWay"
+      ? `${responderName} is on their way to you`
+      : type === "called"
+        ? `${responderName} is calling for help for you`
+        : `${responderName} has seen your SOS`;
+  sendSocketEventToUsers({
+    userIds: [sos.member.user.id],
+    event: SocketEvent.familySosResponse,
+    data: response,
+  });
+  await sendPushNotificationToUser({
+    userId: sos.member.user.id,
+    title: ownerCopy,
+    body: "They can see your live location.",
+    data: { circleId: membership.circleId, sosEventId: sos.id },
+    type: PushNotificationType.familySosResponse,
+  });
+
+  // Everyone else keeps the third-person update.
   await notifyCircle({
     circleId: membership.circleId,
-    excludeMemberIds: [membership.id],
+    excludeMemberIds: [membership.id, sos.memberId],
     title: "SOS update",
     body: actionText,
     data: { circleId: membership.circleId, sosEventId: sos.id },
