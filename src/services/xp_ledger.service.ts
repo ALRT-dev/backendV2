@@ -421,12 +421,23 @@ const applyMatchBonuses = async (
           select: { id: true },
         });
         if (!alreadyWide) {
-          await recordXpEvent({
-            userId: candidate.reportedById,
-            type: XpEventType.reportWidelyCorroborated,
-            hazardId: candidate.id,
-            meta: { confirmations },
-          });
+          try {
+            await recordXpEvent({
+              userId: candidate.reportedById,
+              type: XpEventType.reportWidelyCorroborated,
+              hazardId: candidate.id,
+              meta: { confirmations },
+            });
+          } catch (error) {
+            // Once per report is enforced by a partial unique index on
+            // (hazardId, type): a concurrent confirmation that got there
+            // first aborts this write, which is the correct outcome. The
+            // read above is just an optimisation to skip the attempt.
+            const isDuplicate =
+              error instanceof Prisma.PrismaClientKnownRequestError &&
+              error.code === "P2002";
+            if (!isDuplicate) throw error;
+          }
         }
       }
 

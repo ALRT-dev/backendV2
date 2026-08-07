@@ -1891,7 +1891,13 @@ export const respondToSos = async (
 export const getSosTrail = async (userId: string, sosEventId: string) => {
   const sos = await prisma.familySosEvent.findUnique({
     where: { id: sosEventId },
-    select: { id: true, circleId: true, memberId: true, createdAt: true },
+    select: {
+      id: true,
+      circleId: true,
+      memberId: true,
+      createdAt: true,
+      status: true,
+    },
   });
   if (!sos) throw new HttpError(404, "SOS event not found");
 
@@ -1901,6 +1907,14 @@ export const getSosTrail = async (userId: string, sosEventId: string) => {
   });
   if (!membership) {
     throw new HttpError(403, "You are not a member of this circle");
+  }
+
+  // Stand-down wipes the trail (locked spec), so a resolved SOS has no
+  // trail to serve. Without this gate, a point shared AFTER stand-down
+  // (an ordinary check-in) would come back dressed as trail data for an
+  // event whose trail is supposed to be gone.
+  if (sos.status !== "active") {
+    return { sosEventId: sos.id, points: [] };
   }
 
   const points = await prisma.familyLocationPing.findMany({
