@@ -10,6 +10,7 @@ import { SocketEvent } from "../models/socket_event_types.js";
 import { PushNotificationType } from "../models/push_notification_types.js";
 import { convertLatLngToAddress } from "./google_map.service.js";
 import { sendPushNotificationToUser } from "./notification.service.js";
+import { sendSocketEventToUsers } from "./socket.service.js";
 import {
   assertCircleNotPaused,
   haversineKm,
@@ -232,7 +233,15 @@ export const createLocationRequest = async (
     "A family member";
 
   // Only the target is notified. The push carries the request id so the app
-  // can open the Share once / Not now screen.
+  // can open the Share once / Not now screen — and the same payload goes
+  // over the socket so a phone with the app OPEN sees the ask instantly
+  // even when its notifications are off (two-phone QA 2026-08-07: the
+  // wifi-only phone with alerts declined never saw location requests).
+  sendSocketEventToUsers({
+    userIds: [target.userId],
+    event: SocketEvent.familyLocationRequest,
+    data: request,
+  });
   await sendPushNotificationToUser({
     userId: target.userId,
     title: `${requesterName} asked where you are`,
@@ -282,7 +291,7 @@ export const respondToLocationRequest = async (
     where: { id: requestId, target: { userId } },
     include: {
       requester: { include: { user: { select: { id: true } } } },
-      target: true,
+      target: { include: { user: { select: { name: true } } } },
     },
   });
   if (!request) throw new HttpError(404, "Location request not found");
@@ -319,7 +328,8 @@ export const respondToLocationRequest = async (
   });
 
   // Tell the requester their ask was answered.
-  const targetName = membership.nickname || "A family member";
+  const targetName =
+    membership.nickname || membership.user.name || "A family member";
   await sendPushNotificationToUser({
     userId: request.requester.user.id,
     title: "Snapshot shared",

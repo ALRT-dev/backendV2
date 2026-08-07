@@ -959,6 +959,15 @@ export const createInvite = async (
   if (membership.role === "guest") {
     throw new HttpError(403, "Guests cannot create invites");
   }
+  // Locked commercial rule (product owner 2026-08-07): every non-guest
+  // joiner consumes one of the OWNER's ALRT+ seats, so only the owner —
+  // the person paying for those seats — may invite people in.
+  if (membership.role !== "owner") {
+    throw new HttpError(
+      403,
+      "Only the group owner can invite people to this group",
+    );
+  }
 
   // Retry on the (unlikely) unique-code collision.
   for (let attempt = 0; attempt < 5; attempt++) {
