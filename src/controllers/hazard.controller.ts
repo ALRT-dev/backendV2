@@ -44,6 +44,7 @@ import type {
 import {
   adjustExpirationTime,
   buildHazardInclude,
+  withPublicCoords,
 } from "../utils/hazard.util.js";
 import { parseBoolean } from "../utils/parse.util.js";
 import {
@@ -296,7 +297,10 @@ export const getHazardById = async (
       hazard,
     ]);
 
-    res.status(200).json(hazardWithPresignedUrls[0]);
+    const { userId: viewerId } = res;
+    res
+      .status(200)
+      .json(withPublicCoords(hazardWithPresignedUrls[0] as any, viewerId));
   } catch (error) {
     next(error);
   }

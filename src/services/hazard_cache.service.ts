@@ -145,7 +145,9 @@ export const cacheHazardList = async (
 // Single-hazard cache
 // ---------------------------------------------------------------------------
 
-const hazardKey = (id: string) => `hazard:${id}`;
+// v2: key bumped so cached pre-fix hazard objects (which embedded the full
+// reporter User row) can never be served again after deploy.
+const hazardKey = (id: string) => `hazard:v2:${id}`;
 
 export const getCachedHazard = async <T = unknown>(
   hazardId: string,

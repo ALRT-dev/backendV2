@@ -440,13 +440,56 @@ export const buildHazardInclude = (
         license: true, // Include license information
       },
     },
-    reportedBy: true,
+    // Public-safe reporter fields ONLY. Never the full User row: no email,
+    // no password hash, no home location, no plan/account internals
+    // (community-privacy rule: responses never identify other users beyond
+    // display name and reputation).
+    reportedBy: {
+      select: {
+        id: true,
+        name: true,
+        xpPoints: true,
+        reliabilityScore: true,
+      },
+    },
     medias: {
       orderBy: {
         isPrimary: "desc",
       },
     },
     ...params,
+  };
+};
+
+/**
+ * Community-report coordinates are public at suburb precision ONLY (locked
+ * community-privacy rule: suburb/locality or broader, never the exact pin).
+ * Two decimal places is roughly 1.1 km. Official/ingested alerts keep full
+ * precision, and the reporter keeps their own exact pin so edit flows still
+ * line up. Apply at every read/emit boundary; never persist rounded values.
+ */
+export const withPublicCoords = <
+  T extends {
+    latitude?: number | null;
+    longitude?: number | null;
+    reportedById?: string | null;
+  },
+>(
+  hazard: T,
+  viewerId?: string,
+): T => {
+  if (!hazard?.reportedById || hazard.reportedById === viewerId) {
+    return hazard;
+  }
+  const round = (v: number) => Math.round(v * 100) / 100;
+  return {
+    ...hazard,
+    ...(typeof hazard.latitude === "number"
+      ? { latitude: round(hazard.latitude) }
+      : {}),
+    ...(typeof hazard.longitude === "number"
+      ? { longitude: round(hazard.longitude) }
+      : {}),
   };
 };
 

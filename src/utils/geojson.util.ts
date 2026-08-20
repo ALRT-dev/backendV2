@@ -28,7 +28,14 @@ export function toGeoJSONFeatureCollection(
       id: h.id,
       geometry: {
         type: "Point" as const,
-        coordinates: [h.longitude, h.latitude] as [number, number],
+        // Community reports are published at suburb precision, never the
+        // exact pin (community-privacy rule).
+        coordinates: (h.reportedById
+          ? [
+              Math.round(h.longitude * 100) / 100,
+              Math.round(h.latitude * 100) / 100,
+            ]
+          : [h.longitude, h.latitude]) as [number, number],
       },
       properties: {
         id: h.id,

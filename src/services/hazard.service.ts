@@ -22,6 +22,7 @@ import {
   buildHazardsOrderByClauseRaw,
   buildHazardsWhereClause,
   buildHazardsWhereClauseRaw,
+  withPublicCoords,
 } from "../utils/hazard.util.js";
 import { getPromptById } from "./ai-prompt.service.js";
 import { getAIPromptConfiguration } from "./configuration.service.js";
@@ -121,7 +122,7 @@ export const getHazardsApplyingFilters = async (
       : null;
 
     return {
-      ...hazardWithoutVotes,
+      ...withPublicCoords(hazardWithoutVotes, userId),
       userVoteType: votes?.[0]?.voteType,
       reportedBy: enhancedReportedBy,
     };
@@ -248,7 +249,6 @@ export const getHazardsApplyingFiltersRaw = async (
         hsl."backgroundColor" as "licenseBackgroundColor",
         u.id as "reportedByUserId",
         u.name as "reportedByName",
-        u.email as "reportedByEmail",
         u."xpPoints" as "reportedByXpPoints",
         u."reliabilityScore" as "reportedByReliabilityScore"`;
 
@@ -373,7 +373,6 @@ export const getHazardsApplyingFiltersRaw = async (
       ? {
           id: hazard.reportedByUserId,
           name: hazard.reportedByName,
-          email: hazard.reportedByEmail,
           xpPoints: hazard.reportedByXpPoints,
           reliabilityScore: hazard.reportedByReliabilityScore,
           reportsStatus:
@@ -386,7 +385,6 @@ export const getHazardsApplyingFiltersRaw = async (
     const {
       reportedByUserId,
       reportedByName,
-      reportedByEmail,
       reportedByXpPoints,
       reportedByReliabilityScore,
       categoryName,
@@ -415,7 +413,7 @@ export const getHazardsApplyingFiltersRaw = async (
     } = hazard;
 
     return {
-      ...cleanHazard,
+      ...withPublicCoords(cleanHazard, userId),
       userVoteType: userVoteType || undefined,
       reportedBy: enhancedReportedBy,
       category: hazard.categoryId
